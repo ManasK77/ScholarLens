@@ -44,7 +44,7 @@ ScholarLens is built in 15 fixed phases (0 through 14), taken verbatim from READ
 **Plans**: 4 plans
 Plans:
 - [x] 00-01-PLAN.md — Repo package tree, backend/pyproject.toml (dev extras), pre-commit + .gitignore
-- [ ] 00-02-PLAN.md — docker-compose.yml (neo4j/qdrant/postgres/backend), backend/Dockerfile, .env.example
+- [x] 00-02-PLAN.md — docker-compose.yml (neo4j/qdrant/postgres/backend), backend/Dockerfile, .env.example
 - [ ] 00-03-PLAN.md — Frontend empty shell (Vite react-ts)
 - [ ] 00-04-PLAN.md — Centralized config + /health endpoint (TDD), full-stack integration proof
 
