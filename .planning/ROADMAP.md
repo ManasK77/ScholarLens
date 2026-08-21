@@ -41,7 +41,12 @@ ScholarLens is built in 15 fixed phases (0 through 14), taken verbatim from READ
 **Tech**: Python 3.11+, pyproject.toml, Docker & Docker Compose, pre-commit, .env handling, FastAPI skeleton, React+TS skeleton (empty shell), pytest setup.
 **Build**: Repository structure as in README §11. `docker-compose.yml` bringing up empty Neo4j, Qdrant, and Postgres containers plus a `/health` endpoint on the FastAPI backend. No ML/NLP logic yet.
 **Done when**: `docker-compose up` runs cleanly and `/health` returns 200 with all service connections verified.
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 00-01-PLAN.md — Repo package tree, backend/pyproject.toml (dev extras), pre-commit + .gitignore
+- [ ] 00-02-PLAN.md — docker-compose.yml (neo4j/qdrant/postgres/backend), backend/Dockerfile, .env.example
+- [ ] 00-03-PLAN.md — Frontend empty shell (Vite react-ts)
+- [ ] 00-04-PLAN.md — Centralized config + /health endpoint (TDD), full-stack integration proof
 
 ### Phase 1: Literature Collection (Stage 1)
 **Goal**: Users can point the system at a topic and get a deduplicated, normalized corpus of papers from every permitted source, plus manual uploads.
@@ -245,7 +250,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Project Scaffolding & Environment | 0/TBD | Not started | - |
+| 0. Project Scaffolding & Environment | 0/4 | Not started | - |
 | 1. Literature Collection | 0/TBD | Not started | - |
 | 2. Parsing & Section Normalization | 0/TBD | Not started | - |
 | 3. Scientific Information Extraction | 0/TBD | Not started | - |
