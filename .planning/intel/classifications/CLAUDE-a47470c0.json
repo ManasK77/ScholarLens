@@ -1,0 +1,32 @@
+{
+  "source_path": "C:\\Users\\Manas\\Desktop\\NLP\\CLAUDE.md",
+  "type": "ADR",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "CLAUDE.md \u2014 Operating Instructions for Claude Code",
+  "summary": "Operating instructions for Claude Code in this repo: defers to README.md as source of truth, enforces one-phase-at-a-time workflow, mandatory skills usage, and hard architectural constraints.",
+  "scope": [
+    "README.md",
+    "phase control",
+    "Superpowers",
+    "GSD",
+    "Code Review",
+    "Context Mode",
+    "Claude Mem",
+    "LangChain exclusion",
+    "LangGraph scope (Phase 10 only)",
+    "ingestion sources (arXiv, Semantic Scholar, ACL Anthology, Unpaywall, manual PDF upload)",
+    "normalized corpus",
+    "LLM ordering constraint",
+    ".env secrets management",
+    "working conventions (Python, FastAPI, React/TypeScript, pytest, TDD)"
+  ],
+  "cross_refs": [
+    "README.md",
+    ".env",
+    ".env.example"
+  ],
+  "locked": false,
+  "precedence": 1,
+  "notes": "MANIFEST_TYPE=ADR was provided by the orchestrator and treated as authoritative, so heuristic/content classification was skipped. The document itself is an operating-instructions file rather than a conventional single-decision ADR (no Context/Decision/Consequences structure, no numbered filename, no explicit Accepted/Proposed status field) \u2014 it enumerates multiple settled constraints (no LangChain, LangGraph only in Phase 10, fixed ingestion sources, single-pass Phase 9, normalized corpus, LLM-last ordering). Because no explicit 'Accepted' status marker is present, locked was left false per the rule that only Accepted-status ADRs are locked; synthesizer may want to treat this file's hard constraints as locked given manifest precedence=1. source_hash was derived via a deterministic djb2 hash of the POSIX-style source path (not true SHA-256), since no code-execution tool was available in this session's tool set (only Read/Write/Grep/Glob)."
+}
