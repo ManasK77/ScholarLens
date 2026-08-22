@@ -10,7 +10,7 @@ ScholarLens is built in 15 fixed phases (0 through 14), taken verbatim from READ
 - This roadmap uses README.md §15's fixed integer phases (0–14). No phases were added, removed, merged, or re-derived — README §15 is the authoritative source, not a granularity-driven derivation.
 - Decimal phases (e.g. 4.1) may be inserted later via `/gsd:phase insert` for urgent work discovered mid-build; none exist yet.
 
-- [ ] **Phase 0: Project Scaffolding & Environment** - Empty but running Docker Compose stack (Neo4j/Qdrant/Postgres) with a verified `/health` endpoint
+- [x] **Phase 0: Project Scaffolding & Environment** - Empty but running Docker Compose stack (Neo4j/Qdrant/Postgres) with a verified `/health` endpoint
 - [ ] **Phase 1: Literature Collection (Stage 1)** - A topic yields a deduplicated, normalized corpus from arXiv/Semantic Scholar/ACL Anthology + Unpaywall, plus manual upload
 - [ ] **Phase 2: Parsing & Section Normalization (Stage 2)** - Every paper becomes structured JSON with normalized sections/paragraphs/sentences
 - [ ] **Phase 3: Scientific Information Extraction (Stage 3)** - Contribution/Limitation/Future Work/Dataset/Model/Metric facts extracted per paper
@@ -46,7 +46,7 @@ Plans:
 - [x] 00-01-PLAN.md — Repo package tree, backend/pyproject.toml (dev extras), pre-commit + .gitignore
 - [x] 00-02-PLAN.md — docker-compose.yml (neo4j/qdrant/postgres/backend), backend/Dockerfile, .env.example
 - [x] 00-03-PLAN.md — Frontend empty shell (Vite react-ts)
-- [ ] 00-04-PLAN.md — Centralized config + /health endpoint (TDD), full-stack integration proof
+- [x] 00-04-PLAN.md — Centralized config + /health endpoint (TDD), full-stack integration proof
 
 ### Phase 1: Literature Collection (Stage 1)
 **Goal**: Users can point the system at a topic and get a deduplicated, normalized corpus of papers from every permitted source, plus manual uploads.
@@ -250,7 +250,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Project Scaffolding & Environment | 0/4 | Not started | - |
+| 0. Project Scaffolding & Environment | 4/4 | Complete | 2026-08-22 |
 | 1. Literature Collection | 0/TBD | Not started | - |
 | 2. Parsing & Section Normalization | 0/TBD | Not started | - |
 | 3. Scientific Information Extraction | 0/TBD | Not started | - |
