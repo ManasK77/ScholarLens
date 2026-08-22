@@ -3,6 +3,10 @@
 Metadata-only per README/D-14 — this source never downloads a PDF itself;
 it only stores the `openAccessPdf.url` value for later enrichment. No test
 makes a real network call to api.semanticscholar.org (D-23).
+
+httpx.get() (the module-level shortcut) does not accept a `transport`
+kwarg — only httpx.Client() does — so the real client is a context-managed
+httpx.Client(transport=...); tests fake that, not httpx.get directly.
 """
 
 import inspect
@@ -55,16 +59,29 @@ FIXTURE_BODY = {
 }
 
 
+def _make_fake_client(captured):
+    class FakeClient:
+        def __init__(self, transport=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, params=None, headers=None, timeout=None):
+            captured["url"] = url
+            captured["params"] = params
+            captured["headers"] = headers
+            return FakeResponse(FIXTURE_BODY)
+
+    return FakeClient
+
+
 def test_search_topic_returns_corpus_shaped_dicts(monkeypatch):
     captured = {}
-
-    def fake_get(url, params=None, headers=None, timeout=None, transport=None):
-        captured["url"] = url
-        captured["params"] = params
-        captured["headers"] = headers
-        return FakeResponse(FIXTURE_BODY)
-
-    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(captured))
 
     out = semantic_scholar.search_topic("graph neural networks", api_key=None)
 
@@ -82,10 +99,8 @@ def test_search_topic_returns_corpus_shaped_dicts(monkeypatch):
 
 
 def test_search_topic_handles_missing_openaccess_pdf(monkeypatch):
-    def fake_get(url, params=None, headers=None, timeout=None, transport=None):
-        return FakeResponse(FIXTURE_BODY)
-
-    monkeypatch.setattr(httpx, "get", fake_get)
+    captured = {}
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(captured))
 
     out = semantic_scholar.search_topic("graph neural networks", api_key=None)
 
@@ -99,12 +114,7 @@ def test_search_topic_handles_missing_openaccess_pdf(monkeypatch):
 
 def test_search_topic_sends_api_key_header_when_provided(monkeypatch):
     captured = {}
-
-    def fake_get(url, params=None, headers=None, timeout=None, transport=None):
-        captured["headers"] = headers
-        return FakeResponse(FIXTURE_BODY)
-
-    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(captured))
 
     semantic_scholar.search_topic("graph neural networks", api_key="test-key-123")
 
@@ -113,12 +123,7 @@ def test_search_topic_sends_api_key_header_when_provided(monkeypatch):
 
 def test_search_topic_sends_no_api_key_header_when_absent(monkeypatch):
     captured = {}
-
-    def fake_get(url, params=None, headers=None, timeout=None, transport=None):
-        captured["headers"] = headers
-        return FakeResponse(FIXTURE_BODY)
-
-    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(captured))
 
     semantic_scholar.search_topic("graph neural networks", api_key=None)
 
@@ -130,10 +135,8 @@ def test_source_is_metadata_only_never_calls_download_pdf(monkeypatch):
     source_text = inspect.getsource(semantic_scholar)
     assert "download_pdf" not in source_text
 
-    def fake_get(url, params=None, headers=None, timeout=None, transport=None):
-        return FakeResponse(FIXTURE_BODY)
-
-    monkeypatch.setattr(httpx, "get", fake_get)
+    captured = {}
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(captured))
 
     out = semantic_scholar.search_topic("graph neural networks", api_key=None)
 

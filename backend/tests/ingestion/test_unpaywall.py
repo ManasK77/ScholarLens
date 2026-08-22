@@ -23,19 +23,37 @@ class _FakeResponse:
         return self._payload
 
 
+def _make_fake_client(response: _FakeResponse):
+    # httpx.get() (module-level shortcut) doesn't accept a `transport` kwarg —
+    # only httpx.Client() does — so resolve_oa_pdf uses a context-managed
+    # httpx.Client(transport=...); tests fake that, not httpx.get directly.
+    class FakeClient:
+        def __init__(self, transport=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, params=None, timeout=None):
+            return response
+
+    return FakeClient
+
+
 def test_resolve_oa_pdf_returns_url_when_oa_found(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_get(url, params=None, timeout=None, transport=None):
-        return _FakeResponse(
-            200,
-            {
-                "is_oa": True,
-                "best_oa_location": {"url_for_pdf": "https://example.org/paper.pdf"},
-            },
-        )
-
-    monkeypatch.setattr(httpx, "get", fake_get)
+    response = _FakeResponse(
+        200,
+        {
+            "is_oa": True,
+            "best_oa_location": {"url_for_pdf": "https://example.org/paper.pdf"},
+        },
+    )
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(response))
 
     result = resolve_oa_pdf("10.1/xyz", "test@example.org")
 
@@ -45,10 +63,8 @@ def test_resolve_oa_pdf_returns_url_when_oa_found(
 def test_resolve_oa_pdf_returns_none_when_no_oa_copy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_get(url, params=None, timeout=None, transport=None):
-        return _FakeResponse(200, {"is_oa": False, "best_oa_location": None})
-
-    monkeypatch.setattr(httpx, "get", fake_get)
+    response = _FakeResponse(200, {"is_oa": False, "best_oa_location": None})
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(response))
 
     result = resolve_oa_pdf("10.1/valid-no-oa", "test@example.org")
 
@@ -60,10 +76,8 @@ def test_resolve_oa_pdf_short_circuits_on_404_before_json(
 ) -> None:
     # payload=None makes .json() raise if ever called — proves the status_code
     # guard runs before any JSON parsing (Pitfall 2).
-    def fake_get(url, params=None, timeout=None, transport=None):
-        return _FakeResponse(404, None)
-
-    monkeypatch.setattr(httpx, "get", fake_get)
+    response = _FakeResponse(404, None)
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(response))
 
     result = resolve_oa_pdf("10.1/not-a-real-doi", "test@example.org")
 
@@ -73,19 +87,17 @@ def test_resolve_oa_pdf_short_circuits_on_404_before_json(
 def test_resolve_oa_pdf_falls_back_to_url_when_no_url_for_pdf(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_get(url, params=None, timeout=None, transport=None):
-        return _FakeResponse(
-            200,
-            {
-                "is_oa": True,
-                "best_oa_location": {
-                    "url_for_pdf": None,
-                    "url": "https://example.org/landing",
-                },
+    response = _FakeResponse(
+        200,
+        {
+            "is_oa": True,
+            "best_oa_location": {
+                "url_for_pdf": None,
+                "url": "https://example.org/landing",
             },
-        )
-
-    monkeypatch.setattr(httpx, "get", fake_get)
+        },
+    )
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(response))
 
     result = resolve_oa_pdf("10.1/xyz", "test@example.org")
 

@@ -50,6 +50,7 @@ def save_upload(
     )
 
     dest_path = Path(dest_dir) / f"{paper.id}.pdf"
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
     dest_path.write_bytes(file_bytes)
 
     corpus.enrich_paper(session, paper.id, {"pdf_path": str(dest_path)})

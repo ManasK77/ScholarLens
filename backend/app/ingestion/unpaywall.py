@@ -14,12 +14,10 @@ from app.ingestion import corpus
 
 
 def resolve_oa_pdf(doi: str, email: str) -> str | None:
-    resp = httpx.get(
-        f"https://api.unpaywall.org/v2/{doi}",
-        params={"email": email},
-        timeout=10.0,
-        transport=httpx.HTTPTransport(retries=2),
-    )
+    with httpx.Client(transport=httpx.HTTPTransport(retries=2)) as client:
+        resp = client.get(
+            f"https://api.unpaywall.org/v2/{doi}", params={"email": email}, timeout=10.0
+        )
     if resp.status_code != 200:
         return None  # 404 = DOI not found in Unpaywall's index; not "no OA"
     body = resp.json()

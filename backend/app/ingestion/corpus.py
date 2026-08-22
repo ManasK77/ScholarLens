@@ -8,6 +8,7 @@ Stage 2 onward reads from this schema without ever branching on `source`
 
 from collections.abc import Generator
 from datetime import datetime
+from pathlib import Path
 
 import httpx
 from sqlalchemy import (
@@ -90,6 +91,7 @@ def download_pdf(url: str, dest_path: str, timeout: float = 30.0) -> bool:
         with httpx.stream("GET", url, timeout=timeout, follow_redirects=True) as resp:
             if resp.status_code != 200:
                 return False
+            Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
             with open(dest_path, "wb") as f:
                 f.writelines(resp.iter_bytes())
         return True

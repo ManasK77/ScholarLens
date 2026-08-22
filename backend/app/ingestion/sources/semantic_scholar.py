@@ -29,13 +29,8 @@ def search_topic(topic: str, api_key: str | None = None) -> list[dict]:
     headers = {"x-api-key": api_key} if api_key else {}
     params = {"query": topic, "fields": FIELDS}
 
-    resp = httpx.get(
-        SEARCH_URL,
-        params=params,
-        headers=headers,
-        timeout=10.0,
-        transport=httpx.HTTPTransport(retries=2),
-    )
+    with httpx.Client(transport=httpx.HTTPTransport(retries=2)) as client:
+        resp = client.get(SEARCH_URL, params=params, headers=headers, timeout=10.0)
     resp.raise_for_status()
     body = resp.json()
 

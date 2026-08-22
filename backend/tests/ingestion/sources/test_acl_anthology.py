@@ -128,6 +128,26 @@ def test_old_style_url_less_entry_falls_back_to_cite_key():
     assert old["year"] == 1991
 
 
+def _make_fake_client(get_impl):
+    # httpx.get() (module-level shortcut) doesn't accept a `transport` kwarg —
+    # only httpx.Client() does — so download_anthology_export uses a
+    # context-managed httpx.Client(transport=...); tests fake that.
+    class FakeClient:
+        def __init__(self, transport=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, timeout=60.0):
+            return get_impl(url, timeout)
+
+    return FakeClient
+
+
 def test_download_anthology_export_fetches_and_gunzips_when_missing(
     monkeypatch, tmp_path
 ):
@@ -140,12 +160,12 @@ def test_download_anthology_export_fetches_and_gunzips_when_missing(
     class FakeResponse:
         content = compressed
 
-    def fake_get(url, timeout=60.0, transport=None):
+    def get_impl(url, timeout):
         calls["count"] += 1
         calls["url"] = url
         return FakeResponse()
 
-    monkeypatch.setattr(acl_anthology.httpx, "get", fake_get)
+    monkeypatch.setattr(acl_anthology.httpx, "Client", _make_fake_client(get_impl))
 
     acl_anthology.download_anthology_export(str(dest_path), force=False)
 
@@ -159,11 +179,11 @@ def test_download_anthology_export_is_noop_when_dest_exists(monkeypatch, tmp_pat
 
     calls = {"count": 0}
 
-    def fake_get(url, timeout=60.0, transport=None):
+    def get_impl(url, timeout):
         calls["count"] += 1
-        raise AssertionError("httpx.get should not be called on cache hit")
+        raise AssertionError("httpx.Client().get should not be called on cache hit")
 
-    monkeypatch.setattr(acl_anthology.httpx, "get", fake_get)
+    monkeypatch.setattr(acl_anthology.httpx, "Client", _make_fake_client(get_impl))
 
     acl_anthology.download_anthology_export(str(dest_path), force=False)
 

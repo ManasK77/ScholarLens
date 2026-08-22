@@ -84,7 +84,8 @@ def download_anthology_export(dest_path: str, force: bool = False) -> None:
     if Path(dest_path).exists() and not force:
         return
 
-    resp = httpx.get(EXPORT_URL, timeout=60.0, transport=httpx.HTTPTransport(retries=2))
+    with httpx.Client(transport=httpx.HTTPTransport(retries=2)) as client:
+        resp = client.get(EXPORT_URL, timeout=60.0)
     decompressed = gzip.decompress(resp.content)
 
     Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
