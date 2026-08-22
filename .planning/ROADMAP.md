@@ -11,7 +11,7 @@ ScholarLens is built in 15 fixed phases (0 through 14), taken verbatim from READ
 - Decimal phases (e.g. 4.1) may be inserted later via `/gsd:phase insert` for urgent work discovered mid-build; none exist yet.
 
 - [x] **Phase 0: Project Scaffolding & Environment** - Empty but running Docker Compose stack (Neo4j/Qdrant/Postgres) with a verified `/health` endpoint
-- [ ] **Phase 1: Literature Collection (Stage 1)** - A topic yields a deduplicated, normalized corpus from arXiv/Semantic Scholar/ACL Anthology + Unpaywall, plus manual upload
+- [x] **Phase 1: Literature Collection (Stage 1)** - A topic yields a deduplicated, normalized corpus from arXiv/Semantic Scholar/ACL Anthology + Unpaywall, plus manual upload
 - [ ] **Phase 2: Parsing & Section Normalization (Stage 2)** - Every paper becomes structured JSON with normalized sections/paragraphs/sentences
 - [ ] **Phase 3: Scientific Information Extraction (Stage 3)** - Contribution/Limitation/Future Work/Dataset/Model/Metric facts extracted per paper
 - [ ] **Phase 4: Joint NER + Relation Extraction (Stage 4)** - Entities and typed relations written into a queryable Neo4j graph
@@ -63,12 +63,12 @@ Plans:
 **Done when**: A topic string yields N deduplicated papers in the normalized corpus from all discovery sources with Unpaywall enrichment applied; a manually uploaded PDF lands in that same corpus and is indistinguishable to Phase 2 apart from its `source` field.
 **Plans**: 6 plans
 Plans:
-- [ ] 01-01-PLAN.md — corpus.py (D-10 schema) + dedup.py (D-19 priority chain) + new deps (arxiv/bibtexparser/httpx)
-- [ ] 01-02-PLAN.md — arXiv source (metadata + PDF via shared httpx helper)
-- [ ] 01-03-PLAN.md — Semantic Scholar source (metadata-only)
-- [ ] 01-04-PLAN.md — ACL Anthology source (bibtexparser over anthology+abstracts.bib.gz)
-- [ ] 01-05-PLAN.md — Unpaywall enrichment (targeted UPDATE, never INSERT)
-- [ ] 01-06-PLAN.md — Manual upload + /collect + /upload endpoints + INGEST-09 exclusion check
+- [x] 01-01-PLAN.md — corpus.py (D-10 schema) + dedup.py (D-19 priority chain) + new deps (arxiv/bibtexparser/httpx)
+- [x] 01-02-PLAN.md — arXiv source (metadata + PDF via shared httpx helper)
+- [x] 01-03-PLAN.md — Semantic Scholar source (metadata-only)
+- [x] 01-04-PLAN.md — ACL Anthology source (bibtexparser over anthology+abstracts.bib.gz)
+- [x] 01-05-PLAN.md — Unpaywall enrichment (targeted UPDATE, never INSERT)
+- [x] 01-06-PLAN.md — Manual upload + /collect + /upload endpoints + INGEST-09 exclusion check
 
 ### Phase 2: Parsing & Section Normalization (Stage 2)
 **Goal**: Every paper in the corpus has clean, structurally normalized text ready for downstream extraction.
@@ -258,7 +258,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Project Scaffolding & Environment | 4/4 | Complete | 2026-08-22 |
-| 1. Literature Collection | 0/6 | Not started | - |
+| 1. Literature Collection | 6/6 | Complete | 2026-08-22 |
 | 2. Parsing & Section Normalization | 0/TBD | Not started | - |
 | 3. Scientific Information Extraction | 0/TBD | Not started | - |
 | 4. Joint NER + Relation Extraction | 0/TBD | Not started | - |

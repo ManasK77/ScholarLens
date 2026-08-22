@@ -20,15 +20,15 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 
 ### Literature Collection (Phase 1)
 
-- [ ] **INGEST-01**: Normalized corpus writer (`corpus.py`) implements the canonical `papers` schema (title, authors, year, venue, DOI, abstract, source, pdf_path, has_full_text) in PostgreSQL.
-- [ ] **INGEST-02**: `dedup.py` deduplicates across sources in priority order DOI → arXiv ID → ACL Anthology ID → normalized title+year.
-- [ ] **INGEST-03**: arXiv source fetches metadata + full-text PDF for a topic query into the normalized corpus.
-- [ ] **INGEST-04**: Semantic Scholar source fetches metadata (+ `openAccessPdf` link where present); metadata-only by design.
-- [ ] **INGEST-05**: ACL Anthology source fetches metadata + open-access PDF via the same corpus writer (no parallel path).
-- [ ] **INGEST-06**: Unpaywall enrichment resolves a legal open-access full text for corpus records that have a DOI but no full-text PDF, creating no new records.
-- [ ] **INGEST-07**: Manual upload endpoint (`POST /upload`) accepts one or more PDFs, writes them to the shared PDF store, and creates corpus records with `source='manual_upload'`.
-- [ ] **INGEST-08**: `/collect` endpoint runs discovery + enrichment for a topic string, returning N deduplicated papers in the normalized corpus.
-- [ ] **INGEST-09**: IEEE Xplore, Springer, and ACM Digital Library APIs are not integrated anywhere in ingestion, nor is scripted access to those platforms.
+- [x] **INGEST-01**: Normalized corpus writer (`corpus.py`) implements the canonical `papers` schema (title, authors, year, venue, DOI, abstract, source, pdf_path, has_full_text) in PostgreSQL.
+- [x] **INGEST-02**: `dedup.py` deduplicates across sources in priority order DOI → arXiv ID → ACL Anthology ID → normalized title+year.
+- [x] **INGEST-03**: arXiv source fetches metadata + full-text PDF for a topic query into the normalized corpus.
+- [x] **INGEST-04**: Semantic Scholar source fetches metadata (+ `openAccessPdf` link where present); metadata-only by design.
+- [x] **INGEST-05**: ACL Anthology source fetches metadata + open-access PDF via the same corpus writer (no parallel path).
+- [x] **INGEST-06**: Unpaywall enrichment resolves a legal open-access full text for corpus records that have a DOI but no full-text PDF, creating no new records.
+- [x] **INGEST-07**: Manual upload endpoint (`POST /upload`) accepts one or more PDFs, writes them to the shared PDF store, and creates corpus records with `source='manual_upload'`.
+- [x] **INGEST-08**: `/collect` endpoint runs discovery + enrichment for a topic string, returning N deduplicated papers in the normalized corpus.
+- [x] **INGEST-09**: IEEE Xplore, Springer, and ACM Digital Library APIs are not integrated anywhere in ingestion, nor is scripted access to those platforms.
 
 ### Parsing & Section Normalization (Phase 2)
 
@@ -146,15 +146,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SETUP-04 | Phase 0 | Pending |
 | SETUP-05 | Phase 0 | Pending |
 | SETUP-06 | Phase 0 | Pending |
-| INGEST-01 | Phase 1 | Pending |
-| INGEST-02 | Phase 1 | Pending |
-| INGEST-03 | Phase 1 | Pending |
-| INGEST-04 | Phase 1 | Pending |
-| INGEST-05 | Phase 1 | Pending |
-| INGEST-06 | Phase 1 | Pending |
-| INGEST-07 | Phase 1 | Pending |
-| INGEST-08 | Phase 1 | Pending |
-| INGEST-09 | Phase 1 | Pending |
+| INGEST-01 | Phase 1 | Complete |
+| INGEST-02 | Phase 1 | Complete |
+| INGEST-03 | Phase 1 | Complete |
+| INGEST-04 | Phase 1 | Complete |
+| INGEST-05 | Phase 1 | Complete |
+| INGEST-06 | Phase 1 | Complete |
+| INGEST-07 | Phase 1 | Complete |
+| INGEST-08 | Phase 1 | Complete |
+| INGEST-09 | Phase 1 | Complete |
 | PARSE-01 | Phase 2 | Pending |
 | PARSE-02 | Phase 2 | Pending |
 | PARSE-03 | Phase 2 | Pending |
