@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 authorized and planned (5 plans, plan-checker PASSED); execution not yet started — checkpointed here due to context budget, not a blocker
-last_updated: "2026-08-23T00:15:00+05:30"
-last_activity: 2026-08-23 -- Phase 2 context+research+plan+plan-check complete; 5 PLAN.md files committed and ready; execution begins next session starting with Plan 02-01
+stopped_at: Phase 2 Plan 02-01 complete (infra/contract — grobid service, Settings.grobid_url, ParsedDocument, new deps installed); Plans 02-02..02-05 not yet executed — checkpointed here due to context budget, not a blocker
+last_updated: "2026-08-23T00:45:00+05:30"
+last_activity: 2026-08-23 -- Plan 02-01 executed and committed (both tasks); 76/76 backend tests pass; found and fixed a real transformers/sentence-transformers version conflict at install time
 progress:
   total_phases: 15
   completed_phases: 2
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 11
+  completed_plans: 11
   percent: 13
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Every research gap ScholarLens reports is grounded in structured, retrieved evidence extracted before any LLM is involved — the LLM explains gaps already discovered by extraction, clustering, trend analysis, and ranking; it never discovers gaps on its own.
-**Current focus:** Phase 2 (Parsing & Section Normalization) — planned and plan-checked, execution starts with Plan 02-01
+**Current focus:** Phase 2 (Parsing & Section Normalization) — Plan 02-01 done, Plans 02-02 through 02-05 remain
 
 ## Current Position
 
-Phase: 2 (Parsing & Section Normalization, Stage 2) — PLANNED, EXECUTION PENDING
-Plan: 0 of 5 executed (02-01 infra/contract, 02-02 grobid_client+tei_parser, 02-03 section_classifier, 02-04 fallback, 02-05 service+backfill — all written and plan-checker PASSED)
-Status: Ready to execute. Resume by running Plan 02-01 first (wave 1), then 02-02/02-03/02-04 (wave 2, can run in parallel — no shared files), then 02-05 (wave 3).
-Last activity: 2026-08-23 -- Phase 2 planning pipeline complete: CONTEXT.md written (self-decided, no discuss step required), gsd-phase-researcher ran a real GROBID container to capture two TEI-XML fixtures and correct a wrong assumption (D-31), gsd-planner wrote 5 plans, gsd-plan-checker PASSED with 2 non-blocking warnings (both fixed: RESEARCH.md Open Questions marked RESOLVED, Plan 02-01's torch CPU-only install order corrected). Stopped here on purpose — context budget was getting tight (66% used) and Phase 2's execution (GROBID's ~8GB Docker image, torch/transformers installs, 5 TDD plans) is substantial; better to start it fresh next session than risk running out of room mid-execution.
+Phase: 2 (Parsing & Section Normalization, Stage 2) — IN PROGRESS
+Plan: 1 of 5 executed (02-01 infra/contract DONE; 02-02 grobid_client+tei_parser, 02-03 section_classifier, 02-04 fallback, 02-05 service+backfill remain — all already planned and plan-checker PASSED, just not yet executed)
+Status: Resume by running Plans 02-02/02-03/02-04 (wave 2 — independent of each other, no shared files, can run in parallel), then 02-05 (wave 3, depends on all three).
+Last activity: 2026-08-23 -- Plan 02-01 executed: docker-compose grobid service (0.9.1-full, healthy-gated), Settings.grobid_url, ParsedDocument SQLAlchemy table (D-28), and all 5 new Phase 2 dependencies installed (torch CPU-only verified via torch.version.cuda is None). Found and fixed a real dependency conflict during install (sentence-transformers>=6.0 needs transformers>=5.0 — not caught by research, which had assumed <5). 76/76 backend tests pass (72 after Plan 02-01 + confirms no regressions). Stopped here on purpose — context budget was getting tight; Wave 2's three plans involve loading the real SciBERT model, PDF fallback parsing, and the GROBID HTTP client — substantial enough to warrant a fresh context window rather than risk running out mid-execution.
 
-Progress: [███░░░░░░░] ~13% (2/15 phases fully complete; Phase 2 planned but not yet executed, so this understates actual progress)
+Progress: [███░░░░░░░] ~13% (2/15 phases fully complete + Phase 2 1/5 plans done; understates actual progress)
 
 ## Performance Metrics
 
@@ -86,7 +86,7 @@ None yet.
 
 ### Blockers/Concerns
 
-None currently blocking. Phase 2 is fully planned (5 plans, plan-checker PASSED) but **execution has not started** — stopped here deliberately due to context budget (not an owner-only blocker). Resume by executing Plan 02-01 (wave 1) first.
+None currently blocking. Phase 2 Plan 02-01 (wave 1) is done; Plans 02-02/02-03/02-04 (wave 2) and 02-05 (wave 3) remain — stopped here deliberately due to context budget (not an owner-only blocker). Resume by executing Plans 02-02/02-03/02-04.
 
 ## Deferred Items
 
@@ -107,6 +107,6 @@ Phase 1-specific deferrals (per CONTEXT.md, in scope for a later revisit only if
 
 ## Session Continuity
 
-Last session: 2026-08-23T00:15:00+05:30
-Stopped at: Phase 2 authorized ("Start Phase 2"), fully planned (CONTEXT.md, RESEARCH.md with real GROBID-captured fixtures, 5 PLAN.md files, plan-checker PASSED with both warnings fixed) — execution not yet started. Stopped deliberately due to context budget, not a blocker. No owner input needed; just resume and execute.
-Resume file: .planning/phases/02-parsing-section-normalization-stage-2/02-01-PLAN.md (start here — wave 1, infra/contract: grobid docker-compose service, Settings.grobid_url, ParsedDocument table, new deps)
+Last session: 2026-08-23T00:45:00+05:30
+Stopped at: Plan 02-01 (wave 1, infra/contract) executed and committed — grobid docker-compose service, Settings.grobid_url, ParsedDocument table, new deps installed (76/76 tests pass). Plans 02-02/02-03/02-04 (wave 2) and 02-05 (wave 3) remain, already planned and plan-checker PASSED. Stopped deliberately due to context budget, not a blocker. No owner input needed; just resume and execute.
+Resume file: .planning/phases/02-parsing-section-normalization-stage-2/02-02-PLAN.md (start here — wave 2: grobid_client.py + tei_parser.py; 02-03 section_classifier.py and 02-04 fallback.py can run in parallel since none share files)
