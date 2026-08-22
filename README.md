@@ -9,7 +9,7 @@ An AI research assistant that reads scientific literature at scale, builds a str
 This README is written to be followed by **both a human maintainer and an AI coding agent (e.g. Claude Code)**.
 
 - The **human (project owner)** controls pacing. Implementation is broken into numbered **Phases** (see [Section 15](#15-implementation-phases)). No phase should begin until the owner explicitly says so (e.g., *"start Phase 2"*, *"proceed"*).
-- The **AI agent** should read this entire document before writing any code, then implement strictly phase by phase, in order, using the tech stack specified for that phase. After finishing a phase, the agent should summarize what was built, flag any deviations or open questions, and **stop** — not continue to the next phase automatically.
+- The **AI agent** should read this entire document before writing any code, then implement strictly phase by phase, in order, using the tech stack specified for that phase. **Once a phase is authorized, the agent executes it autonomously start to finish** — it does not stop to ask approval for individual tasks, plans, tests, fixes, or routine engineering decisions inside that phase (see [Section 13.7](#137-when-to-pause-mid-phase-owner-only-actions) for the narrow set of things that *do* require a pause). After finishing a phase, the agent runs the required validation/review, summarizes what was built, flags any deviations or open questions, and **stops** — not continuing to the next phase automatically. If the owner says *"continue"* while a phase is already authorized and in progress, the agent resumes that phase; it only asks which phase to start if none is currently in progress.
 - This project is built using five Claude Code plugins/skills — **Superpowers, GSD, Code Review (`/code-review` & `/code-review ultra`), Context Mode, and Claude Mem**. [Section 13](#13-claude-code-skills--plugin-integration) defines which are used at which phase and how the agent should invoke them. The agent is expected to apply them automatically as specified, without being reminded each phase.
 - Every phase entry in Section 15 carries a **Skills:** line. That line is part of the phase's requirements, not a suggestion.
 
@@ -419,18 +419,20 @@ Do **not** run GSD's plan/execute cycle *and* Superpowers' plan/execute cycle as
 
 On phases where GSD is **not** listed, Superpowers' own `brainstorm → write-plan → execute-plan` flow is the top-level structure instead.
 
+**Scale the workflow to the phase, not the other way around.** A phase's **Skills:** line names which skills apply, but not how much ceremony to spend on them. Run the lightest planning pass that still gives the phase appropriate discipline: a routine, well-scoped phase gets one coherent plan and moves; only a phase with genuine design ambiguity or high blast-radius (see the Phase → skill mapping below) earns a heavier discuss-first or per-node planning pass. Never run two competing top-level planning workflows for one piece of work "to be safe" — that produces duplicate passes and burns context for no added discipline.
+
 ### 13.4 Standard workflow the agent runs for every phase
 
-When the project owner says *"start Phase N"*, the agent runs this loop:
+When the project owner authorizes a phase (*"start Phase N"*, *"proceed"*), the agent runs this loop **autonomously, end to end, without pausing for approval at each step**:
 
 1. **Recall.** Claude Mem should have injected prior-phase context automatically. If anything about earlier phases is unclear, query memory (via the `mem-search` skill) rather than guessing or re-deriving.
 2. **Confirm the phase spec.** Re-read the Phase N entry in Section 15 — its tech stack, deliverable, "Done when" criterion, and its **Skills** line.
-3. **Plan.**
+3. **Plan once**, sized to the phase's complexity (see the scaling note above).
    - If the phase lists **GSD**: run GSD's discuss step (only where the phase says so), then have GSD break the phase into small plans, each executed in a fresh context with atomic commits.
    - Otherwise: `/superpowers:brainstorm` (only if the phase has real design ambiguity) → `/superpowers:write-plan` → `/superpowers:execute-plan`.
-4. **Build under TDD.** Superpowers' red-green-refactor applies to every task in every phase. Tests fail first, then implementation.
-5. **Review.** Run `/code-review` at the end of every phase — it's free and unlimited. **Never run `/code-review ultra` as part of a phase.** It is reserved for exactly one full-system pass after Phase 14 is complete (see Section 13.5 and the note at the end of Phase 14), because Anthropic only provides 3 free runs before it bills usage credits. Fix everything `/code-review` raises before proceeding.
-6. **Report and stop.** Summarize what was built, files created/modified, deviations/assumptions, and the review outcome. **Then stop and wait** for the owner to authorize the next phase.
+4. **Execute the whole phase.** Build under TDD — Superpowers' red-green-refactor applies to every task. Tests fail first, then implementation. Move through every task/plan in the phase without stopping for interim approval; make routine engineering decisions independently from the spec. The only interruptions are the owner-only-action pauses in [Section 13.7](#137-when-to-pause-mid-phase-owner-only-actions) — everything else (including a GSD plan's own `checkpoint:human-verify` gates for unremarkable, well-known dependencies) is resolved automatically per that section.
+5. **Review.** Run `/code-review` at the end of every phase — it's free and unlimited, and requires no owner prompting. **Never run `/code-review ultra` as part of a phase.** It is reserved for exactly one full-system pass after Phase 14 is complete (see Section 13.5 and the note at the end of Phase 14), because Anthropic only provides 3 free runs before it bills usage credits. Fix everything `/code-review` raises before proceeding.
+6. **Report and stop.** Summarize what was built, files created/modified, deviations/assumptions, and the review outcome. **Then stop and wait** for the owner to authorize the next phase. If the owner says *"continue"* while this phase is still in progress, resume it directly — don't ask which phase.
 
 Context Mode and Claude Mem require no manual invocation during this loop — they operate via hooks.
 
@@ -485,23 +487,55 @@ Context Mode and Claude Mem require no manual invocation during this loop — th
 
 **Agent note on command names:** Superpowers, Context Mode and the review commands are stable as written above. GSD's distribution has changed across releases and its exact `/gsd:*` subcommand names vary by packaging. At the start of the first session, run `/help` once, confirm which `/gsd:*` commands are actually available, and use those names — do not invent command names, and do not silently skip GSD if a command name differs. If any skill listed for a phase is unavailable, tell the project owner before proceeding rather than continuing without it.
 
+### 13.7 When to pause mid-phase (owner-only actions)
+
+Once a phase is authorized, the agent does not stop for routine task/plan/fix approval. It pauses mid-phase **only** when one of these applies:
+
+1. The spec has a genuine contradiction or ambiguity that re-reading the README doesn't resolve.
+2. An irreversible or materially consequential architectural/product decision can't be safely inferred from the spec.
+3. Something requires credentials, external accounts, permissions, or another action only the project owner can perform.
+4. A manual/system action is needed that Claude Code cannot safely or legitimately perform itself.
+
+**Pause protocol:** state exactly what the owner needs to do, what the agent was attempting, and what remains in the phase — then resume the same phase once the owner responds. One clear instruction from the owner is sufficient; the agent does not re-confirm the same thing afterward.
+
+**Standing pre-authorization — package legitimacy checks.** GSD plans commonly include a `checkpoint:human-verify` gate before installing new dependencies (see the Phase 0 plans for the pattern). For a package that is an unambiguous match to a well-known, real PyPI/npm project (name, maintainer, and repository all check out), the agent resolves this automatically and does not pause — this is exactly how Phase 0's plans 00-01 through 00-03 were already handled. A pause is warranted only when a package looks unfamiliar, misspelled, or otherwise suspicious (typosquat risk, unknown maintainer, no real history).
+
+### 13.8 Resource and system safety
+
+Phase completion is never worth machine instability:
+
+- Never make system-wide or machine-level configuration changes without the owner's explicit permission.
+- Before a resource-intensive operation (large model downloads/loads, big datasets, long-running batch jobs), weigh RAM/CPU/disk and expected runtime, and prefer a small representative run before scaling up. Batch or process incrementally where that reduces risk.
+- If an operation causes repeated crashes, OOMs, timeouts, or other instability, **stop repeating it and diagnose the root cause** rather than retrying — even where a phase's spec implies the operation "must eventually succeed." Choose a safer implementation or testing strategy instead of brute-forcing a failing expensive operation.
+
+### 13.9 Context and session efficiency
+
+Context and session budget are finite resources the agent optimizes, not just spends:
+
+- One coherent plan per phase, sized to that phase's actual complexity — never run competing planning workflows (e.g. GSD's discuss/plan cycle *and* Superpowers' brainstorm/plan cycle) over the same work.
+- Avoid unnecessary repeated file reads, redundant re-derivation of information already in the repo, and excessive commentary. Route bulky tool output through Context Mode.
+- Perform expensive or large-scale operations incrementally, validating early on a small slice before scaling up.
+- If context/session usage becomes constrained mid-phase, checkpoint and commit whatever is safely done, write a precise summary of the exact remaining work, and stop cleanly — don't let a phase fail partway with no record of what's left.
+
 ## 14. Instructions for the Implementing AI Agent
 
 If you are an AI coding agent (e.g. Claude Code) implementing this project:
 
 1. **Read this entire README before writing any code.**
-2. **Implement strictly phase by phase, in the order given in Section 15.** Do not start a phase until the project owner explicitly instructs you to (e.g. *"proceed with Phase 3"*). Do not skip ahead, even if it looks more efficient to build multiple phases together.
+2. **Implement strictly phase by phase, in the order given in Section 15.** Do not start a phase until the project owner explicitly instructs you to (e.g. *"proceed with Phase 3"*). Do not skip ahead, even if it looks more efficient to build multiple phases together. **Once a phase is authorized, execute it autonomously start to finish** — do not pause for approval of individual tasks, plans, tests, fixes, or routine engineering decisions inside that phase; pause only for the owner-only-action cases in [Section 13.7](#137-when-to-pause-mid-phase-owner-only-actions). If the owner says *"continue"* while a phase is already in progress, resume that phase directly rather than asking which one.
 3. **Use the tech stack specified for each phase exactly.** If something in the spec seems wrong, ambiguous, or you'd genuinely recommend a different choice, say so and ask — don't silently substitute a different library or approach.
 4. **LangGraph is used only in two places**: the Mode B retrieve/assess/reformulate/grounding loop (Phase 10), and nowhere else. **Do not introduce LangChain anywhere in this project** — it has been explicitly excluded.
 5. **Do not add a LangGraph (or any) loop around Stage 8→9 (gap ranking → Mode A explanation).** This was considered and explicitly declined — Phase 9 is a single-pass retrieval + generation step, not a loop.
 6. **Ingestion sources are fixed.** The only permitted sources are arXiv, Semantic Scholar, ACL Anthology, Unpaywall (DOI enrichment only), and manual PDF upload. **Do not add IEEE Xplore, Springer, or ACM Digital Library APIs anywhere in this project** — they are explicitly excluded, as is any scripted access to those platforms. Do not add other sources without the owner's approval.
-7. **After completing a phase**, summarize what was built, list files created/modified, note any deviations or assumptions made, and stop. Wait for the next go-ahead.
+7. **After completing a phase**, run its required validation/review, summarize what was built, list files created/modified, note any deviations or assumptions made, and stop. Wait for the next go-ahead.
 8. **Write modular, tested code.** Each phase should include reasonable unit/integration tests (pytest) before being considered done. Tests are written **before** implementation, per Superpowers' TDD discipline.
 9. **Keep the MVP scope disciplined.** Don't add extra frameworks, services, or abstraction layers "for completeness" — this project intentionally avoids overkill (e.g., no LangChain, no learned ranker in the MVP, no Celery/task-queue unless a phase explicitly calls for it).
-10. **Apply the skills defined in [Section 13](#13-claude-code-skills--plugin-integration) automatically.** At the start of every phase, read that phase's **Skills:** line and run the workflow in Section 13.4 without being prompted. Do not wait for the owner to ask you to plan, to run TDD, or to review — those steps are part of the phase.
-11. **Never declare a phase complete before `/code-review` has been run and its findings addressed.** This applies to every phase without exception — `/code-review` is free and unlimited, so there is no reason to skip it.
-12. **At the very first session**, confirm the five plugins are active (`/help`, `/contextmode:ctx-stats`) and report any that are missing to the project owner *before* starting Phase 0.
-13. **`/code-review ultra` is cost-limited — never call it as part of an individual phase.** Anthropic provides only 3 free runs before it bills usage credits. This project uses it exactly once: a single full-system pass after Phase 14 is complete and approved (see Section 13.5 and the note at the end of Phase 14). Do not call it during Phases 0–14 for any reason, even on a high-stakes phase — use `/code-review` there instead.
+10. **Protect machine stability over phase completion.** Never make system-wide/machine-level config changes without explicit permission; weigh resource cost (RAM/CPU/disk/runtime) before large operations and prefer a small representative run first; if something repeatedly crashes, OOMs, times out, or otherwise destabilizes, stop retrying and diagnose the cause instead of forcing it through (see [Section 13.8](#138-resource-and-system-safety)).
+11. **Spend context and session budget deliberately.** One coherent plan per phase, no competing planning workflows, minimal redundant re-reading, bulky output routed through Context Mode; if usage gets tight mid-phase, checkpoint, commit, summarize what's left, and stop cleanly (see [Section 13.9](#139-context-and-session-efficiency)).
+12. **Apply the skills defined in [Section 13](#13-claude-code-skills--plugin-integration) automatically.** At the start of every phase, read that phase's **Skills:** line and run the workflow in Section 13.4 without being prompted. Do not wait for the owner to ask you to plan, to run TDD, or to review — those steps are part of the phase.
+13. **Never declare a phase complete before `/code-review` has been run and its findings addressed.** This applies to every phase without exception — `/code-review` is free and unlimited, so there is no reason to skip it.
+14. **At the very first session**, confirm the five plugins are active (`/help`, `/contextmode:ctx-stats`) and report any that are missing to the project owner *before* starting Phase 0.
+15. **`/code-review ultra` is cost-limited — never call it as part of an individual phase.** Anthropic provides only 3 free runs before it bills usage credits. This project uses it exactly once: a single full-system pass after Phase 14 is complete and approved (see Section 13.5 and the note at the end of Phase 14). Do not call it during Phases 0–14 for any reason, even on a high-stakes phase — use `/code-review` there instead.
 
 ## 15. Implementation Phases
 
