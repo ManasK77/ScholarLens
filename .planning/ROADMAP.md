@@ -61,7 +61,14 @@ Plans:
 **Tech**: `arxiv` Python package; Semantic Scholar API via `httpx`; ACL Anthology bibliographic export + PDF URLs; Unpaywall REST API via `httpx`; FastAPI file upload for manual ingestion; PostgreSQL for the normalized corpus.
 **Build**: Build the normalized corpus writer first (`corpus.py` + the canonical `papers` schema + `dedup.py`), then each ingestion source against it: (1) arXiv source — topic query → metadata + PDF download; (2) Semantic Scholar source — topic query → metadata (+ `openAccessPdf` link where present), metadata-only by design; (3) ACL Anthology source — topic/venue query → metadata + open-access PDF, feeding the same corpus writer, no parallel path; (4) Unpaywall enrichment — runs after discovery, over records with a DOI but no full-text PDF, attaches OA copies, creates no new records; (5) Manual upload — `POST /upload` accepts one or more PDFs, writes to the shared PDF store, creates corpus records with `source='manual_upload'` (metadata backfilled in Phase 2). Expose `/collect` (topic → discovery + enrichment) and `/upload`. Deduplicate across all sources in order DOI → arXiv ID → ACL Anthology ID → normalized title+year. **Constraint:** IEEE Xplore, Springer, and ACM Digital Library APIs are prohibited — do not add them here or anywhere else.
 **Done when**: A topic string yields N deduplicated papers in the normalized corpus from all discovery sources with Unpaywall enrichment applied; a manually uploaded PDF lands in that same corpus and is indistinguishable to Phase 2 apart from its `source` field.
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+- [ ] 01-01-PLAN.md — corpus.py (D-10 schema) + dedup.py (D-19 priority chain) + new deps (arxiv/bibtexparser/httpx)
+- [ ] 01-02-PLAN.md — arXiv source (metadata + PDF via shared httpx helper)
+- [ ] 01-03-PLAN.md — Semantic Scholar source (metadata-only)
+- [ ] 01-04-PLAN.md — ACL Anthology source (bibtexparser over anthology+abstracts.bib.gz)
+- [ ] 01-05-PLAN.md — Unpaywall enrichment (targeted UPDATE, never INSERT)
+- [ ] 01-06-PLAN.md — Manual upload + /collect + /upload endpoints + INGEST-09 exclusion check
 
 ### Phase 2: Parsing & Section Normalization (Stage 2)
 **Goal**: Every paper in the corpus has clean, structurally normalized text ready for downstream extraction.
@@ -251,7 +258,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Project Scaffolding & Environment | 4/4 | Complete | 2026-08-22 |
-| 1. Literature Collection | 0/TBD | Not started | - |
+| 1. Literature Collection | 0/6 | Not started | - |
 | 2. Parsing & Section Normalization | 0/TBD | Not started | - |
 | 3. Scientific Information Extraction | 0/TBD | Not started | - |
 | 4. Joint NER + Relation Extraction | 0/TBD | Not started | - |
