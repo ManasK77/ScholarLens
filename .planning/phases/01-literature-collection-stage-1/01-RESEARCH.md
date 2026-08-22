@@ -440,15 +440,15 @@ async def upload_papers(files: list[UploadFile] = File(...)):
 
 ## Open Questions
 
-1. **Does the ACL Anthology's BibTeX export reliably carry a machine-derivable "Anthology ID" for dedup (INGEST-02's "ACL Anthology ID" key)?**
+1. **(RESOLVED) Does the ACL Anthology's BibTeX export reliably carry a machine-derivable "Anthology ID" for dedup (INGEST-02's "ACL Anthology ID" key)?**
    - What we know: the `url` field's path segment (e.g. `2026.wildre-1.1`) is the Anthology ID and is present on every verified entry in this session's sample.
    - What's unclear: whether every historical entry (pre-2020 "old style" IDs like `E91-1001`) follows the same extractable pattern from the `url` field, or needs the BibTeX cite-key (e.g. `kranti-vajjala-2026-metricalargs`) as a fallback.
-   - Recommendation: derive the Anthology ID from the `url` field's last path segment first; fall back to the BibTeX cite key only if `url` is missing (rare, mostly `@proceedings` entries which aren't individual papers anyway).
+   - **Resolution (post-plan-check):** derive the Anthology ID from the `url` field's last path segment first; when `url` is absent, fall back to the BibTeX cite key (`entry["ID"]`, always present) and construct `pdf_url` as `https://aclanthology.org/{acl_id}.pdf`. Implemented and unit-tested in Plan 01-04 Task 2 (Test 6) against a dedicated url-less fixture entry (`E91-1001`).
 
-2. **Semantic Scholar unauthenticated rate limit — exact requests/second?**
+2. **(RESOLVED) Semantic Scholar unauthenticated rate limit — exact requests/second?**
    - What we know: an API key gives 1 req/sec; unauthenticated is documented as "lower" without this research session finding an exact published number.
    - What's unclear: the precise unauthenticated ceiling (community reports vary; Semantic Scholar's own docs are not fully explicit on the exact shared-pool number).
-   - Recommendation: implement the conservative 2-retry-with-backoff default (per CONTEXT.md's discretion note) and treat 429 responses as retryable; don't hardcode an assumed requests/sec value into application logic.
+   - **Resolution (post-plan-check):** rather than guessing a requests/sec ceiling, both the Semantic Scholar client (Plan 01-03) and the Unpaywall client (Plan 01-05) issue requests via `httpx.get(..., transport=httpx.HTTPTransport(retries=2))` — a conservative, hardcoded-number-free retry default, not a rate-limit-aware resilience framework. This directly addresses the plan-checker's Warning 1 (no retry/backoff was implemented) and closes this open question without inventing an unverified number.
 
 ## Environment Availability
 
