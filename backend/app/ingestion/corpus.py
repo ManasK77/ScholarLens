@@ -8,6 +8,7 @@ Stage 2 onward reads from this schema without ever branching on `source`
 
 from collections.abc import Generator
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 
 import httpx
@@ -51,7 +52,14 @@ class Paper(Base):
     )
 
 
+@lru_cache(maxsize=1)
 def get_engine():
+    """A single cached Engine (and its connection pool) for the process lifetime.
+
+    Building a fresh Engine per request would open a new physical connection
+    pool every time, churning connections and risking exhausting Postgres's
+    max_connections under any sustained traffic.
+    """
     return create_engine(
         get_settings().postgres_url, connect_args={"connect_timeout": 5}
     )

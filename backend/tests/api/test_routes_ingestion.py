@@ -214,6 +214,25 @@ def test_upload_rejects_oversized_file(
     assert response.status_code == 413
 
 
+def test_upload_rejects_oversized_file_multi_chunk(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A multi-megabyte upload spanning several 1MB read chunks (_UPLOAD_CHUNK_SIZE)
+    is still rejected with 413 — regression test for the chunked bounded-read path
+    (code-review finding: a plain file.file.read() would buffer the whole upload
+    before the size check ever ran)."""
+    monkeypatch.setenv("MAX_UPLOAD_SIZE_MB", "1")  # 1MB cap
+
+    oversized_content = b"x" * (5 * 1024 * 1024)  # 5MB, spans 5 read chunks
+
+    response = client.post(
+        "/upload",
+        files={"files": ("paper.pdf", oversized_content, "application/pdf")},
+    )
+
+    assert response.status_code == 413
+
+
 def test_upload_multiple_files_returns_one_result_each(client: TestClient) -> None:
     response = client.post(
         "/upload",

@@ -43,6 +43,31 @@ def _to_paper_dict(candidate: dict, source: str, pdf_path: str | None) -> dict:
     }
 
 
+_UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1MB
+
+
+def _read_bounded(file: UploadFile, max_bytes: int) -> bytes:
+    """Read `file` in chunks, raising before buffering past `max_bytes`.
+
+    A plain `file.file.read()` would buffer the entire upload into memory
+    before manual_upload.save_upload's own size check ever runs, so an
+    oversized upload could exhaust worker memory before being rejected.
+    """
+    chunks = []
+    total = 0
+    while True:
+        chunk = file.file.read(_UPLOAD_CHUNK_SIZE)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise manual_upload.UploadRejected(
+                413, "Uploaded file exceeds the maximum allowed size"
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _process_one(session: Session, paper_dict: dict) -> int:
     existing = dedup.find_existing(session, paper_dict)
     if existing:
@@ -101,8 +126,8 @@ def upload(
 
     created = []
     for file in files:
-        file_bytes = file.file.read()
         try:
+            file_bytes = _read_bounded(file, max_bytes)
             result = manual_upload.save_upload(
                 file_bytes=file_bytes,
                 filename=file.filename,

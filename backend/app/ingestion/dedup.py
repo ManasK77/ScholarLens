@@ -59,6 +59,10 @@ def merge(existing, candidate: dict) -> dict:
         else:
             result[key] = existing_value
 
+    # has_full_text/pdf_path are handled separately (not by the generic loop
+    # above) because they're a coupled pair, not independent present-over-None
+    # fields: pdf_path must always come from whichever side actually has
+    # has_full_text=True, so the two can't be merged independently.
     if getattr(existing, "has_full_text", False):
         result["has_full_text"] = True
         result["pdf_path"] = existing.pdf_path

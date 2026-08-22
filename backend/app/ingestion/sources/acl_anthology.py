@@ -86,6 +86,7 @@ def download_anthology_export(dest_path: str, force: bool = False) -> None:
 
     with httpx.Client(transport=httpx.HTTPTransport(retries=2)) as client:
         resp = client.get(EXPORT_URL, timeout=60.0)
+    resp.raise_for_status()  # fail clearly on a non-200 body rather than a confusing gzip error
     decompressed = gzip.decompress(resp.content)
 
     Path(dest_path).parent.mkdir(parents=True, exist_ok=True)

@@ -14,6 +14,9 @@ monkeypatch httpx.get.
 
 import gzip
 
+import httpx
+import pytest
+
 from app.ingestion.sources import acl_anthology
 
 FIXTURE_PATH = "tests/fixtures/acl_anthology_sample.bib"
@@ -160,6 +163,9 @@ def test_download_anthology_export_fetches_and_gunzips_when_missing(
     class FakeResponse:
         content = compressed
 
+        def raise_for_status(self):
+            pass
+
     def get_impl(url, timeout):
         calls["count"] += 1
         calls["url"] = url
@@ -171,6 +177,28 @@ def test_download_anthology_export_fetches_and_gunzips_when_missing(
 
     assert calls["count"] == 1
     assert dest_path.read_bytes() == original_bytes
+
+
+def test_download_anthology_export_raises_clearly_on_non_200(monkeypatch, tmp_path):
+    """A bad HTTP response must fail via raise_for_status(), not a confusing
+    gzip.decompress error on an HTML/error body (plan-checker follow-up finding)."""
+    dest_path = tmp_path / "export.bib"
+
+    class FakeResponse:
+        content = b"<html>503 Service Unavailable</html>"
+
+        def raise_for_status(self):
+            raise httpx.HTTPStatusError("503", request=None, response=self)
+
+    def get_impl(url, timeout):
+        return FakeResponse()
+
+    monkeypatch.setattr(acl_anthology.httpx, "Client", _make_fake_client(get_impl))
+
+    with pytest.raises(httpx.HTTPStatusError):
+        acl_anthology.download_anthology_export(str(dest_path), force=False)
+
+    assert not dest_path.exists()
 
 
 def test_download_anthology_export_is_noop_when_dest_exists(monkeypatch, tmp_path):
