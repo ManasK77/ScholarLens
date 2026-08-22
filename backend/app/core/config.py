@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     # --- Ingestion sources ---
     unpaywall_email: str
     semantic_scholar_api_key: str | None = None
+    acl_anthology_bib_path: str = "data/acl_anthology_export.bib"
 
     # --- LLM ---
     llm_api_key: str | None = None

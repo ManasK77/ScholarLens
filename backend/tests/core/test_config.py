@@ -93,3 +93,17 @@ def test_get_settings_returns_settings_instance(
     result = get_settings()
 
     assert isinstance(result, Settings)
+
+
+def test_acl_anthology_bib_path_defaults_when_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """acl_anthology_bib_path is optional — existing .env files need no change."""
+    _set_all_required(monkeypatch)
+    monkeypatch.delenv("ACL_ANTHOLOGY_BIB_PATH", raising=False)
+
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.acl_anthology_bib_path == "data/acl_anthology_export.bib"
