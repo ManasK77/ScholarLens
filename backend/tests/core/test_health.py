@@ -23,6 +23,7 @@ def _settings() -> Settings:
         pdf_storage_path="/data/pdfs",
         max_upload_size_mb=50,
         unpaywall_email="you@example.com",
+        grobid_url="http://grobid:8070",
     )
 
 

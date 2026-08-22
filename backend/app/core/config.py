@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     semantic_scholar_api_key: str | None = None
     acl_anthology_bib_path: str = "data/acl_anthology_export.bib"
 
+    # --- GROBID (Stage 2 parsing service) ---
+    grobid_url: str
+
     # --- LLM ---
     llm_api_key: str | None = None
 

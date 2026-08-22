@@ -23,6 +23,7 @@ REQUIRED_ENV = {
     "PDF_STORAGE_PATH": "/data/pdfs",
     "MAX_UPLOAD_SIZE_MB": "50",
     "UNPAYWALL_EMAIL": "you@example.com",
+    "GROBID_URL": "http://grobid:8070",
 }
 
 

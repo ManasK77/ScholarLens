@@ -18,6 +18,7 @@ ALL_REQUIRED_ENV = {
     "PDF_STORAGE_PATH": "/data/pdfs",
     "MAX_UPLOAD_SIZE_MB": "50",
     "UNPAYWALL_EMAIL": "you@example.com",
+    "GROBID_URL": "http://grobid:8070",
 }
 
 
@@ -52,6 +53,7 @@ def test_settings_loads_all_d09_variables(monkeypatch: pytest.MonkeyPatch) -> No
     assert settings.unpaywall_email == "you@example.com"
     assert settings.semantic_scholar_api_key == "s2-test-key"
     assert settings.llm_api_key == "llm-test-key"
+    assert settings.grobid_url == "http://grobid:8070"
 
 
 def test_optional_keys_default_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
