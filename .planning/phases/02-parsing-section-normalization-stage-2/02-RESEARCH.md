@@ -356,7 +356,7 @@ def extract_header_fields(root) -> dict:
 
 **If this table is empty:** N/A — see entries above.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does the `-full` GROBID image assign meaningfully more `div[@type]` values than `-crf`?**
    - What we know: GROBID's segmentation-model docs describe a fixed, back-matter-focused `type` vocabulary (annex/availability/conflict/contribution/funding/acknowledgement/references) — this appears to be a schema-level design choice, not a model-capability difference.
