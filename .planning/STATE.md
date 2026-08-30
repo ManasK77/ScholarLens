@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 2 Plan 02-01 complete (infra/contract — grobid service, Settings.grobid_url, ParsedDocument, new deps installed); Plans 02-02..02-05 not yet executed — checkpointed here due to context budget, not a blocker
-last_updated: "2026-08-23T00:45:00+05:30"
-last_activity: 2026-08-23 -- Plan 02-01 executed and committed (both tasks); 76/76 backend tests pass; found and fixed a real transformers/sentence-transformers version conflict at install time
+status: awaiting_authorization
+stopped_at: Phase 3 complete; reviewed and verified; waiting for owner authorization to start Phase 4
+last_updated: "2026-08-30T23:45:00+05:30"
+last_activity: 2026-08-30 -- Phase 3 completed; 126 default backend tests and the explicit Phase 3 SciBERT integration test pass; Ruff and code review clean
 progress:
   total_phases: 15
-  completed_phases: 2
-  total_plans: 11
-  completed_plans: 11
-  percent: 13
+  completed_phases: 4
+  total_plans: 16
+  completed_plans: 16
+  percent: 27
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Every research gap ScholarLens reports is grounded in structured, retrieved evidence extracted before any LLM is involved — the LLM explains gaps already discovered by extraction, clustering, trend analysis, and ranking; it never discovers gaps on its own.
-**Current focus:** Phase 2 (Parsing & Section Normalization) — Plan 02-01 done, Plans 02-02 through 02-05 remain
+**Current focus:** Phase 4 (Joint NER + Relation Extraction) — not authorized; waiting for owner direction
 
 ## Current Position
 
-Phase: 2 (Parsing & Section Normalization, Stage 2) — IN PROGRESS
-Plan: 1 of 5 executed (02-01 infra/contract DONE; 02-02 grobid_client+tei_parser, 02-03 section_classifier, 02-04 fallback, 02-05 service+backfill remain — all already planned and plan-checker PASSED, just not yet executed)
-Status: Resume by running Plans 02-02/02-03/02-04 (wave 2 — independent of each other, no shared files, can run in parallel), then 02-05 (wave 3, depends on all three).
-Last activity: 2026-08-23 -- Plan 02-01 executed: docker-compose grobid service (0.9.1-full, healthy-gated), Settings.grobid_url, ParsedDocument SQLAlchemy table (D-28), and all 5 new Phase 2 dependencies installed (torch CPU-only verified via torch.version.cuda is None). Found and fixed a real dependency conflict during install (sentence-transformers>=6.0 needs transformers>=5.0 — not caught by research, which had assumed <5). 76/76 backend tests pass (72 after Plan 02-01 + confirms no regressions). Stopped here on purpose — context budget was getting tight; Wave 2's three plans involve loading the real SciBERT model, PDF fallback parsing, and the GROBID HTTP client — substantial enough to warrant a fresh context window rather than risk running out mid-execution.
+Phase: 3 (Scientific Information Extraction, Stage 3) — COMPLETE
+Plan: 1 of 1 executed
+Status: Waiting for explicit authorization to begin Phase 4.
+Last activity: 2026-08-30 -- Hybrid spaCy/SciBERT extraction and typed Postgres persistence completed under TDD. Review added section-index provenance, cached semantic exemplars, and lazy model loading. 126 default tests plus the explicit Phase 3 real-model check pass.
 
-Progress: [███░░░░░░░] ~13% (2/15 phases fully complete + Phase 2 1/5 plans done; understates actual progress)
+Progress: [███░░░░░░░] 27% (4/15 phases complete)
 
 ## Performance Metrics
 
@@ -86,7 +86,7 @@ None yet.
 
 ### Blockers/Concerns
 
-None currently blocking. Phase 2 Plan 02-01 (wave 1) is done; Plans 02-02/02-03/02-04 (wave 2) and 02-05 (wave 3) remain — stopped here deliberately due to context budget (not an owner-only blocker). Resume by executing Plans 02-02/02-03/02-04.
+Docker and Docker Compose are unavailable on the current host, so the live `docker compose`/GROBID-container acceptance check could not be rerun. The GROBID HTTP and TEI behavior is covered offline using captured real GROBID 0.9.1 fixtures. This does not block the completed implementation, but live Compose verification remains an environment follow-up.
 
 ## Deferred Items
 
@@ -107,6 +107,6 @@ Phase 1-specific deferrals (per CONTEXT.md, in scope for a later revisit only if
 
 ## Session Continuity
 
-Last session: 2026-08-23T00:45:00+05:30
-Stopped at: Plan 02-01 (wave 1, infra/contract) executed and committed — grobid docker-compose service, Settings.grobid_url, ParsedDocument table, new deps installed (76/76 tests pass). Plans 02-02/02-03/02-04 (wave 2) and 02-05 (wave 3) remain, already planned and plan-checker PASSED. Stopped deliberately due to context budget, not a blocker. No owner input needed; just resume and execute.
-Resume file: .planning/phases/02-parsing-section-normalization-stage-2/02-02-PLAN.md (start here — wave 2: grobid_client.py + tei_parser.py; 02-03 section_classifier.py and 02-04 fallback.py can run in parallel since none share files)
+Last session: 2026-08-30T23:45:00+05:30
+Stopped at: Phase 3 complete after TDD, full regression tests, real SciBERT smoke check, static review, and findings remediation.
+Resume file: README.md §15 Phase 4 — only after explicit owner authorization.

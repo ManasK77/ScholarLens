@@ -32,17 +32,17 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 
 ### Parsing & Section Normalization (Phase 2)
 
-- [ ] **PARSE-01**: GROBID parses each PDF into structured sections/paragraphs/sentences.
-- [ ] **PARSE-02**: PyMuPDF/pdfplumber fallback handles PDFs GROBID cannot parse cleanly.
-- [ ] **PARSE-03**: A SciBERT rhetorical-role classifier normalizes inconsistent venue headings onto the common schema (Introduction, Methodology, Results, Discussion, Limitations, Future Work, Conclusion).
-- [ ] **PARSE-04**: Parsing reads from the normalized corpus only and never branches on a paper's `source` field.
-- [ ] **PARSE-05**: Manual-upload records missing metadata are backfilled via GROBID header extraction (title, authors, DOI).
-- [ ] **PARSE-06**: A DOI recovered via backfill becomes eligible for the same Semantic Scholar / Unpaywall enrichment as any other paper.
+- [x] **PARSE-01**: GROBID parses each PDF into structured sections/paragraphs/sentences.
+- [x] **PARSE-02**: PyMuPDF/pdfplumber fallback handles PDFs GROBID cannot parse cleanly.
+- [x] **PARSE-03**: A SciBERT rhetorical-role classifier normalizes inconsistent venue headings onto the common schema (Introduction, Methodology, Results, Discussion, Limitations, Future Work, Conclusion).
+- [x] **PARSE-04**: Parsing reads from the normalized corpus only and never branches on a paper's `source` field.
+- [x] **PARSE-05**: Manual-upload records missing metadata are backfilled via GROBID header extraction (title, authors, DOI).
+- [x] **PARSE-06**: A DOI recovered via backfill becomes eligible for the same Semantic Scholar / Unpaywall enrichment as any other paper.
 
 ### Scientific Information Extraction (Phase 3)
 
-- [ ] **EXTRACT-01**: A spaCy + Transformer pipeline extracts Contribution / Limitation / Future Work / Dataset / Model / Metric statements per paper from normalized sections.
-- [ ] **EXTRACT-02**: Extracted statements are stored in Postgres linked to `paper_id` and queryable by type.
+- [x] **EXTRACT-01**: A spaCy + Transformer pipeline extracts Contribution / Limitation / Future Work / Dataset / Model / Metric statements per paper from normalized sections.
+- [x] **EXTRACT-02**: Extracted statements are stored in Postgres linked to `paper_id` and queryable by type.
 
 ### Joint NER + Relation Extraction (Phase 4)
 
@@ -155,14 +155,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INGEST-07 | Phase 1 | Complete |
 | INGEST-08 | Phase 1 | Complete |
 | INGEST-09 | Phase 1 | Complete |
-| PARSE-01 | Phase 2 | Pending |
-| PARSE-02 | Phase 2 | Pending |
-| PARSE-03 | Phase 2 | Pending |
-| PARSE-04 | Phase 2 | Pending |
-| PARSE-05 | Phase 2 | Pending |
-| PARSE-06 | Phase 2 | Pending |
-| EXTRACT-01 | Phase 3 | Pending |
-| EXTRACT-02 | Phase 3 | Pending |
+| PARSE-01 | Phase 2 | Complete |
+| PARSE-02 | Phase 2 | Complete |
+| PARSE-03 | Phase 2 | Complete |
+| PARSE-04 | Phase 2 | Complete |
+| PARSE-05 | Phase 2 | Complete |
+| PARSE-06 | Phase 2 | Complete |
+| EXTRACT-01 | Phase 3 | Complete |
+| EXTRACT-02 | Phase 3 | Complete |
 | NERRE-01 | Phase 4 | Pending |
 | NERRE-02 | Phase 4 | Pending |
 | EMBED-01 | Phase 5 | Pending |

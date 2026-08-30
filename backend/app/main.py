@@ -3,6 +3,9 @@
 from fastapi import FastAPI
 
 from app.api import routes_health, routes_ingestion
+from app.extraction import (
+    storage as extraction_storage,  # noqa: F401 -- registers ExtractedFact
+)
 from app.ingestion.corpus import Base, get_engine
 from app.parsing import (
     storage,  # noqa: F401 -- registers ParsedDocument on Base.metadata

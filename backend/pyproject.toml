@@ -32,6 +32,7 @@ dependencies = [
     # default PyPI index, which can pull a multi-GB CUDA-enabled build.
     "torch>=2.9,<3",
     "sentence-transformers>=6.0,<7",
+    "spacy>=3.8,<4",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +45,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = '-m "not integration"'
 markers = [
     "integration: tests that load a real ML model or hit a real external service; excluded from the default fast run",
 ]

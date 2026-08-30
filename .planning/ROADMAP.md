@@ -12,8 +12,8 @@ ScholarLens is built in 15 fixed phases (0 through 14), taken verbatim from READ
 
 - [x] **Phase 0: Project Scaffolding & Environment** - Empty but running Docker Compose stack (Neo4j/Qdrant/Postgres) with a verified `/health` endpoint
 - [x] **Phase 1: Literature Collection (Stage 1)** - A topic yields a deduplicated, normalized corpus from arXiv/Semantic Scholar/ACL Anthology + Unpaywall, plus manual upload
-- [ ] **Phase 2: Parsing & Section Normalization (Stage 2)** - Every paper becomes structured JSON with normalized sections/paragraphs/sentences
-- [ ] **Phase 3: Scientific Information Extraction (Stage 3)** - Contribution/Limitation/Future Work/Dataset/Model/Metric facts extracted per paper
+- [x] **Phase 2: Parsing & Section Normalization (Stage 2)** - Every paper becomes structured JSON with normalized sections/paragraphs/sentences
+- [x] **Phase 3: Scientific Information Extraction (Stage 3)** - Contribution/Limitation/Future Work/Dataset/Model/Metric facts extracted per paper
 - [ ] **Phase 4: Joint NER + Relation Extraction (Stage 4)** - Entities and typed relations written into a queryable Neo4j graph
 - [ ] **Phase 5: Embeddings & Vector Indexing (Stage 5)** - Every statement embedded and searchable in Qdrant, linked back to Neo4j
 - [ ] **Phase 6: Semantic Clustering + Contradiction Detection (Stage 6)** - Similar limitations clustered; contradictions flagged via NLI
@@ -83,7 +83,13 @@ Plans:
 **Tech**: GROBID (Dockerized service, primary parser), PyMuPDF + pdfplumber (fallback), SciBERT-based section-role classifier.
 **Build**: A parsing module that sends each PDF to GROBID, extracts structured sections/paragraphs/sentences, falls back to PyMuPDF/pdfplumber on failure, and normalizes headings onto the common schema. Reads from the normalized corpus only and must not branch on a paper's `source` field — every paper is parsed identically regardless of ingestion path. Additionally, backfill metadata for manually uploaded papers via GROBID header extraction (title, authors, DOI); a DOI recovered this way becomes eligible for the same Semantic Scholar / Unpaywall enrichment as any other paper.
 **Done when**: Every stored paper has a structured JSON representation with normalized sections, paragraphs, and sentences, and no manually uploaded paper remains without metadata that GROBID could recover.
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+- [x] 02-01-PLAN.md — GROBID Compose/config, dependencies, and ParsedDocument storage
+- [x] 02-02-PLAN.md — GROBID HTTP client and TEI structure parser
+- [x] 02-03-PLAN.md — keyword + SciBERT section-role classifier
+- [x] 02-04-PLAN.md — PyMuPDF/pdfplumber fallback parser
+- [x] 02-05-PLAN.md — source-agnostic orchestration and manual-upload backfill
 
 ### Phase 3: Scientific Information Extraction (Stage 3)
 **Goal**: Each paper's claims are turned into structured, queryable facts instead of prose.
@@ -95,7 +101,9 @@ Plans:
 **Tech**: spaCy + Transformer pipeline (SciBERT/DeBERTa), structured extraction schema.
 **Build**: Extracts Contribution / Limitation / Future Work / Dataset / Model / Metric statements per paper from the normalized sections, stores them in Postgres linked to `paper_id`.
 **Done when**: Each parsed paper has associated structured fact rows queryable by type.
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [x] 03-01-PLAN.md — spaCy/SciBERT extraction, structured fact storage, and orchestration
 
 ### Phase 4: Joint NER + Relation Extraction (Stage 4)
 **Goal**: The system understands which entities (models, datasets, tasks, metrics, domains) relate to which papers and how.
@@ -259,8 +267,8 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 |-------|----------------|--------|-----------|
 | 0. Project Scaffolding & Environment | 4/4 | Complete | 2026-08-22 |
 | 1. Literature Collection | 6/6 | Complete | 2026-08-22 |
-| 2. Parsing & Section Normalization | 0/TBD | Not started | - |
-| 3. Scientific Information Extraction | 0/TBD | Not started | - |
+| 2. Parsing & Section Normalization | 5/5 | Complete | 2026-08-30 |
+| 3. Scientific Information Extraction | 1/1 | Complete | 2026-08-30 |
 | 4. Joint NER + Relation Extraction | 0/TBD | Not started | - |
 | 5. Embeddings & Vector Indexing | 0/TBD | Not started | - |
 | 6. Semantic Clustering + Contradiction Detection | 0/TBD | Not started | - |
