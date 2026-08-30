@@ -6,12 +6,12 @@ An AI research assistant that reads scientific literature at scale, builds a str
 
 ## How to Use This Document
 
-This README is written to be followed by **both a human maintainer and an AI coding agent (e.g. Claude Code)**.
+This README is written to be followed by **both a human maintainer and an AI coding agent or IDE assistant** (e.g. Claude Code, Cursor, Antigravity, Codex, or any comparable tool).
 
 - The **human (project owner)** controls pacing. Implementation is broken into numbered **Phases** (see [Section 15](#15-implementation-phases)). No phase should begin until the owner explicitly says so (e.g., *"start Phase 2"*, *"proceed"*).
-- The **AI agent** should read this entire document before writing any code, then implement strictly phase by phase, in order, using the tech stack specified for that phase. **Once a phase is authorized, the agent executes it autonomously start to finish** — it does not stop to ask approval for individual tasks, plans, tests, fixes, or routine engineering decisions inside that phase (see [Section 13.7](#137-when-to-pause-mid-phase-owner-only-actions) for the narrow set of things that *do* require a pause). After finishing a phase, the agent runs the required validation/review, summarizes what was built, flags any deviations or open questions, and **stops** — not continuing to the next phase automatically. If the owner says *"continue"* while a phase is already authorized and in progress, the agent resumes that phase; it only asks which phase to start if none is currently in progress.
-- This project is built using five Claude Code plugins/skills — **Superpowers, GSD, Code Review (`/code-review` & `/code-review ultra`), Context Mode, and Claude Mem**. [Section 13](#13-claude-code-skills--plugin-integration) defines which are used at which phase and how the agent should invoke them. The agent is expected to apply them automatically as specified, without being reminded each phase.
-- Every phase entry in Section 15 carries a **Skills:** line. That line is part of the phase's requirements, not a suggestion.
+- The **AI agent** should read this entire document before writing any code, then implement strictly phase by phase, in order, using the tech stack specified for that phase. **Once a phase is authorized, the agent executes it autonomously start to finish** — it does not stop to ask approval for individual tasks, plans, tests, fixes, or routine engineering decisions inside that phase (see [Section 13.5](#135-when-to-pause-mid-phase-owner-only-actions) for the narrow set of things that *do* require a pause). After finishing a phase, the agent runs the required tests and code review, summarizes what was built, flags any deviations or open questions, and **stops** — not continuing to the next phase automatically. If the owner says *"continue"* while a phase is already authorized and in progress, the agent resumes that phase; it only asks which phase to start if none is currently in progress.
+- This project follows a disciplined development workflow — plan before implementing, tests before code, and a code review at the end of every phase. [Section 13](#13-development-workflow--quality-gates) defines the workflow in detail and which parts apply at which phase. The agent is expected to apply it automatically as specified, without being reminded each phase.
+- Every phase entry in Section 15 carries a **Workflow:** line. That line is part of the phase's requirements, not a suggestion.
 
 ---
 
@@ -29,7 +29,7 @@ This README is written to be followed by **both a human maintainer and an AI cod
 10. [Evaluation Strategy](#10-evaluation-strategy)
 11. [Repository Structure](#11-repository-structure)
 12. [Environment & Configuration](#12-environment--configuration)
-13. [Claude Code Skills & Plugin Integration](#13-claude-code-skills--plugin-integration)
+13. [Development Workflow & Quality Gates](#13-development-workflow--quality-gates)
 14. [Instructions for the Implementing AI Agent](#14-instructions-for-the-implementing-ai-agent)
 15. [Implementation Phases](#15-implementation-phases)
 16. [Future Extensions (Post-MVP)](#16-future-extensions-post-mvp)
@@ -388,119 +388,68 @@ research-gap-ai/
 - Services orchestrated via Docker Compose: `backend`, `frontend`, `neo4j`, `qdrant`, `postgres`, `grobid`.
 - Config values (model names, cluster weights `w1..w5`, retrieval-round cap, top-N retrieval size) live in a central settings module, not scattered across files.
 
-## 13. Claude Code Skills & Plugin Integration
+## 13. Development Workflow & Quality Gates
 
-This project is built with five Claude Code plugins/skills active. **The implementing agent must use them as specified below — they are not optional tooling, they are part of the defined build process.** Each phase in [Section 15](#15-implementation-phases) names the skills required for that phase.
+This project is built with a disciplined, phase-based development workflow — plan before implementing, tests before code, and a code review gate at the end of every phase. **The implementing agent must follow it as specified below — it is not optional, it is part of the defined build process.** This workflow is tool-agnostic: it describes required practices (planning, TDD, review, context hygiene), not any specific IDE, plugin, or command set, so it applies equally whether the work is done in Claude Code, Cursor, Antigravity, Codex, or any other coding agent/IDE. Each phase in [Section 15](#15-implementation-phases) names the workflow required for that phase.
 
-### 13.1 The five skills and what each is for
+### 13.1 Core development discipline (every phase, Phase 0 → Phase 14)
 
-| Skill | Problem it solves | How it activates |
-|---|---|---|
-| **Superpowers** | Development discipline via its skill library — `test-driven-development` (red-green-refactor), `systematic-debugging` (root-cause before fix), `brainstorming`, `writing-plans`, `subagent-driven-development`, `requesting-code-review` | Slash commands (`/superpowers:brainstorm`, `/superpowers:write-plan`, `/superpowers:execute-plan`) + automatic skill activation for the rest |
-| **GSD (Get Sh*t Done)** | Context rot on large multi-step builds: locks decisions in a discuss phase, splits work into small plans each run in a **fresh context window**, atomic git commit per task, validates a test-feedback loop exists *before* code is written | Slash commands (`/gsd:*`) |
-| **Code Review** (`/code-review`, `/code-review ultra`) | Catching bugs/edge cases/design issues before a phase is declared done. `/code-review` = fast, **free, unlimited** structured self-review — used at the end of every phase. `/code-review ultra` = multiple cloud reviewer agents attacking from different angles (logic, security, performance) — **Anthropic gives only 3 free runs, then bills usage credits ($5–20/run)**, so this project uses it exactly **once**, as a full-system pass after Phase 14, never per-phase | Slash commands (built into Claude Code) |
-| **Context Mode** | In-session context bloat: routes large raw tool outputs through a sandbox so only compact summaries enter the context window | Automatic (PreToolUse hook) once installed |
-| **Claude Mem** | Cross-session memory: captures decisions/edits per session and re-injects the relevant parts at the start of the next session | Automatic (session lifecycle hooks) once installed |
+- **Test-driven development.** Write the failing test first, then implement, then refactor. Every phase includes pytest coverage (or equivalent) for the code it adds.
+- **Plan before executing.** Write a short implementation plan for the phase before writing any code — what will be built, in what order, and how it will be tested.
+- **Code review at the end of every phase**, before it is considered done. Use whatever review capability is available in your environment — a self-review checklist, static analysis/linting, or an AI code-review feature. This step is required on every phase, with no exceptions.
+- **Systematic debugging.** When something breaks, find the root cause before proposing a fix.
+- **Context hygiene.** Several phases produce bulky raw output (arXiv / Semantic Scholar / ACL Anthology / Unpaywall API responses, GROBID TEI-XML, embedding batches, Cypher/Qdrant query results, LLM traces). Parse or summarize this kind of output programmatically rather than pasting it wholesale into the working context — see 13.7.
+- **Persist decisions across sessions.** Because the project owner controls pacing, phases may span separate sessions and days. Keep a running decisions/progress log in the repo (e.g. `PROGRESS.md`, or the phase summaries produced at the end of each session) so architectural decisions (GROBID over PyMuPDF, the SPECTER2/SciBERT split, LangGraph only in Phase 10, LangChain excluded, gap-score weights, etc.) don't need to be re-derived or re-explained in a later session or by a different agent/IDE picking up the work.
 
-### 13.2 Always-on layer (every phase, Phase 0 → Phase 14)
-
-- **Claude Mem** — always on. The project owner controls pacing, so phases will span separate sessions and days. Every architectural decision recorded in this README (GROBID over PyMuPDF, SPECTER2 vs SciBERT split, LangGraph only in Phase 10, LangChain excluded, gap-score weights) must survive between sessions without being re-explained.
-- **Context Mode** — always on. Nearly every phase produces bulky raw output (arXiv / Semantic Scholar / ACL Anthology / Unpaywall API responses, GROBID TEI-XML, embedding batches, Cypher/Qdrant query results, LLM traces).
-- **Superpowers** — always on for the actual coding inside every phase (TDD + debugging discipline).
-
-**GSD** and the **code-review commands** are used selectively, per the phase table in 13.5.
-
-### 13.3 Division of labour between GSD and Superpowers (important)
-
-Do **not** run GSD's plan/execute cycle *and* Superpowers' plan/execute cycle as two competing top-level workflows in the same phase — that produces duplicate planning passes and wasted context.
-
-- **GSD owns the macro structure** of a phase: discuss → break into small plans → run each plan in a fresh context → atomic commits per task.
-- **Superpowers owns the micro discipline** *inside* each plan or task: write the failing test first, then implement, then refactor; use its debugging methodology when something breaks.
-
-On phases where GSD is **not** listed, Superpowers' own `brainstorm → write-plan → execute-plan` flow is the top-level structure instead.
-
-**Scale the workflow to the phase, not the other way around.** A phase's **Skills:** line names which skills apply, but not how much ceremony to spend on them. Run the lightest planning pass that still gives the phase appropriate discipline: a routine, well-scoped phase gets one coherent plan and moves; only a phase with genuine design ambiguity or high blast-radius (see the Phase → skill mapping below) earns a heavier discuss-first or per-node planning pass. Never run two competing top-level planning workflows for one piece of work "to be safe" — that produces duplicate passes and burns context for no added discipline.
-
-### 13.4 Standard workflow the agent runs for every phase
+### 13.2 Standard workflow the agent runs for every phase
 
 When the project owner authorizes a phase (*"start Phase N"*, *"proceed"*), the agent runs this loop **autonomously, end to end, without pausing for approval at each step**:
 
-1. **Recall.** Claude Mem should have injected prior-phase context automatically. If anything about earlier phases is unclear, query memory (via the `mem-search` skill) rather than guessing or re-deriving.
-2. **Confirm the phase spec.** Re-read the Phase N entry in Section 15 — its tech stack, deliverable, "Done when" criterion, and its **Skills** line.
-3. **Plan once**, sized to the phase's complexity (see the scaling note above).
-   - If the phase lists **GSD**: run GSD's discuss step (only where the phase says so), then have GSD break the phase into small plans, each executed in a fresh context with atomic commits.
-   - Otherwise: `/superpowers:brainstorm` (only if the phase has real design ambiguity) → `/superpowers:write-plan` → `/superpowers:execute-plan`.
-4. **Execute the whole phase.** Build under TDD — Superpowers' red-green-refactor applies to every task. Tests fail first, then implementation. Move through every task/plan in the phase without stopping for interim approval; make routine engineering decisions independently from the spec. The only interruptions are the owner-only-action pauses in [Section 13.7](#137-when-to-pause-mid-phase-owner-only-actions) — everything else (including a GSD plan's own `checkpoint:human-verify` gates for unremarkable, well-known dependencies) is resolved automatically per that section.
-5. **Review.** Run `/code-review` at the end of every phase — it's free and unlimited, and requires no owner prompting. **Never run `/code-review ultra` as part of a phase.** It is reserved for exactly one full-system pass after Phase 14 is complete (see Section 13.5 and the note at the end of Phase 14), because Anthropic only provides 3 free runs before it bills usage credits. Fix everything `/code-review` raises before proceeding.
+1. **Recall.** Check the repo's progress log and prior-phase artifacts for anything already decided rather than guessing or re-deriving it.
+2. **Confirm the phase spec.** Re-read the Phase N entry in Section 15 — its tech stack, deliverable, "Done when" criterion, and its **Workflow** line.
+3. **Plan the phase's tasks before implementing them**, per its Workflow line.
+4. **Execute the whole phase.** Build under TDD — red, then green, then refactor, for every task. Move through every task in the phase without stopping for interim approval; make routine engineering decisions independently from the spec. The only interruptions are the owner-only-action pauses in [Section 13.5](#135-when-to-pause-mid-phase-owner-only-actions).
+5. **Review.** Run a code review at the end of the phase — it requires no owner prompting — and fix everything it raises before proceeding.
 6. **Report and stop.** Summarize what was built, files created/modified, deviations/assumptions, and the review outcome. **Then stop and wait** for the owner to authorize the next phase. If the owner says *"continue"* while this phase is still in progress, resume it directly — don't ask which phase.
 
-Context Mode and Claude Mem require no manual invocation during this loop — they operate via hooks.
+### 13.3 Phase → workflow mapping (authoritative)
 
-### 13.5 Phase → skill mapping (authoritative)
+| Phase | Testing | Review | Notes |
+|---|---|---|---|
+| 0 — Scaffolding | TDD | code review | — |
+| 1 — Literature Collection | TDD | code review | Bulk API responses — heavy context hygiene |
+| 2 — Parsing & Section Norm. | TDD | code review | GROBID TEI-XML output is large — heavy context hygiene |
+| 3 — Scientific IE | TDD | code review | — |
+| 4 — Joint NER + RE | TDD | code review | Errors cascade downstream; heavy context hygiene |
+| 5 — Embeddings & Vector Index | TDD | code review | Batch embedding/Qdrant output is large — heavy context hygiene |
+| 6 — Clustering + Contradiction | TDD | code review | — |
+| 7 — Trend Analysis | TDD | code review | — |
+| 8 — Gap Ranking | TDD | code review | Formula determines every gap's validity — thorough per-signal TDD |
+| 9 — Mode A RAG Explanation | TDD | code review | Retrieved-paragraph batches + LLM traces are large — heavy context hygiene; verify no unsupported claims |
+| 10 — Mode B LangGraph | TDD | code review | Highest-complexity phase; live user input — review logic and security; heavy context hygiene |
+| 11 — Backend API | TDD | code review + security review | Exposed surface — review security carefully |
+| 12 — Frontend Dashboard | — | code review | — |
+| 13 — Evaluation Harness | TDD | code review | — |
+| 14 — Deployment | — | code review + security review | — |
 
-| Phase | GSD | Superpowers | Review command | Context Mode load |
-|---|---|---|---|---|
-| 0 — Scaffolding | discuss + plans | execute + TDD | `/code-review` | normal |
-| 1 — Literature Collection | plans | TDD | `/code-review` | **heavy** |
-| 2 — Parsing & Section Norm. | plans (fresh context per batch) | TDD | `/code-review` | **heavy** |
-| 3 — Scientific IE | — | brainstorm→plan→execute + TDD | `/code-review` | normal |
-| 4 — Joint NER + RE | **discuss** + plans | TDD | `/code-review` | **heavy** |
-| 5 — Embeddings & Vector Index | plans | TDD | `/code-review` | **heavy** |
-| 6 — Clustering + Contradiction | **validation-before-code** + plans | TDD | `/code-review` | normal |
-| 7 — Trend Analysis | — | brainstorm→plan→execute + TDD | `/code-review` | normal |
-| 8 — Gap Ranking | — | plan→execute + TDD | `/code-review` | normal |
-| 9 — Mode A RAG Explanation | plans | TDD | `/code-review` | **heavy** |
-| 10 — Mode B LangGraph | **discuss + plan per graph node** | TDD | `/code-review` | **heavy** |
-| 11 — Backend API | plans | TDD | `/code-review` + `/security-review` | normal |
-| 12 — Frontend Dashboard | — | brainstorm→plan→execute | `/code-review` | normal |
-| 13 — Evaluation Harness | — | plan→execute + TDD | `/code-review` | normal |
-| 14 — Deployment | **discuss** + plans | execute | `/code-review` + `/security-review` → **project's one `/code-review ultra` pass after this phase** | normal |
+### 13.4 Tooling note
 
-**On `/code-review ultra`:** Anthropic gives 3 free runs before it bills usage credits ($5–20/run). To guarantee zero additional cost, this project does **not** call `/code-review ultra` per phase — every phase closes with the free `/code-review` instead (plus `/security-review`, also free, on Phases 11 and 14). `/code-review ultra` is used exactly **once** in the whole project: a full-system pass after Phase 14 is approved and complete (see the note at the end of Phase 14 in Section 15). Phases 4, 8, 9, 10, 11, and 14 were flagged earlier as the highest-stakes work (extraction errors cascading downstream, the scoring formula's validity, grounding correctness, Mode B's complexity, exposed endpoints, deployment config) — that risk is exactly why the one deep multi-agent pass happens after all of them are built and integrated, catching cross-phase issues a single-phase review can't see, rather than being spent piecemeal across six separate runs.
+This project does not prescribe a specific IDE, plugin, or command set. Use whichever planning, testing, and code-review tooling your environment provides — the requirement is the underlying discipline (plan first, test first, review before done), not any particular tool's syntax.
 
-### 13.6 Command reference
-
-```
-# Superpowers
-/superpowers:brainstorm      # interactive design refinement (use only where design is genuinely open)
-/superpowers:write-plan      # produce an implementation plan
-/superpowers:execute-plan    # execute the plan in batches
-
-# GSD  (command namespace is /gsd:* )
-/gsd:*                       # discuss → plan → execute → verify workflow commands
-
-# Code review (built into Claude Code)
-/code-review                      # fast, free, unlimited review — run at the end of EVERY phase
-/code-review ultra                # multi-agent deep cloud review (logic / security / performance).
-                              # Only 3 free runs, then billed usage credits ($5-20/run) — this project
-                              # runs it ONCE, after Phase 14, never per-phase. /ultrareview (no hyphen)
-                              # is a known alias for the same command.
-/security-review             # security-focused scan (free, built-in) — used on Phases 11 and 14
-
-# Context Mode (otherwise automatic)
-/contextmode:ctx-stats       # check context savings / confirm it is active
-
-# Claude Mem
-# fully automatic via session hooks; to explicitly search stored memory, invoke
-# the mem-search skill (e.g. ask "search memory for how we handled X")
-```
-
-**Agent note on command names:** Superpowers, Context Mode and the review commands are stable as written above. GSD's distribution has changed across releases and its exact `/gsd:*` subcommand names vary by packaging. At the start of the first session, run `/help` once, confirm which `/gsd:*` commands are actually available, and use those names — do not invent command names, and do not silently skip GSD if a command name differs. If any skill listed for a phase is unavailable, tell the project owner before proceeding rather than continuing without it.
-
-### 13.7 When to pause mid-phase (owner-only actions)
+### 13.5 When to pause mid-phase (owner-only actions)
 
 Once a phase is authorized, the agent does not stop for routine task/plan/fix approval. It pauses mid-phase **only** when one of these applies:
 
 1. The spec has a genuine contradiction or ambiguity that re-reading the README doesn't resolve.
 2. An irreversible or materially consequential architectural/product decision can't be safely inferred from the spec.
 3. Something requires credentials, external accounts, permissions, or another action only the project owner can perform.
-4. A manual/system action is needed that Claude Code cannot safely or legitimately perform itself.
+4. A manual/system action is needed that the agent cannot safely or legitimately perform itself.
 
 **Pause protocol:** state exactly what the owner needs to do, what the agent was attempting, and what remains in the phase — then resume the same phase once the owner responds. One clear instruction from the owner is sufficient; the agent does not re-confirm the same thing afterward.
 
-**Standing pre-authorization — package legitimacy checks.** GSD plans commonly include a `checkpoint:human-verify` gate before installing new dependencies (see the Phase 0 plans for the pattern). For a package that is an unambiguous match to a well-known, real PyPI/npm project (name, maintainer, and repository all check out), the agent resolves this automatically and does not pause — this is exactly how Phase 0's plans 00-01 through 00-03 were already handled. A pause is warranted only when a package looks unfamiliar, misspelled, or otherwise suspicious (typosquat risk, unknown maintainer, no real history).
+**Standing pre-authorization — package legitimacy checks.** Before installing a new dependency, do a quick sanity check on it. For a package that is an unambiguous match to a well-known, real PyPI/npm project (name, maintainer, and repository all check out), the agent resolves this automatically and does not pause. A pause is warranted only when a package looks unfamiliar, misspelled, or otherwise suspicious (typosquat risk, unknown maintainer, no real history).
 
-### 13.8 Resource and system safety
+### 13.6 Resource and system safety
 
 Phase completion is never worth machine instability:
 
@@ -508,47 +457,46 @@ Phase completion is never worth machine instability:
 - Before a resource-intensive operation (large model downloads/loads, big datasets, long-running batch jobs), weigh RAM/CPU/disk and expected runtime, and prefer a small representative run before scaling up. Batch or process incrementally where that reduces risk.
 - If an operation causes repeated crashes, OOMs, timeouts, or other instability, **stop repeating it and diagnose the root cause** rather than retrying — even where a phase's spec implies the operation "must eventually succeed." Choose a safer implementation or testing strategy instead of brute-forcing a failing expensive operation.
 
-### 13.9 Context and session efficiency
+### 13.7 Context and session efficiency
 
 Context and session budget are finite resources the agent optimizes, not just spends:
 
-- One coherent plan per phase, sized to that phase's actual complexity — never run competing planning workflows (e.g. GSD's discuss/plan cycle *and* Superpowers' brainstorm/plan cycle) over the same work.
-- Avoid unnecessary repeated file reads, redundant re-derivation of information already in the repo, and excessive commentary. Route bulky tool output through Context Mode.
+- One coherent plan per phase, sized to that phase's actual complexity — never run competing planning workflows over the same work.
+- Avoid unnecessary repeated file reads, redundant re-derivation of information already in the repo, and excessive commentary. Parse or summarize bulky raw output (see 13.1) instead of pasting it wholesale into context.
 - Perform expensive or large-scale operations incrementally, validating early on a small slice before scaling up.
 - If context/session usage becomes constrained mid-phase, checkpoint and commit whatever is safely done, write a precise summary of the exact remaining work, and stop cleanly — don't let a phase fail partway with no record of what's left.
 
 ## 14. Instructions for the Implementing AI Agent
 
-If you are an AI coding agent (e.g. Claude Code) implementing this project:
+If you are an AI coding agent or IDE assistant (e.g. Claude Code, Cursor, Antigravity, Codex, or similar) implementing this project:
 
 1. **Read this entire README before writing any code.**
-2. **Implement strictly phase by phase, in the order given in Section 15.** Do not start a phase until the project owner explicitly instructs you to (e.g. *"proceed with Phase 3"*). Do not skip ahead, even if it looks more efficient to build multiple phases together. **Once a phase is authorized, execute it autonomously start to finish** — do not pause for approval of individual tasks, plans, tests, fixes, or routine engineering decisions inside that phase; pause only for the owner-only-action cases in [Section 13.7](#137-when-to-pause-mid-phase-owner-only-actions). If the owner says *"continue"* while a phase is already in progress, resume that phase directly rather than asking which one.
+2. **Implement strictly phase by phase, in the order given in Section 15.** Do not start a phase until the project owner explicitly instructs you to (e.g. *"proceed with Phase 3"*). Do not skip ahead, even if it looks more efficient to build multiple phases together. **Once a phase is authorized, execute it autonomously start to finish** — do not pause for approval of individual tasks, plans, tests, fixes, or routine engineering decisions inside that phase; pause only for the owner-only-action cases in [Section 13.5](#135-when-to-pause-mid-phase-owner-only-actions). If the owner says *"continue"* while a phase is already in progress, resume that phase directly rather than asking which one.
 3. **Use the tech stack specified for each phase exactly.** If something in the spec seems wrong, ambiguous, or you'd genuinely recommend a different choice, say so and ask — don't silently substitute a different library or approach.
 4. **LangGraph is used only in two places**: the Mode B retrieve/assess/reformulate/grounding loop (Phase 10), and nowhere else. **Do not introduce LangChain anywhere in this project** — it has been explicitly excluded.
 5. **Do not add a LangGraph (or any) loop around Stage 8→9 (gap ranking → Mode A explanation).** This was considered and explicitly declined — Phase 9 is a single-pass retrieval + generation step, not a loop.
 6. **Ingestion sources are fixed.** The only permitted sources are arXiv, Semantic Scholar, ACL Anthology, Unpaywall (DOI enrichment only), and manual PDF upload. **Do not add IEEE Xplore, Springer, or ACM Digital Library APIs anywhere in this project** — they are explicitly excluded, as is any scripted access to those platforms. Do not add other sources without the owner's approval.
-7. **After completing a phase**, run its required validation/review, summarize what was built, list files created/modified, note any deviations or assumptions made, and stop. Wait for the next go-ahead.
-8. **Write modular, tested code.** Each phase should include reasonable unit/integration tests (pytest) before being considered done. Tests are written **before** implementation, per Superpowers' TDD discipline.
+7. **After completing a phase**, run its required tests and code review, summarize what was built, list files created/modified, note any deviations or assumptions made, and stop. Wait for the next go-ahead.
+8. **Write modular, tested code.** Each phase should include reasonable unit/integration tests (pytest) before being considered done. Tests are written **before** implementation, per the TDD discipline in [Section 13](#13-development-workflow--quality-gates).
 9. **Keep the MVP scope disciplined.** Don't add extra frameworks, services, or abstraction layers "for completeness" — this project intentionally avoids overkill (e.g., no LangChain, no learned ranker in the MVP, no Celery/task-queue unless a phase explicitly calls for it).
-10. **Protect machine stability over phase completion.** Never make system-wide/machine-level config changes without explicit permission; weigh resource cost (RAM/CPU/disk/runtime) before large operations and prefer a small representative run first; if something repeatedly crashes, OOMs, times out, or otherwise destabilizes, stop retrying and diagnose the cause instead of forcing it through (see [Section 13.8](#138-resource-and-system-safety)).
-11. **Spend context and session budget deliberately.** One coherent plan per phase, no competing planning workflows, minimal redundant re-reading, bulky output routed through Context Mode; if usage gets tight mid-phase, checkpoint, commit, summarize what's left, and stop cleanly (see [Section 13.9](#139-context-and-session-efficiency)).
-12. **Apply the skills defined in [Section 13](#13-claude-code-skills--plugin-integration) automatically.** At the start of every phase, read that phase's **Skills:** line and run the workflow in Section 13.4 without being prompted. Do not wait for the owner to ask you to plan, to run TDD, or to review — those steps are part of the phase.
-13. **Never declare a phase complete before `/code-review` has been run and its findings addressed.** This applies to every phase without exception — `/code-review` is free and unlimited, so there is no reason to skip it.
-14. **At the very first session**, confirm the five plugins are active (`/help`, `/contextmode:ctx-stats`) and report any that are missing to the project owner *before* starting Phase 0.
-15. **`/code-review ultra` is cost-limited — never call it as part of an individual phase.** Anthropic provides only 3 free runs before it bills usage credits. This project uses it exactly once: a single full-system pass after Phase 14 is complete and approved (see Section 13.5 and the note at the end of Phase 14). Do not call it during Phases 0–14 for any reason, even on a high-stakes phase — use `/code-review` there instead.
+10. **Protect machine stability over phase completion.** Never make system-wide/machine-level config changes without explicit permission; weigh resource cost (RAM/CPU/disk/runtime) before large operations and prefer a small representative run first; if something repeatedly crashes, OOMs, times out, or otherwise destabilizes, stop retrying and diagnose the cause instead of forcing it through (see [Section 13.6](#136-resource-and-system-safety)).
+11. **Spend context and session budget deliberately.** One coherent plan per phase, no competing planning workflows, minimal redundant re-reading, bulky output parsed/summarized rather than pasted raw; if usage gets tight mid-phase, checkpoint, commit, summarize what's left, and stop cleanly (see [Section 13.7](#137-context-and-session-efficiency)).
+12. **Apply the workflow defined in [Section 13](#13-development-workflow--quality-gates) automatically.** At the start of every phase, read that phase's **Workflow** line and run the loop in Section 13.2 without being prompted. Do not wait for the owner to ask you to plan, to run TDD, or to review — those steps are part of the phase.
+13. **Never declare a phase complete before a code review has been run and its findings addressed.** This applies to every phase without exception.
+14. **At the very first session**, confirm your environment can actually run the stack this project needs (Python 3.11+, Docker & Docker Compose, and whatever testing/review tooling your IDE or agent provides) and report anything missing to the project owner *before* starting Phase 0.
 
 ## 15. Implementation Phases
 
 > The project owner controls when each phase starts. Do not proceed automatically.
 
 ### Phase 0 — Project Scaffolding & Environment
-**Skills:** Verify Context Mode + Claude Mem are active first (`/contextmode:ctx-stats`, `/help`) — everything after this depends on them. GSD discuss + plans for repo shape; Superpowers execute + TDD; close with `/code-review`.
+**Workflow:** Confirm your environment/tooling is set up first (Docker, Python, etc.) — everything after this depends on it. Plan and execute under TDD; close with a code review.
 **Tech:** Python 3.11+, pyproject.toml, Docker & Docker Compose, pre-commit, .env handling, FastAPI skeleton, React+TS skeleton (empty shell), pytest setup.
 **Build:** Repository structure as in Section 11. `docker-compose.yml` bringing up empty Neo4j, Qdrant, and Postgres containers plus a `/health` endpoint on the FastAPI backend. No ML/NLP logic yet.
 **Done when:** `docker-compose up` runs cleanly and `/health` returns 200 with all service connections verified.
 
 ### Phase 1 — Literature Collection (Stage 1)
-**Skills:** Context Mode **heavy** (bulk arXiv / Semantic Scholar / ACL Anthology / Unpaywall API responses are exactly the raw-output case it exists for). GSD plans — **one plan per ingestion source**, so each source is built and tested in isolation against the shared corpus contract. Superpowers TDD; close with `/code-review`.
+**Workflow:** Heavy context hygiene — bulk arXiv / Semantic Scholar / ACL Anthology / Unpaywall API responses are exactly the raw-output case to parse/summarize rather than paste wholesale. Build and test each ingestion source in isolation against the shared corpus contract. TDD; close with a code review.
 **Tech:** `arxiv` Python package; Semantic Scholar API via `httpx`; ACL Anthology bibliographic export + PDF URLs; Unpaywall REST API via `httpx`; FastAPI file upload for manual ingestion; PostgreSQL for the normalized corpus.
 **Build:** Build the **normalized corpus writer first** (`corpus.py` + the canonical `papers` schema + `dedup.py`), then each ingestion source against it:
 
@@ -564,7 +512,7 @@ Expose `/collect` (topic → run discovery + enrichment) and `/upload` (manual i
 **Done when:** A topic string yields N deduplicated papers in the normalized corpus from all discovery sources with Unpaywall enrichment applied; a manually uploaded PDF lands in that same corpus and is indistinguishable to Phase 2 apart from its `source` field.
 
 ### Phase 2 — Parsing & Section Normalization (Stage 2)
-**Skills:** GSD plans with a **fresh context per batch** — GROBID TEI-XML output is large and repeats across hundreds of papers. Context Mode **heavy**; Superpowers TDD; close with `/code-review`.
+**Workflow:** GROBID TEI-XML output is large and repeats across hundreds of papers — heavy context hygiene. Plan, then execute under TDD; close with a code review.
 **Tech:** GROBID (Dockerized service, primary parser), PyMuPDF + pdfplumber (fallback), SciBERT-based section-role classifier.
 **Build:** A parsing module that sends each PDF to GROBID, extracts structured sections/paragraphs/sentences, falls back to PyMuPDF/pdfplumber on failure, and normalizes headings onto the common schema (Introduction, Methodology, Results, Discussion, Limitations, Future Work, Conclusion). It reads from the normalized corpus only and **must not branch on a paper's `source` field** — every paper is parsed identically regardless of ingestion path.
 
@@ -572,78 +520,76 @@ Additionally, **backfill metadata for manually uploaded papers**: GROBID also ex
 **Done when:** Every stored paper has a structured JSON representation with normalized sections, paragraphs, and sentences, and no manually uploaded paper remains without metadata that GROBID could recover.
 
 ### Phase 3 — Scientific Information Extraction (Stage 3)
-**Skills:** Superpowers-led (`/superpowers:brainstorm` → `write-plan` → `execute-plan`) with strict TDD — extraction rules are unit-testable sentence by sentence. Close with `/code-review`.
+**Workflow:** Brainstorm → plan → execute, with strict TDD — extraction rules are unit-testable sentence by sentence. Close with a code review.
 **Tech:** spaCy + Transformer pipeline (SciBERT/DeBERTa), structured extraction schema.
 **Build:** Extracts Contribution / Limitation / Future Work / Dataset / Model / Metric statements per paper from the normalized sections, stores them in Postgres linked to `paper_id`.
 **Done when:** Each parsed paper has associated structured fact rows queryable by type.
 
 ### Phase 4 — Joint NER + Relation Extraction (Stage 4)
-**Skills:** Start with a **GSD discuss phase** to lock the model choice before any code — errors here cascade into the graph, clusters, and every downstream stage. Then GSD plans + Superpowers TDD, Context Mode **heavy**, and close with `/code-review` (free, unlimited). This phase's extra risk is covered later by the project's single `/code-review ultra` pass after Phase 14, not a per-phase ultra run.
+**Workflow:** Errors here cascade into the graph, clusters, and every downstream stage, so lean on thorough TDD coverage. Plan, then execute under TDD; heavy context hygiene; close with a code review.
 **Tech:** SciERC-style joint entity+relation model (DyGIE++ architecture or an equivalent pretrained scientific IE model).
 **Build:** Extracts entities (Model, Dataset, Task, Metric, Domain) and relations between them (`trained_on`, `evaluated_using`, `fails_on`, `achieves`, etc.) in a single pass; writes entities and relations into Neo4j as nodes/edges linked to the source paper.
 **Done when:** The Neo4j graph contains papers connected to extracted entities via typed relationships, queryable via Cypher.
 
 ### Phase 5 — Embeddings & Vector Indexing (Stage 5)
-**Skills:** Context Mode **heavy** (batch embedding jobs, Qdrant upserts, Neo4j link-back queries all produce bulky output). GSD plans; Superpowers TDD; close with `/code-review`.
+**Workflow:** Heavy context hygiene (batch embedding jobs, Qdrant upserts, Neo4j link-back queries all produce bulky output). Plan; TDD; close with a code review.
 **Tech:** SPECTER2, Qdrant.
 **Build:** Batch-embeds every paragraph/limitation/future-work statement using SPECTER2; stores vectors in Qdrant with metadata (paper ID, year, venue, section type) enabling filtered search; links each vector back to its Neo4j node ID.
 **Done when:** A semantic query against Qdrant returns relevant paragraphs with correct metadata and graph linkage.
 
 ### Phase 6 — Semantic Clustering + Contradiction Detection (Stage 6)
-**Skills:** Use **GSD's validate-before-code step** first — establish a concrete test signal (a small hand-labelled set of limitation sentences that *should* cluster together) before writing clustering code. Then GSD plans + Superpowers TDD; close with `/code-review`.
+**Workflow:** Under TDD, establish a concrete expected outcome first — a small hand-labelled set of limitation sentences that *should* cluster together — before writing clustering code. Plan, then execute; close with a code review.
 **Tech:** HDBSCAN or BERTopic, DeBERTa-MNLI.
 **Build:** Clusters limitation/future-work statements by SPECTER2 embedding similarity (no fixed cluster count). Within each cluster, runs pairwise NLI checks to flag contradicting statements between papers.
 **Done when:** Clusters are stored with member statements, and contradiction flags are attached where applicable.
 
 ### Phase 7 — Trend Analysis (Stage 7)
-**Skills:** Superpowers-led with TDD — deterministic aggregation logic with clear expected outputs. Close with `/code-review`.
+**Workflow:** Brainstorm → plan → execute with TDD — deterministic aggregation logic with clear expected outputs. Close with a code review.
 **Tech:** Pandas, NumPy.
 **Build:** Aggregates per-cluster mention counts by publication year and computes a trend slope/score per cluster.
 **Done when:** Each cluster has a time series and a trend score, exposed via the API.
 
 ### Phase 8 — Gap Ranking (Stage 8)
-**Skills:** Superpowers `write-plan` → `execute-plan` with TDD (test each signal term independently, then the combined score). Close with `/code-review`. This formula determines the validity of every gap the system reports, so lean on thorough TDD coverage here — the deep review pass happens once, at the end (see Phase 14).
+**Workflow:** Plan → execute with TDD (test each signal term independently, then the combined score). Close with a code review. This formula determines the validity of every gap the system reports, so lean on thorough TDD coverage here.
 **Tech:** Plain Python (no ML model — a transparent weighted formula).
 **Build:** Implements `gap_score = w1·mention_frequency + w2·trend_slope − w3·solution_density + w4·citation_impact + w5·contradiction_flag` with configurable weights; ranks clusters and stores results in Postgres.
 **Done when:** A ranked, queryable list of gap clusters with individual signal breakdowns is available via the API.
 
 ### Phase 9 — Mode A: RAG-Grounded Explanation Generation (Stage 9)
-**Skills:** GSD plans; Superpowers TDD; Context Mode **heavy** (retrieved paragraph batches + LLM traces). Close with `/code-review`, explicitly checking that no generated claim is unsupported by retrieved evidence — this is the project's core credibility claim, and it gets a second, deeper look in the single final `/code-review ultra` pass after Phase 14.
+**Workflow:** Plan; TDD; heavy context hygiene (retrieved paragraph batches + LLM traces). Close with a code review, explicitly checking that no generated claim is unsupported by retrieved evidence — this is the project's core credibility claim.
 **Tech:** Qdrant retrieval, direct LLM API call (Llama 3.x / Qwen / GPT), structured JSON output/schema validation. **No LangGraph loop here.**
 **Build:** For each top-ranked gap cluster, retrieves the top-N actual supporting paragraphs from Qdrant and passes them as context to the LLM in a single pass, producing a structured report (Gap / Evidence / Confidence / Suggested Directions). Stores and exposes reports via `/reports`.
 **Done when:** Top-K ranked gaps each have a complete, evidence-grounded report referencing real retrieved paragraphs/papers.
 
 ### Phase 10 — Mode B: Interactive GraphRAG with LangGraph (Stage 10)
-**Skills:** The most complex phase — use **GSD discuss first**, then **one GSD plan per graph node** (retrieve → assess → reformulate → rerank → generate → grounding check), each in a fresh context with atomic commits. Superpowers TDD per node; Context Mode **heavy**; close with `/code-review` (takes live user input, so logic *and* security angles both matter — this phase gets particular attention in the single final `/code-review ultra` pass after Phase 14).
+**Workflow:** The most complex phase — plan and implement it node by node (retrieve → assess → reformulate → rerank → generate → grounding check). TDD per node; heavy context hygiene; close with a code review (takes live user input, so logic *and* security angles both matter).
 **Tech:** **LangGraph**, Qdrant, Neo4j, cross-encoder reranker, LLM API.
 **Build:** Implements the stateful graph described in [Section 9](#9-mode-b-in-detail-interactive-graphrag-with-langgraph): retrieve (vector + graph) → assess sufficiency → reformulate/retry (capped rounds) → rerank → generate → grounding check → return or regenerate. Exposes a `/query` endpoint accepting a natural-language research question and returning a grounded answer with source citations.
 **Done when:** A test question reliably returns an answer whose claims trace back to specific retrieved papers, with visible retry behavior when initial retrieval is weak.
 
 ### Phase 11 — Backend API Integration
-**Skills:** GSD plans (one per endpoint group); Superpowers TDD. Close with `/code-review` followed by `/security-review` (both free, unlimited) — these endpoints are the system's exposed surface, so run `/security-review` thoroughly here.
+**Workflow:** Plan, then implement under TDD. Close with a code review followed by a security-focused review — these endpoints are the system's exposed surface, so review security thoroughly here.
 **Tech:** FastAPI.
 **Build:** Wires Phases 1–10 into a complete REST surface: `/collect`, `/upload`, `/papers`, `/graph`, `/clusters`, `/trends`, `/gaps`, `/reports` (Mode A), `/query` (Mode B). Adds OpenAPI docs and basic API-key auth.
 **Done when:** The full backend is usable end-to-end via documented REST endpoints without needing to run internal scripts manually.
 
 ### Phase 12 — Frontend Dashboard
-**Skills:** Superpowers-led (`brainstorm` is worthwhile here for layout/UX decisions) → `write-plan` → `execute-plan`. Close with `/code-review`.
+**Workflow:** Brainstorm (worthwhile here for layout/UX decisions) → plan → execute. Close with a code review.
 **Tech:** React + TypeScript, Plotly/D3.js, a graph-visualization component (e.g. force-directed graph view).
 **Build:** Dashboard views for: ranked gap reports (Mode A), trend charts, cluster/knowledge-graph exploration, and a chat-style interface for Mode B queries with citations displayed.
 **Done when:** A researcher can browse gap reports and ask interactive questions entirely through the UI.
 
 ### Phase 13 — Evaluation Harness
-**Skills:** Superpowers `write-plan` → `execute-plan` with TDD — scripts with well-defined expected outputs. Close with `/code-review`.
+**Workflow:** Plan → execute with TDD — scripts with well-defined expected outputs. Close with a code review.
 **Tech:** Python scripts.
 **Build:** Implements the three evaluation methods from [Section 10](#10-evaluation-strategy) — time-shifted validation, survey cross-check, and an expert-scoring rubric/collection script — and produces a summary report.
 **Done when:** Running the harness against a test corpus produces a concrete evaluation report with precision/validity indicators.
 
 ### Phase 14 — Full Deployment
-**Skills:** **GSD discuss phase** before touching config (secrets handling, service wiring, volumes). Superpowers execute. Close with `/code-review` + `/security-review` (both free, unlimited). **Once this phase is approved, run the project's single, one-time `/code-review ultra` pass** — see the note at the end of this phase's entry below.
+**Workflow:** Plan the config carefully (secrets handling, service wiring, volumes), then execute. Close with a code review + a security-focused review.
 **Tech:** Docker Compose (full stack).
 **Build:** Single `docker-compose up` brings up backend, frontend, Neo4j, Qdrant, Postgres, and GROBID together, wired via environment configuration, with a documented local run procedure.
 **Done when:** A fresh clone + `docker-compose up` + `.env` configured results in a fully working system end-to-end.
-
-**Final review (after Phase 14, once only, not a phase of its own).** Once the project owner approves Phase 14, run exactly one `/code-review ultra` pass over the complete, integrated codebase. This is the **only** time `/code-review ultra` is used anywhere in this project. Anthropic provides just 3 free runs before it starts billing usage credits, and this project is designed to spend only the first of them — every other review gate throughout Phases 0–14 uses the free `/code-review` (and `/security-review` on Phases 11/14) instead. Address anything the ultra pass raises; once resolved, the build is complete.
 
 ## 16. Future Extensions (Post-MVP)
 
