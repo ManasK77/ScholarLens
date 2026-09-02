@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: awaiting_authorization
-stopped_at: Phase 3 complete; reviewed and verified; waiting for owner authorization to start Phase 4
-last_updated: "2026-08-30T23:45:00+05:30"
-last_activity: 2026-08-30 -- Phase 3 completed; 126 default backend tests and the explicit Phase 3 SciBERT integration test pass; Ruff and code review clean
+stopped_at: Backend Phases 4-11 complete; frontend explicitly deferred by owner; waiting for authorization for Phase 12
+last_updated: "2026-09-01"
+last_activity: 2026-09-01 -- Complete backend pipeline, Gemini/Ollama providers, LangGraph GraphRAG, and secured REST API implemented; 143 default tests pass
 progress:
   total_phases: 15
-  completed_phases: 4
-  total_plans: 16
-  completed_plans: 16
-  percent: 27
+  completed_phases: 12
+  total_plans: 24
+  completed_plans: 24
+  percent: 80
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Every research gap ScholarLens reports is grounded in structured, retrieved evidence extracted before any LLM is involved — the LLM explains gaps already discovered by extraction, clustering, trend analysis, and ranking; it never discovers gaps on its own.
-**Current focus:** Phase 4 (Joint NER + Relation Extraction) — not authorized; waiting for owner direction
+**Current focus:** Backend complete through Phase 11. Phase 12 frontend is explicitly deferred until the owner authorizes it.
 
 ## Current Position
 
-Phase: 3 (Scientific Information Extraction, Stage 3) — COMPLETE
-Plan: 1 of 1 executed
-Status: Waiting for explicit authorization to begin Phase 4.
-Last activity: 2026-08-30 -- Hybrid spaCy/SciBERT extraction and typed Postgres persistence completed under TDD. Review added section-index provenance, cached semantic exemplars, and lazy model loading. 126 default tests plus the explicit Phase 3 real-model check pass.
+Phase: 11 (Backend API Integration) — COMPLETE
+Plan: Combined owner-authorized backend pass for Phases 4–11 executed in dependency order
+Status: Waiting for explicit authorization to begin Phase 12; owner requested no frontend changes in this pass.
+Last activity: 2026-09-01 -- GLiNER2/Neo4j, SPECTER2/Qdrant, clustering/NLI, trends, ranking, Mode A, LangGraph Mode B, Gemini/Ollama selection, and the secured REST API completed. See `.planning/BACKEND-04-11-SUMMARY.md`.
 
-Progress: [███░░░░░░░] 27% (4/15 phases complete)
+Progress: [████████░░] 80% (12/15 phases complete)
 
 ## Performance Metrics
 
@@ -82,11 +82,11 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- Run the backend Docker image build and live Neo4j/Qdrant/Postgres/GROBID/model smoke test when Docker Desktop's daemon is healthy.
 
 ### Blockers/Concerns
 
-Docker and Docker Compose are unavailable on the current host, so the live `docker compose`/GROBID-container acceptance check could not be rerun. The GROBID HTTP and TEI behavior is covered offline using captured real GROBID 0.9.1 fixtures. This does not block the completed implementation, but live Compose verification remains an environment follow-up.
+Docker CLI and Compose are installed, and Compose configuration validates. Docker Desktop was started, but its daemon did not become reachable at the configured Unix socket, so the backend image build and live multi-service acceptance check could not run. Offline tests cover all external boundaries; this remains an environment-only follow-up.
 
 ## Deferred Items
 
@@ -107,6 +107,6 @@ Phase 1-specific deferrals (per CONTEXT.md, in scope for a later revisit only if
 
 ## Session Continuity
 
-Last session: 2026-08-30T23:45:00+05:30
-Stopped at: Phase 3 complete after TDD, full regression tests, real SciBERT smoke check, static review, and findings remediation.
-Resume file: README.md §15 Phase 4 — only after explicit owner authorization.
+Last session: 2026-09-01
+Stopped at: Backend complete through Phase 11 after TDD, full regression tests, static/security review, dependency validation, and findings remediation.
+Resume file: README.md §15 Phase 12 — only after explicit owner authorization; frontend was explicitly excluded from the backend pass.

@@ -32,6 +32,9 @@ def save_upload(
     if len(file_bytes) > max_bytes:
         raise UploadRejected(413, "Uploaded file exceeds the maximum allowed size")
 
+    if not file_bytes.startswith(b"%PDF-"):
+        raise UploadRejected(415, "Uploaded content is not a valid PDF file")
+
     paper = corpus.insert_paper(
         session,
         {

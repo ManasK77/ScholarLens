@@ -17,7 +17,7 @@ dicts" pattern.
 import httpx
 
 SEARCH_URL = "https://api.semanticscholar.org/graph/v1/paper/search"
-FIELDS = "title,authors,year,venue,externalIds,abstract,openAccessPdf"
+FIELDS = "title,authors,year,venue,externalIds,abstract,openAccessPdf,citationCount"
 
 
 def search_topic(topic: str, api_key: str | None = None) -> list[dict]:
@@ -45,6 +45,7 @@ def search_topic(topic: str, api_key: str | None = None) -> list[dict]:
                 "doi": (p.get("externalIds") or {}).get("DOI"),
                 "abstract": p.get("abstract"),
                 "openaccess_pdf_url": (p.get("openAccessPdf") or {}).get("url"),
+                "citation_count": p.get("citationCount"),
             }
         )
     return results

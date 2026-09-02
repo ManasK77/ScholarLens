@@ -1,1 +1,1 @@
-"""Phase 7 — trend analysis."""
+"""Phase 7 — per-cluster publication-year trend analysis."""

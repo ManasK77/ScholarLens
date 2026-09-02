@@ -8,7 +8,7 @@ papers touched (new inserts + enriched rows) for the run.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -19,7 +19,7 @@ router = APIRouter()
 
 
 class CollectRequest(BaseModel):
-    topic: str
+    topic: str = Field(min_length=2, max_length=300)
 
 
 def _to_paper_dict(candidate: dict, source: str, pdf_path: str | None) -> dict:
@@ -40,6 +40,7 @@ def _to_paper_dict(candidate: dict, source: str, pdf_path: str | None) -> dict:
         "has_full_text": pdf_path is not None,
         "arxiv_id": candidate.get("arxiv_id"),
         "acl_id": candidate.get("acl_id"),
+        "citation_count": candidate.get("citation_count"),
     }
 
 
@@ -123,6 +124,11 @@ def upload(
 ):
     settings = get_settings()
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
+    if len(files) > settings.max_upload_files:
+        raise HTTPException(
+            status_code=413,
+            detail=f"At most {settings.max_upload_files} files may be uploaded at once",
+        )
 
     created = []
     for file in files:

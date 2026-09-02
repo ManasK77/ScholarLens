@@ -24,6 +24,7 @@ def _settings() -> Settings:
         max_upload_size_mb=50,
         unpaywall_email="you@example.com",
         grobid_url="http://grobid:8070",
+        api_key="test-api-key",
     )
 
 

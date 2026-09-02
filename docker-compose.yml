@@ -74,7 +74,18 @@ services:
       grobid:
         condition: service_healthy
 
+  # Optional local LLM provider. Start with:
+  #   docker compose --profile ollama up
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
 volumes:
   neo4j_data:
   qdrant_data:
   postgres_data:
+  ollama_data:

@@ -204,7 +204,7 @@ Both modes are implemented — Mode A is the batch/offline engine, Mode B is the
 | Reranking | Cross-encoder (e.g. MS MARCO MiniLM cross-encoder) | Reorders retrieved chunks before they're passed to the LLM |
 | Trend Analysis | Pandas + NumPy | Aggregate mention frequency over time per cluster |
 | Orchestration (Mode B + grounding checks) | **LangGraph** | Stateful, conditional, loopable graph for retrieve → assess → reformulate → generate → verify (see Section 9). **LangChain is intentionally not used anywhere in this project.** |
-| LLM | Llama 3.x / Qwen / GPT (via API) | Final synthesis only — called directly via API with structured (JSON) output, no framework wrapper |
+| LLM | Gemini API or local Ollama model | Final synthesis only — selected with `LLM_PROVIDER`, called directly over HTTP with structured JSON output, no framework wrapper |
 | Visualization | Plotly / D3.js | Trend graphs, cluster views, knowledge graph exploration |
 | Backend API | FastAPI | Upload, analysis, querying, reports |
 | Frontend | React + TypeScript | Researcher-facing dashboard |
@@ -385,6 +385,8 @@ research-gap-ai/
 
 - All secrets/API keys (LLM provider, Semantic Scholar API, etc.) live in `.env`, never hardcoded. `.env.example` documents required variables.
 - Ingestion-specific config: `UNPAYWALL_EMAIL` (Unpaywall requires a contact email as a query parameter instead of an API key — no account or key needed), `SEMANTIC_SCHOLAR_API_KEY` (**optional** — the API works unauthenticated at a lower rate limit), `PDF_STORAGE_PATH`, and `MAX_UPLOAD_SIZE_MB` for the manual-upload endpoint. arXiv and ACL Anthology require no credentials; set a descriptive User-Agent/contact string for arXiv as a courtesy.
+- Backend API access is protected by the required `API_KEY` value, sent by clients as `X-API-Key`.
+- Final synthesis supports two environment-selected providers: `LLM_PROVIDER=gemini` with `GEMINI_API_KEY`/`GEMINI_MODEL`, or `LLM_PROVIDER=ollama` with `OLLAMA_URL`/`OLLAMA_MODEL`. Both use structured JSON output through direct HTTP calls.
 - Services orchestrated via Docker Compose: `backend`, `frontend`, `neo4j`, `qdrant`, `postgres`, `grobid`.
 - Config values (model names, cluster weights `w1..w5`, retrieval-round cap, top-N retrieval size) live in a central settings module, not scattered across files.
 

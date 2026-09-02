@@ -1,1 +1,1 @@
-"""Phase 5 — SPECTER2 + Qdrant + Neo4j writers."""
+"""Phase 5 — SPECTER2 encoding and Qdrant evidence indexing."""

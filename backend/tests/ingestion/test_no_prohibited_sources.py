@@ -13,9 +13,9 @@ def test_no_prohibited_platform_references() -> None:
 
     for py_file in ingestion_dir.rglob("*.py"):
         text = py_file.read_text(encoding="utf-8")
-        assert not PROHIBITED_PATTERN.search(
-            text
-        ), f"{py_file} references a prohibited platform (IEEE/Springer/ACM)"
+        assert not PROHIBITED_PATTERN.search(text), (
+            f"{py_file} references a prohibited platform (IEEE/Springer/ACM)"
+        )
 
 
 def test_only_permitted_source_modules_exist() -> None:

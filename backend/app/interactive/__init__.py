@@ -1,1 +1,1 @@
-"""Phase 10 — Mode B LangGraph pipeline."""
+"""Phase 10 — bounded, grounded Mode B LangGraph pipeline."""

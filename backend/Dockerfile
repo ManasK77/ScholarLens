@@ -3,7 +3,11 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY pyproject.toml .
-RUN pip install --no-cache-dir -e ".[dev]"
+# Pin resolution to PyTorch's CPU wheel index before installing the remaining
+# project dependencies; otherwise Linux may pull multi-GB CUDA runtime wheels.
+RUN pip install --no-cache-dir "torch>=2.9,<3" \
+      --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -e ".[dev]"
 
 COPY app ./app
 

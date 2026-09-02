@@ -26,6 +26,7 @@ REQUIRED_ENV = {
     "MAX_UPLOAD_SIZE_MB": "50",
     "UNPAYWALL_EMAIL": "you@example.com",
     "GROBID_URL": "http://grobid:8070",
+    "API_KEY": "test-api-key",
 }
 
 
@@ -56,7 +57,7 @@ def client(test_session: Session):
         yield test_session
 
     app.dependency_overrides[corpus.get_session] = _override_get_session
-    yield TestClient(app)
+    yield TestClient(app, headers={"X-API-Key": "test-api-key"})
     app.dependency_overrides.clear()
 
 
@@ -122,6 +123,12 @@ def test_collect_orchestrates_sources_dedups_and_enriches(
     all_papers = test_session.query(Paper).all()
     shared_doi_rows = [p for p in all_papers if p.doi == "10.1/shared"]
     assert len(shared_doi_rows) == 1  # dedup ran
+
+
+def test_ingestion_rejects_missing_api_key() -> None:
+    response = TestClient(app).post("/collect", json={"topic": "security"})
+
+    assert response.status_code == 401
 
 
 def test_collect_includes_enriched_ids(

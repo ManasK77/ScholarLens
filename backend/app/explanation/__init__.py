@@ -1,1 +1,1 @@
-"""Phase 9 — Mode A RAG explanation generation."""
+"""Phase 9 — provider-neutral, evidence-grounded Mode A reports."""

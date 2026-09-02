@@ -14,14 +14,14 @@ ScholarLens is built in 15 fixed phases (0 through 14), taken verbatim from READ
 - [x] **Phase 1: Literature Collection (Stage 1)** - A topic yields a deduplicated, normalized corpus from arXiv/Semantic Scholar/ACL Anthology + Unpaywall, plus manual upload
 - [x] **Phase 2: Parsing & Section Normalization (Stage 2)** - Every paper becomes structured JSON with normalized sections/paragraphs/sentences
 - [x] **Phase 3: Scientific Information Extraction (Stage 3)** - Contribution/Limitation/Future Work/Dataset/Model/Metric facts extracted per paper
-- [ ] **Phase 4: Joint NER + Relation Extraction (Stage 4)** - Entities and typed relations written into a queryable Neo4j graph
-- [ ] **Phase 5: Embeddings & Vector Indexing (Stage 5)** - Every statement embedded and searchable in Qdrant, linked back to Neo4j
-- [ ] **Phase 6: Semantic Clustering + Contradiction Detection (Stage 6)** - Similar limitations clustered; contradictions flagged via NLI
-- [ ] **Phase 7: Trend Analysis (Stage 7)** - Per-cluster mention time series and trend score exposed via the API
-- [ ] **Phase 8: Gap Ranking (Stage 8)** - Transparent weighted gap-score formula ranks clusters, queryable via the API
-- [ ] **Phase 9: Mode A - RAG-Grounded Explanation Generation (Stage 9)** - Top-ranked gaps get complete, evidence-grounded reports
-- [ ] **Phase 10: Mode B - Interactive GraphRAG with LangGraph (Stage 10)** - On-demand questions get grounded, cited answers with retry behavior
-- [ ] **Phase 11: Backend API Integration** - Full REST surface wiring Phases 1-10 together, documented, with API-key auth
+- [x] **Phase 4: Joint NER + Relation Extraction (Stage 4)** - Entities and typed relations written into a queryable Neo4j graph
+- [x] **Phase 5: Embeddings & Vector Indexing (Stage 5)** - Every statement embedded and searchable in Qdrant, linked back to Neo4j
+- [x] **Phase 6: Semantic Clustering + Contradiction Detection (Stage 6)** - Similar limitations clustered; contradictions flagged via NLI
+- [x] **Phase 7: Trend Analysis (Stage 7)** - Per-cluster mention time series and trend score exposed via the API
+- [x] **Phase 8: Gap Ranking (Stage 8)** - Transparent weighted gap-score formula ranks clusters, queryable via the API
+- [x] **Phase 9: Mode A - RAG-Grounded Explanation Generation (Stage 9)** - Top-ranked gaps get complete, evidence-grounded reports
+- [x] **Phase 10: Mode B - Interactive GraphRAG with LangGraph (Stage 10)** - On-demand questions get grounded, cited answers with retry behavior
+- [x] **Phase 11: Backend API Integration** - Full REST surface wiring Phases 1-10 together, documented, with API-key auth
 - [ ] **Phase 12: Frontend Dashboard** - Researcher-facing UI for gap reports, trends, graph exploration, and Mode B chat
 - [ ] **Phase 13: Evaluation Harness** - Time-shifted validation, survey cross-check, and expert scoring produce a concrete evaluation report
 - [ ] **Phase 14: Full Deployment** - Fresh clone + `docker-compose up` + `.env` brings up the entire system end-to-end
@@ -116,7 +116,7 @@ Plans:
 **Tech**: SciERC-style joint entity+relation model (DyGIE++ architecture or an equivalent pretrained scientific IE model).
 **Build**: Extracts entities (Model, Dataset, Task, Metric, Domain) and relations between them (`trained_on`, `evaluated_using`, `fails_on`, `achieves`, etc.) in a single pass; writes entities and relations into Neo4j as nodes/edges linked to the source paper.
 **Done when**: The Neo4j graph contains papers connected to extracted entities via typed relationships, queryable via Cypher.
-**Plans**: TBD
+**Plans**: Complete in combined backend pass — see `.planning/BACKEND-04-11-SUMMARY.md`
 
 ### Phase 5: Embeddings & Vector Indexing (Stage 5)
 **Goal**: Any paragraph/limitation/future-work statement in the corpus is semantically searchable.
@@ -129,7 +129,7 @@ Plans:
 **Tech**: SPECTER2, Qdrant.
 **Build**: Batch-embeds every paragraph/limitation/future-work statement using SPECTER2; stores vectors in Qdrant with metadata (paper ID, year, venue, section type) enabling filtered search; links each vector back to its Neo4j node ID.
 **Done when**: A semantic query against Qdrant returns relevant paragraphs with correct metadata and graph linkage.
-**Plans**: TBD
+**Plans**: Complete in combined backend pass — see `.planning/BACKEND-04-11-SUMMARY.md`
 
 ### Phase 6: Semantic Clustering + Contradiction Detection (Stage 6)
 **Goal**: Similar limitations/future-work statements across papers are recognized as the same underlying gap, and conflicting claims are flagged.
@@ -143,7 +143,7 @@ Plans:
 **Tech**: HDBSCAN or BERTopic, DeBERTa-MNLI.
 **Build**: Clusters limitation/future-work statements by SPECTER2 embedding similarity (no fixed cluster count). Within each cluster, runs pairwise NLI checks to flag contradicting statements between papers.
 **Done when**: Clusters are stored with member statements, and contradiction flags are attached where applicable.
-**Plans**: TBD
+**Plans**: Complete in combined backend pass — see `.planning/BACKEND-04-11-SUMMARY.md`
 
 ### Phase 7: Trend Analysis (Stage 7)
 **Goal**: Each cluster's momentum over time is visible.
@@ -156,7 +156,7 @@ Plans:
 **Tech**: Pandas, NumPy.
 **Build**: Aggregates per-cluster mention counts by publication year and computes a trend slope/score per cluster.
 **Done when**: Each cluster has a time series and a trend score, exposed via the API.
-**Plans**: TBD
+**Plans**: Complete in combined backend pass — see `.planning/BACKEND-04-11-SUMMARY.md`
 
 ### Phase 8: Gap Ranking (Stage 8)
 **Goal**: Clusters are ranked by how likely they are to represent a genuine, unresolved research gap, with the ranking fully explainable.
@@ -169,7 +169,7 @@ Plans:
 **Tech**: Plain Python (no ML model — a transparent weighted formula).
 **Build**: Implements `gap_score = w1·mention_frequency + w2·trend_slope − w3·solution_density + w4·citation_impact + w5·contradiction_flag` with configurable weights; ranks clusters and stores results in Postgres.
 **Done when**: A ranked, queryable list of gap clusters with individual signal breakdowns is available via the API.
-**Plans**: TBD
+**Plans**: Complete in combined backend pass — see `.planning/BACKEND-04-11-SUMMARY.md`
 
 ### Phase 9: Mode A - RAG-Grounded Explanation Generation (Stage 9)
 **Goal**: Top-ranked gaps come with a human-readable, evidence-grounded explanation, not just a score.
@@ -183,7 +183,7 @@ Plans:
 **Tech**: Qdrant retrieval, direct LLM API call (Llama 3.x / Qwen / GPT), structured JSON output/schema validation. **No LangGraph loop here.**
 **Build**: For each top-ranked gap cluster, retrieves the top-N actual supporting paragraphs from Qdrant and passes them as context to the LLM in a single pass, producing a structured report (Gap / Evidence / Confidence / Suggested Directions). Stores and exposes reports via `/reports`.
 **Done when**: Top-K ranked gaps each have a complete, evidence-grounded report referencing real retrieved paragraphs/papers.
-**Plans**: TBD
+**Plans**: Complete in combined backend pass — see `.planning/BACKEND-04-11-SUMMARY.md`
 
 ### Phase 10: Mode B - Interactive GraphRAG with LangGraph (Stage 10)
 **Goal**: A researcher can ask a specific question and get a grounded, cited answer on demand.
@@ -197,7 +197,7 @@ Plans:
 **Tech**: LangGraph, Qdrant, Neo4j, cross-encoder reranker, LLM API.
 **Build**: Implements the stateful graph described in README §9: retrieve (vector + graph) → assess sufficiency → reformulate/retry (capped rounds) → rerank → generate → grounding check → return or regenerate. Exposes a `/query` endpoint accepting a natural-language research question and returning a grounded answer with source citations.
 **Done when**: A test question reliably returns an answer whose claims trace back to specific retrieved papers, with visible retry behavior when initial retrieval is weak.
-**Plans**: TBD
+**Plans**: Complete in combined backend pass — see `.planning/BACKEND-04-11-SUMMARY.md`
 
 ### Phase 11: Backend API Integration
 **Goal**: Every capability built in Phases 1-10 is reachable through one documented, coherent, secured API.
@@ -211,7 +211,7 @@ Plans:
 **Tech**: FastAPI.
 **Build**: Wires Phases 1–10 into a complete REST surface: `/collect`, `/upload`, `/papers`, `/graph`, `/clusters`, `/trends`, `/gaps`, `/reports` (Mode A), `/query` (Mode B). Adds OpenAPI docs and basic API-key auth.
 **Done when**: The full backend is usable end-to-end via documented REST endpoints without needing to run internal scripts manually.
-**Plans**: TBD
+**Plans**: Complete in combined backend pass — see `.planning/BACKEND-04-11-SUMMARY.md`
 
 ### Phase 12: Frontend Dashboard
 **Goal**: A researcher can explore gaps and ask questions without touching the API directly.
@@ -269,14 +269,14 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 1. Literature Collection | 6/6 | Complete | 2026-08-22 |
 | 2. Parsing & Section Normalization | 5/5 | Complete | 2026-08-30 |
 | 3. Scientific Information Extraction | 1/1 | Complete | 2026-08-30 |
-| 4. Joint NER + Relation Extraction | 0/TBD | Not started | - |
-| 5. Embeddings & Vector Indexing | 0/TBD | Not started | - |
-| 6. Semantic Clustering + Contradiction Detection | 0/TBD | Not started | - |
-| 7. Trend Analysis | 0/TBD | Not started | - |
-| 8. Gap Ranking | 0/TBD | Not started | - |
-| 9. Mode A - RAG-Grounded Explanation Generation | 0/TBD | Not started | - |
-| 10. Mode B - Interactive GraphRAG with LangGraph | 0/TBD | Not started | - |
-| 11. Backend API Integration | 0/TBD | Not started | - |
+| 4. Joint NER + Relation Extraction | 1/1 | Complete | 2026-09-01 |
+| 5. Embeddings & Vector Indexing | 1/1 | Complete | 2026-09-01 |
+| 6. Semantic Clustering + Contradiction Detection | 1/1 | Complete | 2026-09-01 |
+| 7. Trend Analysis | 1/1 | Complete | 2026-09-01 |
+| 8. Gap Ranking | 1/1 | Complete | 2026-09-01 |
+| 9. Mode A - RAG-Grounded Explanation Generation | 1/1 | Complete | 2026-09-01 |
+| 10. Mode B - Interactive GraphRAG with LangGraph | 1/1 | Complete | 2026-09-01 |
+| 11. Backend API Integration | 1/1 | Complete | 2026-09-01 |
 | 12. Frontend Dashboard | 0/TBD | Not started | - |
 | 13. Evaluation Harness | 0/TBD | Not started | - |
 | 14. Full Deployment | 0/TBD | Not started | - |

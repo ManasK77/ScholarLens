@@ -76,6 +76,10 @@ def parse_all_pending(
     """Parse every corpus paper that has no stored parsed representation."""
     processed: list[int] = []
     for paper in session.scalars(select(Paper)):
+        # Metadata-only discovery records remain in the normalized corpus but
+        # cannot enter the full-text pipeline until enrichment supplies a PDF.
+        if not paper.pdf_path:
+            continue
         if storage.get_parsed_document(session, paper.id) is not None:
             continue
         run_parsing_pipeline(

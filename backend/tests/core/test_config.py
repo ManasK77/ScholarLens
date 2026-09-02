@@ -19,6 +19,7 @@ ALL_REQUIRED_ENV = {
     "MAX_UPLOAD_SIZE_MB": "50",
     "UNPAYWALL_EMAIL": "you@example.com",
     "GROBID_URL": "http://grobid:8070",
+    "API_KEY": "test-api-key",
 }
 
 

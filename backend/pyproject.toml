@@ -21,18 +21,23 @@ dependencies = [
     "python-multipart>=0.0.12,<1",
     "pymupdf>=1.28,<2",
     "pdfplumber>=0.11,<1",
-    # transformers: widened to allow 5.x — sentence-transformers>=6.0 requires
-    # transformers>=5.0, discovered as a real resolver conflict at install time
-    # (RESEARCH.md's <5 pin assumed 4.x compatibility with SciBERT checkpoints,
-    # which also holds under 5.x).
-    "transformers>=4.57,<6",
+    # GLiNER2 2.x currently requires Transformers 4.x. Keep the shared
+    # SciBERT/SPECTER2/cross-encoder stack on the compatible 4.x line.
+    "transformers>=4.57,<5",
     # torch: install the CPU-only wheel explicitly BEFORE `pip install -e ".[dev]"`:
     #   pip install torch --index-url https://download.pytorch.org/whl/cpu
     # A plain `pip install -e ".[dev]"` alone would resolve torch from the
     # default PyPI index, which can pull a multi-GB CUDA-enabled build.
     "torch>=2.9,<3",
-    "sentence-transformers>=6.0,<7",
+    "sentence-transformers>=3.0,<6",
     "spacy>=3.8,<4",
+    # Unified, schema-conditioned joint entity + relation extraction.
+    "gliner2[local]>=2.0,<3",
+    # Phase 10 only: stateful conditional GraphRAG workflow.
+    "langgraph>=1.2,<2",
+    "numpy>=2.2,<3",
+    "pandas>=2.2,<4",
+    "scikit-learn>=1.6,<2",
 ]
 
 [project.optional-dependencies]
