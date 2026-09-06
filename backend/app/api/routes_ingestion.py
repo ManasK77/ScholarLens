@@ -11,11 +11,15 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.security import require_api_key
 from app.core.config import get_settings
 from app.ingestion import corpus, dedup, manual_upload, unpaywall
 from app.ingestion.sources import acl_anthology, arxiv, semantic_scholar
 
-router = APIRouter()
+# Both endpoints write to the corpus and reach out to external services, so the
+# whole router sits behind the Phase 11 API key (README §12 shows /collect
+# being called with X-API-Key). /health stays open — see app.api.security.
+router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 class CollectRequest(BaseModel):

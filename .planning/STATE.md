@@ -3,27 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: awaiting_authorization
-<<<<<<< Updated upstream
-stopped_at: Phase 3 complete; reviewed and verified; waiting for owner authorization to start Phase 4
-last_updated: "2026-08-30T23:45:00+05:30"
-last_activity: 2026-08-30 -- Phase 3 completed; 126 default backend tests and the explicit Phase 3 SciBERT integration test pass; Ruff and code review clean
+stopped_at: Phase 11 partially delivered (API-key auth only). Phases 4-10 implementations are absent from the repository — see PROGRESS.md (2026-09-06) for the full reconciliation.
+last_updated: "2026-09-06"
+last_activity: 2026-09-06 -- Project-state reconciliation after the incomplete upstream push in 478597b. Phase 11 API-key auth landed and verified; routes_backend.router remains unregistered because 12 modules it imports do not exist.
 progress:
   total_phases: 15
-  completed_phases: 4
+  # Verified by implementation + passing tests, not by planning-file claims:
+  # complete = Phases 0, 1, 2, 3 and 13 (13 is self-contained and was verified independently).
+  # Phase 12 is built but blocked; Phase 11 is partial; Phases 4-10 are absent.
+  completed_phases: 5
   total_plans: 16
   completed_plans: 16
-  percent: 27
-=======
-stopped_at: Phases 0-13 complete; Phase 14 deployment explicitly deferred by owner
-last_updated: "2026-09-06"
-last_activity: 2026-09-06 -- Ask state persistence, actionable LLM-provider errors, and Qdrant collection race fixed; 146 backend and 3 frontend tests pass
-progress:
-  total_phases: 15
-  completed_phases: 14
-  total_plans: 26
-  completed_plans: 26
-  percent: 93
->>>>>>> Stashed changes
+  percent: 33
 ---
 
 # Project State
@@ -33,29 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Every research gap ScholarLens reports is grounded in structured, retrieved evidence extracted before any LLM is involved — the LLM explains gaps already discovered by extraction, clustering, trend analysis, and ranking; it never discovers gaps on its own.
-<<<<<<< Updated upstream
-**Current focus:** Phase 4 (Joint NER + Relation Extraction) — not authorized; waiting for owner direction
+**Current focus:** Phases 4-10 must be rebuilt before Phase 11 can be finished. Phase 4 is blocked on an owner model-choice decision.
 
 ## Current Position
 
-Phase: 3 (Scientific Information Extraction, Stage 3) — COMPLETE
-Plan: 1 of 1 executed
-Status: Waiting for explicit authorization to begin Phase 4.
-Last activity: 2026-08-30 -- Hybrid spaCy/SciBERT extraction and typed Postgres persistence completed under TDD. Review added section-index provenance, cached semantic exemplars, and lazy model loading. 126 default tests plus the explicit Phase 3 real-model check pass.
+Phase: 11 (Backend API Integration) — PARTIAL; Phases 4-10 — NOT IMPLEMENTED
+Plan: no plan documents exist for Phases 4 through 11
+Status: Waiting for owner authorization and for the Phase 4 model-choice decision.
+Last activity: 2026-09-06 -- Reconciled the three conflicted planning files against git history and the source tree. Confirmed by exhaustive object-database search that the Phase 4-10 modules exist in no reachable commit, tree, blob, reflog entry, or unreachable object, and that there are zero unreachable commits.
 
-Progress: [███░░░░░░░] 27% (4/15 phases complete)
-=======
-**Current focus:** Phases 0–13 are complete. Phase 14 is explicitly deferred until the owner is ready to package and deploy the full stack.
-
-## Current Position
-
-Phase: 13 (Evaluation Harness) — COMPLETE
-Plan: Phase 12 dashboard and Phase 13 evaluation harness executed sequentially after owner authorization
-Status: Waiting for explicit authorization to begin Phase 14; owner requested local operation only for now.
-Last activity: 2026-09-06 -- React dashboard, Plotly trends, D3 graph, grounded query UI, and three-method evaluation harness completed and reviewed. Local backend service health and authenticated API access verified.
-
-Progress: [█████████░] 93% (14/15 phases complete)
->>>>>>> Stashed changes
+Progress: [███░░░░░░░] 33% (5/15 phases verified complete)
 
 ## Performance Metrics
 
@@ -107,21 +85,24 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-<<<<<<< Updated upstream
-None yet.
+- Phases 4-10: rebuild from scratch (not recoverable from git). Phase 4 first, and only after the owner locks the model choice.
+- Phase 11: register `routes_backend.router` and finish `/papers`, `/graph`, `/clusters`, `/trends`, `/gaps`, `/reports`, `/query`, `/pipeline/run` once Phases 4-10 exist.
+- `backend/pyproject.toml` and `backend/uv.lock` disagree: the lock records `gliner2[local]`, `langgraph`, `pandas`, `scikit-learn` and `numpy`, none of which the committed `pyproject.toml` declares. The lock is a fossil of an uncommitted `pyproject.toml`.
 
 ### Blockers/Concerns
 
-Docker and Docker Compose are unavailable on the current host, so the live `docker compose`/GROBID-container acceptance check could not be rerun. The GROBID HTTP and TEI behavior is covered offline using captured real GROBID 0.9.1 fixtures. This does not block the completed implementation, but live Compose verification remains an environment follow-up.
-=======
-- Phase 14: add the frontend container, one-command full-stack deployment, and final deployment/security review when authorized.
+**BLOCKER — Phases 4-10 implementations are missing and unrecoverable.** Commit 478597b (authored by Jain Kanish <jainkanish412@gmail.com>, 2026-09-06) added `routes_backend.py`, `ner_re/graph.py`, `embeddings/indexer.py`, `interactive/workflow.py`, the frontend and `evaluation/`, but not the 12 modules those files import. An exhaustive search of all 43 commits, 285 trees, 272 blobs, both refs, the 91-entry reflog and every unreachable object found none of them, and found no unreachable commits. `git stash list` is empty. They must be rebuilt.
 
-### Blockers/Concerns
+**BLOCKER — Phase 4 model choice is unmade.** See "Owner decisions required" below.
 
-None for Phases 0–13. Docker services (`backend`, `neo4j`, `qdrant`, `postgres`, `grobid`) were started and reported healthy on 2026-09-06; `/health`, authenticated `/papers`, and the frontend development proxy returned 200. Real heavyweight model inference still requires a populated corpus and first-use model downloads.
+Docker is available and healthy on this host as of 2026-09-06 (`neo4j`, `qdrant`, `postgres`, `grobid`, `backend` all reported healthy; `/health` returned 200 with all three service checks true). This supersedes the earlier "Docker unavailable" note.
 
-Post-completion fixes on 2026-09-06: Ask-tab requests now remain mounted across dashboard navigation; offline Gemini/Ollama providers return an actionable HTTP 503; concurrent Qdrant collection creation treats the expected 409 as idempotent success. The local Ollama service/model remains an owner-controlled resource because the configured `qwen3:8b` download is several gigabytes.
->>>>>>> Stashed changes
+### Owner decisions required (could not be resolved from repository evidence)
+
+1. **Phase 4 joint NER+RE model.** ROADMAP Phase 4 requires a discuss phase to lock this "before any code". README §7/§15 specify a SciERC-style/DyGIE++ model "or an equivalent pretrained scientific IE model". `uv.lock` shows the lost implementation used `gliner2[local]>=2.0,<3` — a substitution the owner never recorded a decision for.
+2. **Phase 6 clustering library.** README §7 and CLUSTER-01 specify HDBSCAN/BERTopic. `uv.lock` contains neither; it has `scikit-learn>=1.6,<2` instead. The lost implementation appears to have deviated here too.
+3. **Whether Phases 4-13 were ever authorized.** The two sides of this file disagreed and the repository holds no evidence either way.
+4. **Whether Phase 14 is "explicitly deferred by owner"** — asserted by one side of the conflict only; unverifiable here.
 
 ## Deferred Items
 
@@ -142,12 +123,6 @@ Phase 1-specific deferrals (per CONTEXT.md, in scope for a later revisit only if
 
 ## Session Continuity
 
-<<<<<<< Updated upstream
-Last session: 2026-08-30T23:45:00+05:30
-Stopped at: Phase 3 complete after TDD, full regression tests, real SciBERT smoke check, static review, and findings remediation.
-Resume file: README.md §15 Phase 4 — only after explicit owner authorization.
-=======
 Last session: 2026-09-06
-Stopped at: Phases 12 and 13 complete after tests, builds, static review, dependency audit, and live local-service smoke checks.
-Resume file: README.md §15 Phase 14 — only after explicit owner authorization; deployment is deferred.
->>>>>>> Stashed changes
+Stopped at: Project-state reconciliation. Planning-file conflicts resolved from repository evidence; four items above still need an owner decision.
+Resume file: README.md §15 Phase 4 — only after explicit owner authorization AND the Phase 4 model-choice decision.

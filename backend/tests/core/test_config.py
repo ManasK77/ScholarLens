@@ -97,6 +97,46 @@ def test_get_settings_returns_settings_instance(
     assert isinstance(result, Settings)
 
 
+def test_api_key_loads_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """API_KEY is the Phase 11 backend authentication credential."""
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv("API_KEY", "backend-api-key")
+
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.api_key == "backend-api-key"
+
+
+def test_api_key_defaults_to_none_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unset API_KEY must not block startup — the dependency fails closed instead."""
+    _set_all_required(monkeypatch)
+    monkeypatch.delenv("API_KEY", raising=False)
+
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.api_key is None
+
+
+def test_api_key_is_distinct_from_the_llm_credential(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """API_KEY authenticates callers; LLM_API_KEY authenticates us to a provider."""
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv("API_KEY", "backend-api-key")
+    monkeypatch.setenv("LLM_API_KEY", "provider-key")
+
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.api_key == "backend-api-key"
+    assert settings.llm_api_key == "provider-key"
+
+
 def test_acl_anthology_bib_path_defaults_when_unset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

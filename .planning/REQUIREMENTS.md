@@ -163,7 +163,6 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PARSE-06 | Phase 2 | Complete |
 | EXTRACT-01 | Phase 3 | Complete |
 | EXTRACT-02 | Phase 3 | Complete |
-<<<<<<< Updated upstream
 | NERRE-01 | Phase 4 | Pending |
 | NERRE-02 | Phase 4 | Pending |
 | EMBED-01 | Phase 5 | Pending |
@@ -184,48 +183,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MODEB-02 | Phase 10 | Pending |
 | MODEB-03 | Phase 10 | Pending |
 | API-01 | Phase 11 | Pending |
-| API-02 | Phase 11 | Pending |
+| API-02 | Phase 11 | Partial — API-key auth + OpenAPI verified on /collect and /upload; /health exempt by design |
 | API-03 | Phase 11 | Pending |
-| UI-01 | Phase 12 | Pending |
-| UI-02 | Phase 12 | Pending |
-| UI-03 | Phase 12 | Pending |
-| UI-04 | Phase 12 | Pending |
-| EVAL-01 | Phase 13 | Pending |
-| EVAL-02 | Phase 13 | Pending |
-| EVAL-03 | Phase 13 | Pending |
-| EVAL-04 | Phase 13 | Pending |
-=======
-| NERRE-01 | Phase 4 | Complete |
-| NERRE-02 | Phase 4 | Complete |
-| EMBED-01 | Phase 5 | Complete |
-| EMBED-02 | Phase 5 | Complete |
-| EMBED-03 | Phase 5 | Complete |
-| EMBED-04 | Phase 5 | Complete |
-| CLUSTER-01 | Phase 6 | Complete |
-| CLUSTER-02 | Phase 6 | Complete |
-| CLUSTER-03 | Phase 6 | Complete |
-| TREND-01 | Phase 7 | Complete |
-| TREND-02 | Phase 7 | Complete |
-| GAPRANK-01 | Phase 8 | Complete |
-| GAPRANK-02 | Phase 8 | Complete |
-| MODEA-01 | Phase 9 | Complete |
-| MODEA-02 | Phase 9 | Complete |
-| MODEA-03 | Phase 9 | Complete |
-| MODEB-01 | Phase 10 | Complete |
-| MODEB-02 | Phase 10 | Complete |
-| MODEB-03 | Phase 10 | Complete |
-| API-01 | Phase 11 | Complete |
-| API-02 | Phase 11 | Complete |
-| API-03 | Phase 11 | Complete |
-| UI-01 | Phase 12 | Complete |
-| UI-02 | Phase 12 | Complete |
-| UI-03 | Phase 12 | Complete |
-| UI-04 | Phase 12 | Complete |
+| UI-01 | Phase 12 | Complete (blocked: API-01) |
+| UI-02 | Phase 12 | Complete (blocked: API-01) |
+| UI-03 | Phase 12 | Complete (blocked: API-01) |
+| UI-04 | Phase 12 | Complete (blocked: API-01) |
 | EVAL-01 | Phase 13 | Complete |
 | EVAL-02 | Phase 13 | Complete |
 | EVAL-03 | Phase 13 | Complete |
 | EVAL-04 | Phase 13 | Complete |
->>>>>>> Stashed changes
 | DEPLOY-01 | Phase 14 | Pending |
 | DEPLOY-02 | Phase 14 | Pending |
 | DEPLOY-03 | Phase 14 | Pending |

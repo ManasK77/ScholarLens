@@ -26,7 +26,11 @@ REQUIRED_ENV = {
     "MAX_UPLOAD_SIZE_MB": "50",
     "UNPAYWALL_EMAIL": "you@example.com",
     "GROBID_URL": "http://grobid:8070",
+    # /collect and /upload sit behind the Phase 11 API key.
+    "API_KEY": "test-api-key-ingestion",
 }
+
+AUTH_HEADERS = {"X-API-Key": REQUIRED_ENV["API_KEY"]}
 
 
 @pytest.fixture(autouse=True)
@@ -56,7 +60,7 @@ def client(test_session: Session):
         yield test_session
 
     app.dependency_overrides[corpus.get_session] = _override_get_session
-    yield TestClient(app)
+    yield TestClient(app, headers=AUTH_HEADERS)
     app.dependency_overrides.clear()
 
 

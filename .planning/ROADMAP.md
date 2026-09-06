@@ -14,7 +14,6 @@ ScholarLens is built in 15 fixed phases (0 through 14), taken verbatim from READ
 - [x] **Phase 1: Literature Collection (Stage 1)** - A topic yields a deduplicated, normalized corpus from arXiv/Semantic Scholar/ACL Anthology + Unpaywall, plus manual upload
 - [x] **Phase 2: Parsing & Section Normalization (Stage 2)** - Every paper becomes structured JSON with normalized sections/paragraphs/sentences
 - [x] **Phase 3: Scientific Information Extraction (Stage 3)** - Contribution/Limitation/Future Work/Dataset/Model/Metric facts extracted per paper
-<<<<<<< Updated upstream
 - [ ] **Phase 4: Joint NER + Relation Extraction (Stage 4)** - Entities and typed relations written into a queryable Neo4j graph
 - [ ] **Phase 5: Embeddings & Vector Indexing (Stage 5)** - Every statement embedded and searchable in Qdrant, linked back to Neo4j
 - [ ] **Phase 6: Semantic Clustering + Contradiction Detection (Stage 6)** - Similar limitations clustered; contradictions flagged via NLI
@@ -22,21 +21,9 @@ ScholarLens is built in 15 fixed phases (0 through 14), taken verbatim from READ
 - [ ] **Phase 8: Gap Ranking (Stage 8)** - Transparent weighted gap-score formula ranks clusters, queryable via the API
 - [ ] **Phase 9: Mode A - RAG-Grounded Explanation Generation (Stage 9)** - Top-ranked gaps get complete, evidence-grounded reports
 - [ ] **Phase 10: Mode B - Interactive GraphRAG with LangGraph (Stage 10)** - On-demand questions get grounded, cited answers with retry behavior
-- [ ] **Phase 11: Backend API Integration** - Full REST surface wiring Phases 1-10 together, documented, with API-key auth
-- [ ] **Phase 12: Frontend Dashboard** - Researcher-facing UI for gap reports, trends, graph exploration, and Mode B chat
-- [ ] **Phase 13: Evaluation Harness** - Time-shifted validation, survey cross-check, and expert scoring produce a concrete evaluation report
-=======
-- [x] **Phase 4: Joint NER + Relation Extraction (Stage 4)** - Entities and typed relations written into a queryable Neo4j graph
-- [x] **Phase 5: Embeddings & Vector Indexing (Stage 5)** - Every statement embedded and searchable in Qdrant, linked back to Neo4j
-- [x] **Phase 6: Semantic Clustering + Contradiction Detection (Stage 6)** - Similar limitations clustered; contradictions flagged via NLI
-- [x] **Phase 7: Trend Analysis (Stage 7)** - Per-cluster mention time series and trend score exposed via the API
-- [x] **Phase 8: Gap Ranking (Stage 8)** - Transparent weighted gap-score formula ranks clusters, queryable via the API
-- [x] **Phase 9: Mode A - RAG-Grounded Explanation Generation (Stage 9)** - Top-ranked gaps get complete, evidence-grounded reports
-- [x] **Phase 10: Mode B - Interactive GraphRAG with LangGraph (Stage 10)** - On-demand questions get grounded, cited answers with retry behavior
-- [x] **Phase 11: Backend API Integration** - Full REST surface wiring Phases 1-10 together, documented, with API-key auth
-- [x] **Phase 12: Frontend Dashboard** - Researcher-facing UI for gap reports, trends, graph exploration, and Mode B chat
-- [x] **Phase 13: Evaluation Harness** - Time-shifted validation, survey cross-check, and expert scoring produce a concrete evaluation report
->>>>>>> Stashed changes
+- [ ] **Phase 11: Backend API Integration** - Full REST surface wiring Phases 1-10 together, documented, with API-key auth *(partial: API-key auth built and verified; routes_backend.router not registerable)*
+- [x] **Phase 12: Frontend Dashboard** - Researcher-facing UI for gap reports, trends, graph exploration, and Mode B chat *(built, tested and building; end-to-end blocked on Phases 4-11)*
+- [x] **Phase 13: Evaluation Harness** - Time-shifted validation, survey cross-check, and expert scoring produce a concrete evaluation report *(self-contained; 4 tests pass, example report reproduced)*
 - [ ] **Phase 14: Full Deployment** - Fresh clone + `docker-compose up` + `.env` brings up the entire system end-to-end
 
 ## Phase Details
@@ -282,7 +269,6 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 1. Literature Collection | 6/6 | Complete | 2026-08-22 |
 | 2. Parsing & Section Normalization | 5/5 | Complete | 2026-08-30 |
 | 3. Scientific Information Extraction | 1/1 | Complete | 2026-08-30 |
-<<<<<<< Updated upstream
 | 4. Joint NER + Relation Extraction | 0/TBD | Not started | - |
 | 5. Embeddings & Vector Indexing | 0/TBD | Not started | - |
 | 6. Semantic Clustering + Contradiction Detection | 0/TBD | Not started | - |
@@ -290,19 +276,7 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 8. Gap Ranking | 0/TBD | Not started | - |
 | 9. Mode A - RAG-Grounded Explanation Generation | 0/TBD | Not started | - |
 | 10. Mode B - Interactive GraphRAG with LangGraph | 0/TBD | Not started | - |
-| 11. Backend API Integration | 0/TBD | Not started | - |
-| 12. Frontend Dashboard | 0/TBD | Not started | - |
-| 13. Evaluation Harness | 0/TBD | Not started | - |
-=======
-| 4. Joint NER + Relation Extraction | 1/1 | Complete | 2026-09-01 |
-| 5. Embeddings & Vector Indexing | 1/1 | Complete | 2026-09-01 |
-| 6. Semantic Clustering + Contradiction Detection | 1/1 | Complete | 2026-09-01 |
-| 7. Trend Analysis | 1/1 | Complete | 2026-09-01 |
-| 8. Gap Ranking | 1/1 | Complete | 2026-09-01 |
-| 9. Mode A - RAG-Grounded Explanation Generation | 1/1 | Complete | 2026-09-01 |
-| 10. Mode B - Interactive GraphRAG with LangGraph | 1/1 | Complete | 2026-09-01 |
-| 11. Backend API Integration | 1/1 | Complete | 2026-09-01 |
-| 12. Frontend Dashboard | 1/1 | Complete | 2026-09-06 |
+| 11. Backend API Integration | 0/TBD | Partial (API-key auth only) | - |
+| 12. Frontend Dashboard | 1/1 | Built, blocked on Phases 4-11 | 2026-09-06 |
 | 13. Evaluation Harness | 1/1 | Complete | 2026-09-06 |
->>>>>>> Stashed changes
 | 14. Full Deployment | 0/TBD | Not started | - |

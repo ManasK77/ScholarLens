@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     # --- LLM ---
     llm_api_key: str | None = None
 
+    # --- Backend API authentication (Phase 11) ---
+    # The shared secret callers present as `X-API-Key`. Distinct from
+    # `llm_api_key`, which authenticates *us* to an LLM provider.
+    # Optional at load time so an unconfigured deployment still starts (and
+    # `/health` still answers); `app.api.security.require_api_key` then fails
+    # closed and rejects every authenticated request.
+    api_key: str | None = None
+
     @property
     def postgres_url(self) -> str:
         """SQLAlchemy connection string built from the individual postgres_* fields."""
