@@ -1,0 +1,22 @@
+[
+  {
+    "paper_id": "paper-multilingual-benchmark",
+    "title": "A Multilingual Prompt Injection Benchmark",
+    "year": 2024,
+    "abstract": "We evaluate prompt injection defenses across twelve high-resource and low-resource languages.",
+    "keywords": ["multilingual security", "prompt injection", "benchmark"]
+  },
+  {
+    "paper_id": "paper-energy-accounting",
+    "title": "Energy Accounting for Large Language Model Training",
+    "year": 2025,
+    "abstract": "We measure and report energy consumption during language model pretraining.",
+    "keywords": ["energy evaluation", "large language models"]
+  },
+  {
+    "paper_id": "paper-unrelated",
+    "title": "Improved Image Segmentation with Sparse Labels",
+    "year": 2025,
+    "abstract": "A computer vision segmentation method for medical images."
+  }
+]

@@ -1,0 +1,20 @@
+[
+  {
+    "gap_id": "gap-multilingual-security",
+    "description": "Multilingual prompt injection defenses and benchmarks remain underexplored",
+    "cutoff_year": 2022,
+    "relevant_future_paper_ids": ["paper-multilingual-benchmark"]
+  },
+  {
+    "gap_id": "gap-energy-evaluation",
+    "description": "Energy consumption of large language model training is rarely evaluated",
+    "cutoff_year": 2022,
+    "relevant_future_paper_ids": ["paper-energy-accounting"]
+  },
+  {
+    "gap_id": "gap-agent-reproducibility",
+    "description": "Reproducible evaluation protocols for autonomous language model agents are missing",
+    "cutoff_year": 2023,
+    "relevant_future_paper_ids": []
+  }
+]

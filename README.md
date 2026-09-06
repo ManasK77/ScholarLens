@@ -388,6 +388,74 @@ research-gap-ai/
 - Services orchestrated via Docker Compose: `backend`, `frontend`, `neo4j`, `qdrant`, `postgres`, `grobid`.
 - Config values (model names, cluster weights `w1..w5`, retrieval-round cap, top-N retrieval size) live in a central settings module, not scattered across files.
 
+### Local development (Phases 0–13)
+
+Copy `.env.example` to `.env`, replace the placeholder credentials, and start the backend services:
+
+```bash
+docker compose up -d --build postgres neo4j qdrant grobid backend
+```
+
+If `.env` uses the default `LLM_PROVIDER=ollama`, start the optional local LLM service and install its configured model before using **Ask ScholarLens**:
+
+```bash
+docker compose --profile ollama up -d ollama
+docker compose exec ollama ollama pull qwen3:8b
+```
+
+Replace `qwen3:8b` with the exact `OLLAMA_MODEL` value when using another
+model. The model download is several gigabytes. A 6–8B model alongside GROBID
+can exceed a Docker Desktop VM configured with only 8 GB; either allocate more
+memory, choose a smaller Ollama model, or stop GROBID after ingestion while
+using the Ask workflow. Alternatively, configure `LLM_PROVIDER=gemini` and
+`GEMINI_API_KEY` in `.env`, then recreate the backend container.
+
+Then start the dashboard in a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`, choose **Connect API**, and enter the same `API_KEY` configured in `.env`. The Vite server proxies dashboard requests to the backend on port 8000. Backend OpenAPI documentation remains available at `http://127.0.0.1:8000/docs`.
+
+The dashboard's **Add papers** workspace exposes the complete corpus setup
+flow: search scholarly sources by topic, upload one or more local PDFs, inspect
+recently added papers, and run the evidence-building pipeline. The API examples
+below provide the equivalent command-line workflow.
+
+Before using **Ask ScholarLens**, populate the local evidence base. You can use
+the interactive OpenAPI page, or run the equivalent requests below:
+
+```bash
+curl -X POST http://127.0.0.1:8000/collect \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"topic":"multilingual prompt injection"}'
+
+curl -X POST http://127.0.0.1:8000/pipeline/run \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"generate_reports":true}'
+```
+
+Collection and the first pipeline run can take time because papers and ML
+models are downloaded. If the dashboard says **No indexed evidence**, the
+PostgreSQL corpus or Qdrant evidence index is still empty; this is a data-state
+message, not an LLM grounding failure. An empty index returns immediately and
+does not invoke the configured LLM.
+
+Run the complete local verification suite with:
+
+```bash
+cd backend && .venv/bin/pytest -q && .venv/bin/ruff check app tests && cd ..
+PYTHONPATH=. backend/.venv/bin/pytest -q evaluation/tests
+cd frontend && npm test && npm run build && npm run lint
+```
+
+See `evaluation/README.md` for the reproducible Phase 13 sample evaluation and input formats. Phase 14 will add the frontend container and one-command full-stack deployment; it is intentionally deferred.
+
 ## 13. Development Workflow & Quality Gates
 
 This project is built with a disciplined, phase-based development workflow — plan before implementing, tests before code, and a code review gate at the end of every phase. **The implementing agent must follow it as specified below — it is not optional, it is part of the defined build process.** This workflow is tool-agnostic: it describes required practices (planning, TDD, review, context hygiene), not any specific IDE, plugin, or command set, so it applies equally whether the work is done in Claude Code, Cursor, Antigravity, Codex, or any other coding agent/IDE. Each phase in [Section 15](#15-implementation-phases) names the workflow required for that phase.

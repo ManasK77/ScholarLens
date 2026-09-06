@@ -1,0 +1,7 @@
+gap_id,rater_id,novelty,validity,evidence_quality,actionability,notes
+gap-multilingual-security,expert-a,5,5,5,5,Clear benchmark opportunity
+gap-multilingual-security,expert-b,4,5,4,5,Strong cross-lingual motivation
+gap-energy-evaluation,expert-a,4,4,4,4,Important but measurement standards vary
+gap-energy-evaluation,expert-b,3,4,4,4,Some recent work exists
+gap-agent-reproducibility,expert-a,5,4,4,3,Needs narrower protocol scope
+gap-agent-reproducibility,expert-b,4,3,3,4,Plausible but fast-moving area

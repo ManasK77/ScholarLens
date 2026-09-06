@@ -1,0 +1,93 @@
+{
+  "generated_at": "2026-09-06T05:56:08.437391+00:00",
+  "configuration": {
+    "similarity_threshold": 0.15
+  },
+  "summary": {
+    "gaps_evaluated": 3,
+    "validity_index": 0.7222,
+    "interpretation": "Composite of later-paper confirmation, survey agreement, and normalized expert validity."
+  },
+  "time_shift": {
+    "total_gaps": 3,
+    "addressed_count": 2,
+    "addressed_rate": 0.6666666666666666,
+    "matches": [
+      {
+        "gap_id": "gap-multilingual-security",
+        "paper_id": "paper-multilingual-benchmark",
+        "paper_title": "A Multilingual Prompt Injection Benchmark",
+        "paper_year": 2024,
+        "similarity": 0.2258
+      },
+      {
+        "gap_id": "gap-energy-evaluation",
+        "paper_id": "paper-energy-accounting",
+        "paper_title": "Energy Accounting for Large Language Model Training",
+        "paper_year": 2025,
+        "similarity": 0.2941
+      }
+    ],
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "survey_crosscheck": {
+    "total_gaps": 3,
+    "matched_gap_count": 2,
+    "match_rate": 0.6666666666666666,
+    "matches": [
+      {
+        "gap_id": "gap-multilingual-security",
+        "survey_id": "survey-llm-security",
+        "survey_title": "A Survey of Large Language Model Security",
+        "open_problem": "Multilingual prompt injection benchmarks and defenses require further study",
+        "similarity": 0.4118
+      },
+      {
+        "gap_id": "gap-agent-reproducibility",
+        "survey_id": "survey-agents",
+        "survey_title": "Evaluating Autonomous Language Model Agents: A Survey",
+        "open_problem": "Reproducible evaluation protocols for autonomous language model agents are not yet established",
+        "similarity": 0.619
+      }
+    ]
+  },
+  "expert_scoring": {
+    "total_ratings": 6,
+    "gaps_rated": 3,
+    "mean_novelty": 4.166666666666667,
+    "mean_validity": 4.166666666666667,
+    "mean_evidence_quality": 4.0,
+    "mean_actionability": 4.166666666666667,
+    "high_validity_fraction": 0.8333333333333334,
+    "per_gap": [
+      {
+        "gap_id": "gap-agent-reproducibility",
+        "rater_count": 2,
+        "mean_novelty": 4.5,
+        "mean_validity": 3.5,
+        "mean_evidence_quality": 3.5,
+        "mean_actionability": 3.5,
+        "validity_stddev": 0.5
+      },
+      {
+        "gap_id": "gap-energy-evaluation",
+        "rater_count": 2,
+        "mean_novelty": 3.5,
+        "mean_validity": 4.0,
+        "mean_evidence_quality": 4.0,
+        "mean_actionability": 4.0,
+        "validity_stddev": 0.0
+      },
+      {
+        "gap_id": "gap-multilingual-security",
+        "rater_count": 2,
+        "mean_novelty": 4.5,
+        "mean_validity": 5.0,
+        "mean_evidence_quality": 4.5,
+        "mean_actionability": 5.0,
+        "validity_stddev": 0.0
+      }
+    ]
+  }
+}

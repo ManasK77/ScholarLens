@@ -1,0 +1,19 @@
+[
+  {
+    "survey_id": "survey-llm-security",
+    "title": "A Survey of Large Language Model Security",
+    "year": 2025,
+    "open_problems": [
+      "Multilingual prompt injection benchmarks and defenses require further study",
+      "Adaptive attacks against safety filters remain an open problem"
+    ]
+  },
+  {
+    "survey_id": "survey-agents",
+    "title": "Evaluating Autonomous Language Model Agents: A Survey",
+    "year": 2025,
+    "open_problems": [
+      "Reproducible evaluation protocols for autonomous language model agents are not yet established"
+    ]
+  }
+]

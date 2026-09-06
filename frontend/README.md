@@ -1,32 +1,29 @@
-# React + TypeScript + Vite
+# ScholarLens frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The React dashboard exposes the complete evidence-backed research workflow
+without requiring direct API access. Its **Add papers** workspace can discover
+research from arXiv, Semantic Scholar, and ACL Anthology, accept multi-PDF
+uploads, run the evidence pipeline, and display the local corpus. It also
+includes ranked Mode A reports, longitudinal trends, an interactive Neo4j
+snapshot, and Mode B grounded Q&A.
 
-Currently, two official plugins are available:
+## Local development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Start the backend on port 8000, then run:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+The Vite development server proxies `/api` to `http://127.0.0.1:8000`. Use **Connect API** in the dashboard and enter the `API_KEY` from the repository-level `.env`. The key is stored only in the current browser tab.
+
+Set `VITE_API_BASE_URL` when the API is hosted elsewhere.
+
+## Verification
+
+```bash
+npm test
+npm run build
+npm run lint
+```

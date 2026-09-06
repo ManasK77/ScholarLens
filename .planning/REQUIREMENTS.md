@@ -92,17 +92,17 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 
 ### Frontend Dashboard (Phase 12)
 
-- [ ] **UI-01**: A researcher can browse ranked gap reports (Mode A) through the dashboard.
-- [ ] **UI-02**: A researcher can view trend charts through the dashboard.
-- [ ] **UI-03**: A researcher can explore clusters and the knowledge graph through the dashboard.
-- [ ] **UI-04**: A researcher can ask Mode B questions through a chat-style interface with citations displayed.
+- [x] **UI-01**: A researcher can browse ranked gap reports (Mode A) through the dashboard.
+- [x] **UI-02**: A researcher can view trend charts through the dashboard.
+- [x] **UI-03**: A researcher can explore clusters and the knowledge graph through the dashboard.
+- [x] **UI-04**: A researcher can ask Mode B questions through a chat-style interface with citations displayed.
 
 ### Evaluation Harness (Phase 13)
 
-- [ ] **EVAL-01**: Time-shifted validation checks whether gaps flagged from a corpus snapshot (up to date X) were later addressed by papers published after X.
-- [ ] **EVAL-02**: Survey cross-check compares flagged gaps against the "open problems"/"future work" sections of recent survey papers in the same field.
-- [ ] **EVAL-03**: An expert-scoring rubric/collection script rates a sample of generated gap reports on novelty and validity (1–5 scale).
-- [ ] **EVAL-04**: Running the harness against a test corpus produces a concrete evaluation report with precision/validity indicators.
+- [x] **EVAL-01**: Time-shifted validation checks whether gaps flagged from a corpus snapshot (up to date X) were later addressed by papers published after X.
+- [x] **EVAL-02**: Survey cross-check compares flagged gaps against the "open problems"/"future work" sections of recent survey papers in the same field.
+- [x] **EVAL-03**: An expert-scoring rubric/collection script rates a sample of generated gap reports on novelty and validity (1–5 scale).
+- [x] **EVAL-04**: Running the harness against a test corpus produces a concrete evaluation report with precision/validity indicators.
 
 ### Full Deployment (Phase 14)
 
@@ -163,6 +163,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PARSE-06 | Phase 2 | Complete |
 | EXTRACT-01 | Phase 3 | Complete |
 | EXTRACT-02 | Phase 3 | Complete |
+<<<<<<< Updated upstream
 | NERRE-01 | Phase 4 | Pending |
 | NERRE-02 | Phase 4 | Pending |
 | EMBED-01 | Phase 5 | Pending |
@@ -193,6 +194,38 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EVAL-02 | Phase 13 | Pending |
 | EVAL-03 | Phase 13 | Pending |
 | EVAL-04 | Phase 13 | Pending |
+=======
+| NERRE-01 | Phase 4 | Complete |
+| NERRE-02 | Phase 4 | Complete |
+| EMBED-01 | Phase 5 | Complete |
+| EMBED-02 | Phase 5 | Complete |
+| EMBED-03 | Phase 5 | Complete |
+| EMBED-04 | Phase 5 | Complete |
+| CLUSTER-01 | Phase 6 | Complete |
+| CLUSTER-02 | Phase 6 | Complete |
+| CLUSTER-03 | Phase 6 | Complete |
+| TREND-01 | Phase 7 | Complete |
+| TREND-02 | Phase 7 | Complete |
+| GAPRANK-01 | Phase 8 | Complete |
+| GAPRANK-02 | Phase 8 | Complete |
+| MODEA-01 | Phase 9 | Complete |
+| MODEA-02 | Phase 9 | Complete |
+| MODEA-03 | Phase 9 | Complete |
+| MODEB-01 | Phase 10 | Complete |
+| MODEB-02 | Phase 10 | Complete |
+| MODEB-03 | Phase 10 | Complete |
+| API-01 | Phase 11 | Complete |
+| API-02 | Phase 11 | Complete |
+| API-03 | Phase 11 | Complete |
+| UI-01 | Phase 12 | Complete |
+| UI-02 | Phase 12 | Complete |
+| UI-03 | Phase 12 | Complete |
+| UI-04 | Phase 12 | Complete |
+| EVAL-01 | Phase 13 | Complete |
+| EVAL-02 | Phase 13 | Complete |
+| EVAL-03 | Phase 13 | Complete |
+| EVAL-04 | Phase 13 | Complete |
+>>>>>>> Stashed changes
 | DEPLOY-01 | Phase 14 | Pending |
 | DEPLOY-02 | Phase 14 | Pending |
 | DEPLOY-03 | Phase 14 | Pending |

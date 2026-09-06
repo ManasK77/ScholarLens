@@ -3,6 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: awaiting_authorization
+<<<<<<< Updated upstream
 stopped_at: Phase 3 complete; reviewed and verified; waiting for owner authorization to start Phase 4
 last_updated: "2026-08-30T23:45:00+05:30"
 last_activity: 2026-08-30 -- Phase 3 completed; 126 default backend tests and the explicit Phase 3 SciBERT integration test pass; Ruff and code review clean
@@ -12,6 +13,17 @@ progress:
   total_plans: 16
   completed_plans: 16
   percent: 27
+=======
+stopped_at: Phases 0-13 complete; Phase 14 deployment explicitly deferred by owner
+last_updated: "2026-09-06"
+last_activity: 2026-09-06 -- Ask state persistence, actionable LLM-provider errors, and Qdrant collection race fixed; 146 backend and 3 frontend tests pass
+progress:
+  total_phases: 15
+  completed_phases: 14
+  total_plans: 26
+  completed_plans: 26
+  percent: 93
+>>>>>>> Stashed changes
 ---
 
 # Project State
@@ -21,6 +33,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Every research gap ScholarLens reports is grounded in structured, retrieved evidence extracted before any LLM is involved — the LLM explains gaps already discovered by extraction, clustering, trend analysis, and ranking; it never discovers gaps on its own.
+<<<<<<< Updated upstream
 **Current focus:** Phase 4 (Joint NER + Relation Extraction) — not authorized; waiting for owner direction
 
 ## Current Position
@@ -31,6 +44,18 @@ Status: Waiting for explicit authorization to begin Phase 4.
 Last activity: 2026-08-30 -- Hybrid spaCy/SciBERT extraction and typed Postgres persistence completed under TDD. Review added section-index provenance, cached semantic exemplars, and lazy model loading. 126 default tests plus the explicit Phase 3 real-model check pass.
 
 Progress: [███░░░░░░░] 27% (4/15 phases complete)
+=======
+**Current focus:** Phases 0–13 are complete. Phase 14 is explicitly deferred until the owner is ready to package and deploy the full stack.
+
+## Current Position
+
+Phase: 13 (Evaluation Harness) — COMPLETE
+Plan: Phase 12 dashboard and Phase 13 evaluation harness executed sequentially after owner authorization
+Status: Waiting for explicit authorization to begin Phase 14; owner requested local operation only for now.
+Last activity: 2026-09-06 -- React dashboard, Plotly trends, D3 graph, grounded query UI, and three-method evaluation harness completed and reviewed. Local backend service health and authenticated API access verified.
+
+Progress: [█████████░] 93% (14/15 phases complete)
+>>>>>>> Stashed changes
 
 ## Performance Metrics
 
@@ -82,11 +107,21 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
+<<<<<<< Updated upstream
 None yet.
 
 ### Blockers/Concerns
 
 Docker and Docker Compose are unavailable on the current host, so the live `docker compose`/GROBID-container acceptance check could not be rerun. The GROBID HTTP and TEI behavior is covered offline using captured real GROBID 0.9.1 fixtures. This does not block the completed implementation, but live Compose verification remains an environment follow-up.
+=======
+- Phase 14: add the frontend container, one-command full-stack deployment, and final deployment/security review when authorized.
+
+### Blockers/Concerns
+
+None for Phases 0–13. Docker services (`backend`, `neo4j`, `qdrant`, `postgres`, `grobid`) were started and reported healthy on 2026-09-06; `/health`, authenticated `/papers`, and the frontend development proxy returned 200. Real heavyweight model inference still requires a populated corpus and first-use model downloads.
+
+Post-completion fixes on 2026-09-06: Ask-tab requests now remain mounted across dashboard navigation; offline Gemini/Ollama providers return an actionable HTTP 503; concurrent Qdrant collection creation treats the expected 409 as idempotent success. The local Ollama service/model remains an owner-controlled resource because the configured `qwen3:8b` download is several gigabytes.
+>>>>>>> Stashed changes
 
 ## Deferred Items
 
@@ -107,6 +142,12 @@ Phase 1-specific deferrals (per CONTEXT.md, in scope for a later revisit only if
 
 ## Session Continuity
 
+<<<<<<< Updated upstream
 Last session: 2026-08-30T23:45:00+05:30
 Stopped at: Phase 3 complete after TDD, full regression tests, real SciBERT smoke check, static review, and findings remediation.
 Resume file: README.md §15 Phase 4 — only after explicit owner authorization.
+=======
+Last session: 2026-09-06
+Stopped at: Phases 12 and 13 complete after tests, builds, static review, dependency audit, and live local-service smoke checks.
+Resume file: README.md §15 Phase 14 — only after explicit owner authorization; deployment is deferred.
+>>>>>>> Stashed changes
