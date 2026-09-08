@@ -66,6 +66,16 @@ services:
         required: false
     volumes:
       - pdf_data:/data/pdfs
+      # ACL_ANTHOLOGY_BIB_PATH's default lives here. The export is a ~180MB
+      # decompressed download that `/collect` re-fetches whenever the file is
+      # absent, so without this volume every `up -d --build backend` — the
+      # command README §12 prescribes after any code change — pays for it
+      # again. `download_anthology_export` is a no-op once the file exists.
+      - corpus_cache:/app/data
+      # SPECTER2, GLiNER2, DeBERTa-MNLI and the cross-encoder are pulled from
+      # Hugging Face on first use — together ~1.6GB. Without this volume the
+      # rebuild above re-downloads all of them before the pipeline can run.
+      - model_cache:/root/.cache/huggingface
     depends_on:
       neo4j:
         condition: service_healthy
@@ -81,3 +91,5 @@ volumes:
   qdrant_data:
   postgres_data:
   pdf_data:
+  corpus_cache:
+  model_cache:
