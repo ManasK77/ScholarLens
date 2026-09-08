@@ -4,8 +4,16 @@
 through dedup.py, then Unpaywall enrichment, returning the count/ids of
 papers touched (new inserts + enriched rows) for the run.
 
+Each source runs in isolation: a third-party outage degrades the run to the
+sources that answered instead of aborting it. Semantic Scholar answers
+unauthenticated callers with 429/500 routinely, and an unguarded exception
+there used to roll back every arXiv row already written while the PDFs those
+rows pointed at stayed on disk.
+
 /upload accepts one or more PDFs via manual_upload.save_upload.
 """
+
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -15,6 +23,8 @@ from app.api.security import require_api_key
 from app.core.config import get_settings
 from app.ingestion import corpus, dedup, manual_upload, unpaywall
 from app.ingestion.sources import acl_anthology, arxiv, semantic_scholar
+
+logger = logging.getLogger(__name__)
 
 # Both endpoints write to the corpus and reach out to external services, so the
 # whole router sits behind the Phase 11 API key (README §12 shows /collect
@@ -83,6 +93,15 @@ def _process_one(session: Session, paper_dict: dict) -> int:
     return paper.id
 
 
+DISCOVERY_SOURCES = ("arxiv", "semantic_scholar", "acl_anthology")
+
+
+def _failure_status(exc: Exception) -> str:
+    """A short, non-leaking description of why a source did not answer."""
+    detail = str(exc).strip().splitlines()[0] if str(exc).strip() else ""
+    return f"failed: {type(exc).__name__}{f': {detail[:200]}' if detail else ''}"
+
+
 @router.post("/collect")
 def collect(
     body: CollectRequest,
@@ -90,35 +109,78 @@ def collect(
 ):
     settings = get_settings()
     touched: set[int] = set()
+    statuses: dict[str, str] = {}
 
-    for candidate in arxiv.search_topic(body.topic):
-        pdf_path = arxiv.fetch_pdf(candidate, settings.pdf_storage_path)
-        touched.add(_process_one(session, _to_paper_dict(candidate, "arxiv", pdf_path)))
+    def _run(name: str, step) -> None:
+        """Run one ingestion step, recording rather than propagating its failure.
 
-    for candidate in semantic_scholar.search_topic(
-        body.topic, settings.semantic_scholar_api_key
-    ):
-        touched.add(
-            _process_one(session, _to_paper_dict(candidate, "semantic_scholar", None))
+        Each step is independent, so one source's outage must not discard what
+        the others already wrote. Anything the step did before raising is rolled
+        back to its own savepoint; earlier sources keep their rows.
+        """
+        savepoint = session.begin_nested()
+        try:
+            step()
+        except Exception as exc:
+            savepoint.rollback()
+            statuses[name] = _failure_status(exc)
+            logger.warning("Ingestion source %r failed: %s", name, exc, exc_info=True)
+        else:
+            savepoint.commit()
+            statuses[name] = "ok"
+
+    def _arxiv() -> None:
+        for candidate in arxiv.search_topic(body.topic):
+            pdf_path = arxiv.fetch_pdf(candidate, settings.pdf_storage_path)
+            touched.add(
+                _process_one(session, _to_paper_dict(candidate, "arxiv", pdf_path))
+            )
+
+    def _semantic_scholar() -> None:
+        for candidate in semantic_scholar.search_topic(
+            body.topic, settings.semantic_scholar_api_key
+        ):
+            touched.add(
+                _process_one(
+                    session, _to_paper_dict(candidate, "semantic_scholar", None)
+                )
+            )
+
+    def _acl_anthology() -> None:
+        acl_anthology.download_anthology_export(settings.acl_anthology_bib_path)
+        for candidate in acl_anthology.search_topic(
+            settings.acl_anthology_bib_path, body.topic
+        ):
+            pdf_path = acl_anthology.fetch_pdf(candidate, settings.pdf_storage_path)
+            touched.add(
+                _process_one(
+                    session, _to_paper_dict(candidate, "acl_anthology", pdf_path)
+                )
+            )
+
+    def _unpaywall() -> None:
+        touched.update(
+            unpaywall.enrich(
+                session, settings.unpaywall_email, settings.pdf_storage_path
+            )
         )
 
-    acl_anthology.download_anthology_export(settings.acl_anthology_bib_path)
-    for candidate in acl_anthology.search_topic(
-        settings.acl_anthology_bib_path, body.topic
-    ):
-        pdf_path = acl_anthology.fetch_pdf(candidate, settings.pdf_storage_path)
-        touched.add(
-            _process_one(session, _to_paper_dict(candidate, "acl_anthology", pdf_path))
-        )
+    _run("arxiv", _arxiv)
+    _run("semantic_scholar", _semantic_scholar)
+    _run("acl_anthology", _acl_anthology)
+    # Enrichment runs last and only over rows discovery already wrote.
+    _run("unpaywall", _unpaywall)
 
-    enriched_ids = unpaywall.enrich(
-        session, settings.unpaywall_email, settings.pdf_storage_path
-    )
-    touched |= set(enriched_ids)
+    if all(statuses[name] != "ok" for name in DISCOVERY_SOURCES):
+        session.rollback()
+        raise HTTPException(
+            status_code=502,
+            detail="No discovery source could be reached. Check network access.",
+        )
 
     session.commit()
 
-    return {"count": len(touched), "ids": list(touched)}
+    return {"count": len(touched), "ids": list(touched), "sources": statuses}
 
 
 @router.post("/upload")

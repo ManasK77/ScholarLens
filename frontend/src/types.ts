@@ -87,6 +87,8 @@ export interface QueryResult {
 export interface CollectResult {
   count: number
   ids: number[]
+  /** Per-source outcome: 'ok', or 'failed: <reason>' when that source was unreachable. */
+  sources?: Record<string, string>
 }
 
 export interface UploadResult {

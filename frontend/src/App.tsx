@@ -186,7 +186,11 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
     setOperationError(null)
     try {
       const result = await api.collect(topic.trim())
-      setCollectStatus(`${result.count} ${result.count === 1 ? 'paper' : 'papers'} added or updated`)
+      const unreachable = Object.entries(result.sources ?? {}).filter(([, status]) => status !== 'ok').map(([name]) => name)
+      setCollectStatus(
+        `${result.count} ${result.count === 1 ? 'paper' : 'papers'} added or updated` +
+          (unreachable.length ? ` · ${unreachable.join(', ')} unreachable this run` : ''),
+      )
       await onRefresh()
     } catch (reason) {
       setOperationError(reason instanceof Error ? reason.message : 'Paper discovery failed.')

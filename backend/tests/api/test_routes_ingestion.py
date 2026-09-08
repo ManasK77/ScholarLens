@@ -269,3 +269,130 @@ def test_paper_dict_carries_the_citation_count_onto_the_corpus_row():
         ]
         is None
     )
+
+
+def test_collect_survives_one_failing_discovery_source(
+    client: TestClient, test_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A flaky third-party source must not discard the papers others found.
+
+    Semantic Scholar answers unauthenticated callers with 429/500 routinely, and
+    before this an exception there aborted the request — rolling back every
+    arXiv row already written while their PDFs stayed on disk.
+    """
+    import httpx
+
+    monkeypatch.setattr(
+        arxiv,
+        "search_topic",
+        lambda topic: [
+            {"title": "Survivor", "year": 2024, "arxiv_id": "2401.00001", "doi": None}
+        ],
+    )
+    monkeypatch.setattr(arxiv, "fetch_pdf", lambda candidate, dest_dir: None)
+
+    def _rate_limited(topic, api_key=None):
+        raise httpx.HTTPStatusError(
+            "429",
+            request=httpx.Request("GET", "https://api.semanticscholar.org"),
+            response=httpx.Response(429),
+        )
+
+    monkeypatch.setattr(semantic_scholar, "search_topic", _rate_limited)
+    monkeypatch.setattr(
+        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+    )
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(
+        routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir: []
+    )
+
+    response = client.post("/collect", json={"topic": "prompt injection"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 1
+    assert body["sources"]["arxiv"] == "ok"
+    assert body["sources"]["semantic_scholar"].startswith("failed")
+    assert body["sources"]["acl_anthology"] == "ok"
+    # The surviving paper is committed, not rolled back with the failing source.
+    assert test_session.query(Paper).count() == 1
+
+
+def test_collect_reports_a_failing_enrichment_step_without_losing_papers(
+    client: TestClient, test_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        arxiv,
+        "search_topic",
+        lambda topic: [
+            {"title": "Kept", "year": 2024, "arxiv_id": "2401.00002", "doi": None}
+        ],
+    )
+    monkeypatch.setattr(arxiv, "fetch_pdf", lambda candidate, dest_dir: None)
+    monkeypatch.setattr(
+        semantic_scholar, "search_topic", lambda topic, api_key=None: []
+    )
+    monkeypatch.setattr(
+        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+    )
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+
+    def _boom(session, email, dest_dir):
+        raise RuntimeError("unpaywall down")
+
+    monkeypatch.setattr(routes_ingestion.unpaywall, "enrich", _boom)
+
+    response = client.post("/collect", json={"topic": "anything"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 1
+    assert body["sources"]["unpaywall"].startswith("failed")
+    assert test_session.query(Paper).count() == 1
+
+
+def test_collect_fails_loudly_when_every_discovery_source_fails(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """All three sources down is an outage, not an empty result set."""
+
+    def _down(*args, **kwargs):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(arxiv, "search_topic", _down)
+    monkeypatch.setattr(semantic_scholar, "search_topic", _down)
+    monkeypatch.setattr(acl_anthology, "download_anthology_export", _down)
+    monkeypatch.setattr(acl_anthology, "search_topic", _down)
+    monkeypatch.setattr(
+        routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir: []
+    )
+
+    response = client.post("/collect", json={"topic": "anything"})
+
+    assert response.status_code == 502
+
+
+def test_collect_reports_every_source_ok_on_a_clean_run(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(arxiv, "search_topic", lambda topic: [])
+    monkeypatch.setattr(
+        semantic_scholar, "search_topic", lambda topic, api_key=None: []
+    )
+    monkeypatch.setattr(
+        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+    )
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(
+        routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir: []
+    )
+
+    body = client.post("/collect", json={"topic": "anything"}).json()
+
+    assert body["sources"] == {
+        "arxiv": "ok",
+        "semantic_scholar": "ok",
+        "acl_anthology": "ok",
+        "unpaywall": "ok",
+    }
