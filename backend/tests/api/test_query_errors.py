@@ -18,7 +18,7 @@ def test_query_returns_service_unavailable_when_llm_provider_is_offline(monkeypa
         routes_backend,
         "run_query",
         lambda *args, **kwargs: (_ for _ in ()).throw(
-            LLMUnavailableError("Ollama is unavailable. Start the configured service.")
+            LLMUnavailableError("Groq is unavailable. Check network access.")
         ),
     )
 
@@ -26,4 +26,4 @@ def test_query_returns_service_unavailable_when_llm_provider_is_offline(monkeypa
         routes_backend.query(routes_backend.QueryRequest(question="What gaps exist?"))
 
     assert exc_info.value.status_code == 503
-    assert "Ollama is unavailable" in exc_info.value.detail
+    assert "Groq is unavailable" in exc_info.value.detail

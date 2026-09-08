@@ -45,6 +45,7 @@ FIXTURE_BODY = {
             "externalIds": {"DOI": "10.1000/gnn-review"},
             "abstract": "A survey of GNNs.",
             "openAccessPdf": {"url": "https://example.org/gnn-review.pdf"},
+            "citationCount": 412,
         },
         {
             "title": "Message Passing Neural Networks",
@@ -143,3 +144,24 @@ def test_source_is_metadata_only_never_calls_download_pdf(monkeypatch):
     for paper in out:
         assert "pdf_path" not in paper
         assert "pdf_bytes" not in paper
+
+
+def test_search_topic_carries_the_citation_count(monkeypatch):
+    """Phase 8's `citation_impact` signal has no other source (README §7)."""
+    monkeypatch.setattr(httpx, "Client", _make_fake_client({}))
+
+    out = semantic_scholar.search_topic("graph neural networks", api_key=None)
+
+    assert out[0]["citation_count"] == 412
+    # Absent from the response rather than zero: an unknown count is not a
+    # claim that nobody cited the paper.
+    assert out[1]["citation_count"] is None
+
+
+def test_search_topic_requests_the_citation_count_field(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(captured))
+
+    semantic_scholar.search_topic("graph neural networks", api_key=None)
+
+    assert "citationCount" in captured["params"]["fields"].split(",")

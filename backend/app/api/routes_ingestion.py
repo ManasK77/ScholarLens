@@ -39,6 +39,7 @@ def _to_paper_dict(candidate: dict, source: str, pdf_path: str | None) -> dict:
         "venue": candidate.get("venue"),
         "doi": candidate.get("doi"),
         "abstract": candidate.get("abstract"),
+        "citation_count": candidate.get("citation_count"),
         "source": source,
         "pdf_path": pdf_path,
         "has_full_text": pdf_path is not None,

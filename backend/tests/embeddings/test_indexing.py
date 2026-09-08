@@ -24,6 +24,11 @@ def test_build_index_records_includes_paragraphs_and_gap_statements():
             fact_type="future_work",
             text="Evaluate regional languages.",
             section_type="future work",
+            # Non-nullable on `ExtractedFact`, and the fact's point id is keyed
+            # on them rather than on `id` — see `indexer._fact_position`.
+            section_index=0,
+            paragraph_index=0,
+            sentence_index=0,
         )
     ]
 

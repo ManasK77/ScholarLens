@@ -14,11 +14,11 @@ ScholarLens is built in 15 fixed phases (0 through 14), taken verbatim from READ
 - [x] **Phase 1: Literature Collection (Stage 1)** - A topic yields a deduplicated, normalized corpus from arXiv/Semantic Scholar/ACL Anthology + Unpaywall, plus manual upload
 - [x] **Phase 2: Parsing & Section Normalization (Stage 2)** - Every paper becomes structured JSON with normalized sections/paragraphs/sentences
 - [x] **Phase 3: Scientific Information Extraction (Stage 3)** - Contribution/Limitation/Future Work/Dataset/Model/Metric facts extracted per paper
-- [ ] **Phase 4: Joint NER + Relation Extraction (Stage 4)** - Entities and typed relations written into a queryable Neo4j graph
-- [ ] **Phase 5: Embeddings & Vector Indexing (Stage 5)** - Every statement embedded and searchable in Qdrant, linked back to Neo4j
-- [ ] **Phase 6: Semantic Clustering + Contradiction Detection (Stage 6)** - Similar limitations clustered; contradictions flagged via NLI
-- [ ] **Phase 7: Trend Analysis (Stage 7)** - Per-cluster mention time series and trend score exposed via the API
-- [ ] **Phase 8: Gap Ranking (Stage 8)** - Transparent weighted gap-score formula ranks clusters, queryable via the API
+- [x] **Phase 4: Joint NER + Relation Extraction (Stage 4)** - Entities and typed relations written into a queryable Neo4j graph
+- [x] **Phase 5: Embeddings & Vector Indexing (Stage 5)** - Every statement embedded and searchable in Qdrant, linked back to Neo4j
+- [x] **Phase 6: Semantic Clustering + Contradiction Detection (Stage 6)** - Similar limitations clustered; contradictions flagged via NLI
+- [x] **Phase 7: Trend Analysis (Stage 7)** - Per-cluster mention time series and trend score exposed via the API
+- [x] **Phase 8: Gap Ranking (Stage 8)** - Transparent weighted gap-score formula ranks clusters, queryable via the API
 - [ ] **Phase 9: Mode A - RAG-Grounded Explanation Generation (Stage 9)** - Top-ranked gaps get complete, evidence-grounded reports
 - [ ] **Phase 10: Mode B - Interactive GraphRAG with LangGraph (Stage 10)** - On-demand questions get grounded, cited answers with retry behavior
 - [ ] **Phase 11: Backend API Integration** - Full REST surface wiring Phases 1-10 together, documented, with API-key auth *(partial: API-key auth built and verified; routes_backend.router not registerable)*
@@ -129,7 +129,7 @@ Plans:
 **Tech**: SPECTER2, Qdrant.
 **Build**: Batch-embeds every paragraph/limitation/future-work statement using SPECTER2; stores vectors in Qdrant with metadata (paper ID, year, venue, section type) enabling filtered search; links each vector back to its Neo4j node ID.
 **Done when**: A semantic query against Qdrant returns relevant paragraphs with correct metadata and graph linkage.
-**Plans**: TBD
+**Plans**: `.planning/phases/05-embeddings-vector-indexing-stage-5/05-01-PLAN.md`
 
 ### Phase 6: Semantic Clustering + Contradiction Detection (Stage 6)
 **Goal**: Similar limitations/future-work statements across papers are recognized as the same underlying gap, and conflicting claims are flagged.
@@ -156,7 +156,7 @@ Plans:
 **Tech**: Pandas, NumPy.
 **Build**: Aggregates per-cluster mention counts by publication year and computes a trend slope/score per cluster.
 **Done when**: Each cluster has a time series and a trend score, exposed via the API.
-**Plans**: TBD
+**Plans**: `phases/07-trend-analysis-stage-7/07-01-PLAN.md`
 
 ### Phase 8: Gap Ranking (Stage 8)
 **Goal**: Clusters are ranked by how likely they are to represent a genuine, unresolved research gap, with the ranking fully explainable.
@@ -169,7 +169,7 @@ Plans:
 **Tech**: Plain Python (no ML model — a transparent weighted formula).
 **Build**: Implements `gap_score = w1·mention_frequency + w2·trend_slope − w3·solution_density + w4·citation_impact + w5·contradiction_flag` with configurable weights; ranks clusters and stores results in Postgres.
 **Done when**: A ranked, queryable list of gap clusters with individual signal breakdowns is available via the API.
-**Plans**: TBD
+**Plans**: `.planning/phases/08-gap-ranking-stage-8/08-01-PLAN.md`
 
 ### Phase 9: Mode A - RAG-Grounded Explanation Generation (Stage 9)
 **Goal**: Top-ranked gaps come with a human-readable, evidence-grounded explanation, not just a score.
@@ -269,10 +269,10 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 1. Literature Collection | 6/6 | Complete | 2026-08-22 |
 | 2. Parsing & Section Normalization | 5/5 | Complete | 2026-08-30 |
 | 3. Scientific Information Extraction | 1/1 | Complete | 2026-08-30 |
-| 4. Joint NER + Relation Extraction | 0/TBD | Not started | - |
-| 5. Embeddings & Vector Indexing | 0/TBD | Not started | - |
-| 6. Semantic Clustering + Contradiction Detection | 0/TBD | Not started | - |
-| 7. Trend Analysis | 0/TBD | Not started | - |
+| 4. Joint NER + Relation Extraction | 1/1 | Complete | 2026-09-06 |
+| 5. Embeddings & Vector Indexing | 1/1 | Complete | 2026-09-06 |
+| 6. Semantic Clustering + Contradiction Detection | 1/1 | Complete | 2026-09-06 |
+| 7. Trend Analysis | 1/1 | Complete | 2026-09-07 |
 | 8. Gap Ranking | 0/TBD | Not started | - |
 | 9. Mode A - RAG-Grounded Explanation Generation | 0/TBD | Not started | - |
 | 10. Mode B - Interactive GraphRAG with LangGraph | 0/TBD | Not started | - |

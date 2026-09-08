@@ -204,7 +204,7 @@ Both modes are implemented — Mode A is the batch/offline engine, Mode B is the
 | Reranking | Cross-encoder (e.g. MS MARCO MiniLM cross-encoder) | Reorders retrieved chunks before they're passed to the LLM |
 | Trend Analysis | Pandas + NumPy | Aggregate mention frequency over time per cluster |
 | Orchestration (Mode B + grounding checks) | **LangGraph** | Stateful, conditional, loopable graph for retrieve → assess → reformulate → generate → verify (see Section 9). **LangChain is intentionally not used anywhere in this project.** |
-| LLM | Llama 3.x / Qwen / GPT (via API) | Final synthesis only — called directly via API with structured (JSON) output, no framework wrapper |
+| LLM | **Groq** (Llama 3.x / GPT-OSS class models, via API) | Final synthesis only — called directly via API with structured (JSON) output, no framework wrapper |
 | Visualization | Plotly / D3.js | Trend graphs, cluster views, knowledge graph exploration |
 | Backend API | FastAPI | Upload, analysis, querying, reports |
 | Frontend | React + TypeScript | Researcher-facing dashboard |
@@ -396,19 +396,12 @@ Copy `.env.example` to `.env`, replace the placeholder credentials, and start th
 docker compose up -d --build postgres neo4j qdrant grobid backend
 ```
 
-If `.env` uses the default `LLM_PROVIDER=ollama`, start the optional local LLM service and install its configured model before using **Ask ScholarLens**:
-
-```bash
-docker compose --profile ollama up -d ollama
-docker compose exec ollama ollama pull qwen3:8b
-```
-
-Replace `qwen3:8b` with the exact `OLLAMA_MODEL` value when using another
-model. The model download is several gigabytes. A 6–8B model alongside GROBID
-can exceed a Docker Desktop VM configured with only 8 GB; either allocate more
-memory, choose a smaller Ollama model, or stop GROBID after ingestion while
-using the Ask workflow. Alternatively, configure `LLM_PROVIDER=gemini` and
-`GEMINI_API_KEY` in `.env`, then recreate the backend container.
+Generation runs on **Groq**, the project's only LLM provider. Create a key at
+<https://console.groq.com/keys>, set `GROQ_API_KEY` in `.env`, and recreate the
+backend container. Nothing needs to run locally for it. Until the key is set,
+ingestion, parsing, extraction, clustering, trends and ranking all still work;
+only report generation and **Ask ScholarLens** return an explicit
+"Groq is unavailable" error.
 
 Then start the dashboard in a second terminal:
 
@@ -625,13 +618,13 @@ Additionally, **backfill metadata for manually uploaded papers**: GROBID also ex
 
 ### Phase 9 — Mode A: RAG-Grounded Explanation Generation (Stage 9)
 **Workflow:** Plan; TDD; heavy context hygiene (retrieved paragraph batches + LLM traces). Close with a code review, explicitly checking that no generated claim is unsupported by retrieved evidence — this is the project's core credibility claim.
-**Tech:** Qdrant retrieval, direct LLM API call (Llama 3.x / Qwen / GPT), structured JSON output/schema validation. **No LangGraph loop here.**
+**Tech:** Qdrant retrieval, direct Groq API call, structured JSON output/schema validation. **No LangGraph loop here.**
 **Build:** For each top-ranked gap cluster, retrieves the top-N actual supporting paragraphs from Qdrant and passes them as context to the LLM in a single pass, producing a structured report (Gap / Evidence / Confidence / Suggested Directions). Stores and exposes reports via `/reports`.
 **Done when:** Top-K ranked gaps each have a complete, evidence-grounded report referencing real retrieved paragraphs/papers.
 
 ### Phase 10 — Mode B: Interactive GraphRAG with LangGraph (Stage 10)
 **Workflow:** The most complex phase — plan and implement it node by node (retrieve → assess → reformulate → rerank → generate → grounding check). TDD per node; heavy context hygiene; close with a code review (takes live user input, so logic *and* security angles both matter).
-**Tech:** **LangGraph**, Qdrant, Neo4j, cross-encoder reranker, LLM API.
+**Tech:** **LangGraph**, Qdrant, Neo4j, cross-encoder reranker, Groq API.
 **Build:** Implements the stateful graph described in [Section 9](#9-mode-b-in-detail-interactive-graphrag-with-langgraph): retrieve (vector + graph) → assess sufficiency → reformulate/retry (capped rounds) → rerank → generate → grounding check → return or regenerate. Exposes a `/query` endpoint accepting a natural-language research question and returning a grounded answer with source citations.
 **Done when:** A test question reliably returns an answer whose claims trace back to specific retrieved papers, with visible retry behavior when initial retrieval is weak.
 

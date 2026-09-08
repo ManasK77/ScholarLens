@@ -21,18 +21,41 @@ dependencies = [
     "python-multipart>=0.0.12,<1",
     "pymupdf>=1.28,<2",
     "pdfplumber>=0.11,<1",
-    # transformers: widened to allow 5.x — sentence-transformers>=6.0 requires
-    # transformers>=5.0, discovered as a real resolver conflict at install time
-    # (RESEARCH.md's <5 pin assumed 4.x compatibility with SciBERT checkpoints,
-    # which also holds under 5.x).
-    "transformers>=4.57,<6",
+    # transformers: capped below 5.x again in Phase 4. gliner2[local] requires
+    # transformers<5, and sentence-transformers>=6.0 requires transformers>=5 —
+    # mutually exclusive. sentence-transformers 5.x accepts transformers<5, so
+    # the pair below is the only set that satisfies the approved Phase 4 model
+    # choice (PROGRESS.md D-04-01). SciBERT checkpoints work under 4.x.
+    "transformers>=4.57,<5",
     # torch: install the CPU-only wheel explicitly BEFORE `pip install -e ".[dev]"`:
     #   pip install torch --index-url https://download.pytorch.org/whl/cpu
     # A plain `pip install -e ".[dev]"` alone would resolve torch from the
     # default PyPI index, which can pull a multi-GB CUDA-enabled build.
     "torch>=2.9,<3",
-    "sentence-transformers>=6.0,<7",
+    # <6 is forced by the transformers<5 cap above, not a preference.
+    "sentence-transformers>=5.1,<6",
     "spacy>=3.8,<4",
+    # Phase 4 joint NER+RE. The [local] extra pulls torch/transformers/peft/
+    # safetensors for offline inference. JointIE API only — see app/ner_re/extractor.py.
+    "gliner2[local]>=2.0,<3",
+    # Phase 5 SPECTER2. AdapterHub's `adapters` is what loads the official
+    # allenai/specter2 proximity adapter onto allenai/specter2_base. 1.3.0
+    # declares transformers~=4.57.6, which the Phase 4 pin above already
+    # resolves to — so SPECTER2 costs no change to the GLiNER2 dependency set.
+    # Imported lazily in app/embeddings/encoder.py, never at module import.
+    "adapters>=1.3,<2",
+    # Phase 6 clustering. scikit-learn 1.3 brought HDBSCAN in-tree, so this is
+    # HDBSCAN proper without the standalone `hdbscan` package's C++/Cython
+    # build (PROGRESS.md D-06-01). >=1.7 is the floor at which
+    # `HDBSCAN(copy=...)` can be set explicitly, which app/clustering/cluster.py
+    # does. Already resolved transitively via sentence-transformers; declared
+    # here because Phase 6 imports it directly.
+    "scikit-learn>=1.7,<2",
+    # Also transitive, and also imported directly (the HDBSCAN input matrix).
+    "numpy>=2.0,<3",
+    # Phase 7 trend analysis. README 7/15 fix the tech as "Pandas + NumPy";
+    # app/trends/analysis.py does the per-cluster year aggregation with it.
+    "pandas>=2.2,<4",
 ]
 
 [project.optional-dependencies]

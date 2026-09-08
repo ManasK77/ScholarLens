@@ -5,7 +5,7 @@ D-23's no-real-network/service-call rule extended to DB isolation.
 """
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import Integer, create_engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -187,3 +187,16 @@ def test_get_session_yields_and_closes(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(StopIteration):
         next(gen)
+
+
+def test_papers_carry_a_nullable_citation_count():
+    """Read by `GET /papers` and by Phase 8's `citation_impact` signal.
+
+    Nullable because only Semantic Scholar reports it: an arXiv-only or
+    manually uploaded record has no count, and `0` would be a false claim that
+    nobody cited it.
+    """
+    column = Paper.__table__.columns["citation_count"]
+
+    assert column.nullable is True
+    assert isinstance(column.type, Integer)

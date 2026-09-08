@@ -51,26 +51,26 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 
 ### Embeddings & Vector Indexing (Phase 5)
 
-- [ ] **EMBED-01**: SPECTER2 batch-embeds every paragraph/limitation/future-work statement.
-- [ ] **EMBED-02**: Vectors are stored in Qdrant with metadata (paper ID, year, venue, section type) enabling filtered search.
-- [ ] **EMBED-03**: Each vector links back to its corresponding Neo4j node ID.
-- [ ] **EMBED-04**: A semantic query against Qdrant returns relevant paragraphs with correct metadata and graph linkage.
+- [x] **EMBED-01**: SPECTER2 batch-embeds every paragraph/limitation/future-work statement.
+- [x] **EMBED-02**: Vectors are stored in Qdrant with metadata (paper ID, year, venue, section type) enabling filtered search.
+- [x] **EMBED-03**: Each vector links back to its corresponding Neo4j node ID.
+- [x] **EMBED-04**: A semantic query against Qdrant returns relevant paragraphs with correct metadata and graph linkage.
 
 ### Clustering + Contradiction Detection (Phase 6)
 
-- [ ] **CLUSTER-01**: HDBSCAN/BERTopic clusters limitation/future-work statements by SPECTER2 embedding similarity without a pre-specified cluster count.
-- [ ] **CLUSTER-02**: DeBERTa-MNLI runs pairwise NLI checks within each cluster to flag contradicting statements between papers.
-- [ ] **CLUSTER-03**: Clusters are stored with member statements and contradiction flags attached where applicable.
+- [x] **CLUSTER-01**: HDBSCAN/BERTopic clusters limitation/future-work statements by SPECTER2 embedding similarity without a pre-specified cluster count.
+- [x] **CLUSTER-02**: DeBERTa-MNLI runs pairwise NLI checks within each cluster to flag contradicting statements between papers.
+- [x] **CLUSTER-03**: Clusters are stored with member statements and contradiction flags attached where applicable.
 
 ### Trend Analysis (Phase 7)
 
-- [ ] **TREND-01**: Pandas/NumPy aggregate per-cluster mention counts by publication year.
-- [ ] **TREND-02**: A trend slope/score is computed per cluster and exposed via the API.
+- [x] **TREND-01**: Pandas/NumPy aggregate per-cluster mention counts by publication year.
+- [x] **TREND-02**: A trend slope/score is computed per cluster and exposed via the API.
 
 ### Gap Ranking (Phase 8)
 
-- [ ] **GAPRANK-01**: `gap_score = w1·mention_frequency + w2·trend_slope − w3·solution_density + w4·citation_impact + w5·contradiction_flag` is implemented with configurable weights stored in central settings.
-- [ ] **GAPRANK-02**: A ranked list of gap clusters with individual signal breakdowns is stored in Postgres and queryable via the API.
+- [x] **GAPRANK-01**: `gap_score = w1·mention_frequency + w2·trend_slope − w3·solution_density + w4·citation_impact + w5·contradiction_flag` is implemented with configurable weights stored in central settings.
+- [x] **GAPRANK-02**: A ranked list of gap clusters with individual signal breakdowns is stored in Postgres and queryable via the API.
 
 ### Mode A — RAG-Grounded Explanation (Phase 9)
 
@@ -165,17 +165,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXTRACT-02 | Phase 3 | Complete |
 | NERRE-01 | Phase 4 | Pending |
 | NERRE-02 | Phase 4 | Pending |
-| EMBED-01 | Phase 5 | Pending |
-| EMBED-02 | Phase 5 | Pending |
-| EMBED-03 | Phase 5 | Pending |
-| EMBED-04 | Phase 5 | Pending |
-| CLUSTER-01 | Phase 6 | Pending |
-| CLUSTER-02 | Phase 6 | Pending |
-| CLUSTER-03 | Phase 6 | Pending |
-| TREND-01 | Phase 7 | Pending |
-| TREND-02 | Phase 7 | Pending |
-| GAPRANK-01 | Phase 8 | Pending |
-| GAPRANK-02 | Phase 8 | Pending |
+| EMBED-01 | Phase 5 | Complete |
+| EMBED-02 | Phase 5 | Complete |
+| EMBED-03 | Phase 5 | Complete |
+| EMBED-04 | Phase 5 | Complete |
+| CLUSTER-01 | Phase 6 | Complete |
+| CLUSTER-02 | Phase 6 | Complete |
+| CLUSTER-03 | Phase 6 | Complete |
+| TREND-01 | Phase 7 | Complete |
+| TREND-02 | Phase 7 | Complete |
+| GAPRANK-01 | Phase 8 | Complete |
+| GAPRANK-02 | Phase 8 | Complete |
 | MODEA-01 | Phase 9 | Pending |
 | MODEA-02 | Phase 9 | Pending |
 | MODEA-03 | Phase 9 | Pending |

@@ -17,14 +17,15 @@ dicts" pattern.
 import httpx
 
 SEARCH_URL = "https://api.semanticscholar.org/graph/v1/paper/search"
-FIELDS = "title,authors,year,venue,externalIds,abstract,openAccessPdf"
+FIELDS = "title,authors,year,venue,externalIds,abstract,openAccessPdf,citationCount"
 
 
 def search_topic(topic: str, api_key: str | None = None) -> list[dict]:
     """Search Semantic Scholar for `topic` and return corpus-shaped dicts.
 
     Each dict has keys: title, authors (list[str] of names), year, venue,
-    doi, abstract, openaccess_pdf_url (URL only — never downloaded here).
+    doi, abstract, citation_count, openaccess_pdf_url (URL only — never
+    downloaded here).
     """
     headers = {"x-api-key": api_key} if api_key else {}
     params = {"query": topic, "fields": FIELDS}
@@ -44,6 +45,9 @@ def search_topic(topic: str, api_key: str | None = None) -> list[dict]:
                 "venue": p.get("venue") or None,
                 "doi": (p.get("externalIds") or {}).get("DOI"),
                 "abstract": p.get("abstract"),
+                # Phase 8's `citation_impact` signal. Left as None when the
+                # response omits it — an unknown count is not a count of zero.
+                "citation_count": p.get("citationCount"),
                 "openaccess_pdf_url": (p.get("openAccessPdf") or {}).get("url"),
             }
         )

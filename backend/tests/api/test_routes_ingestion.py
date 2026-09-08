@@ -249,3 +249,23 @@ def test_upload_multiple_files_returns_one_result_each(client: TestClient) -> No
 
     assert response.status_code == 200
     assert len(response.json()["created"]) == 2
+
+
+def test_paper_dict_carries_the_citation_count_onto_the_corpus_row():
+    """The one place a source's raw dict becomes Paper columns.
+
+    Semantic Scholar is the only source that reports a count; the others leave
+    it `None`, and `dedup.merge` (fill-if-None) lets a later S2 match supply it
+    without ever overwriting a known value.
+    """
+    mapped = routes_ingestion._to_paper_dict(
+        {"title": "A paper", "citation_count": 412}, "semantic_scholar", None
+    )
+
+    assert mapped["citation_count"] == 412
+    assert (
+        routes_ingestion._to_paper_dict({"title": "A paper"}, "arxiv", None)[
+            "citation_count"
+        ]
+        is None
+    )

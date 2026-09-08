@@ -46,6 +46,11 @@ class Paper(Base):
     has_full_text: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     arxiv_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     acl_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    # Semantic Scholar's `citationCount` (README §7 — the only source that
+    # reports one). Feeds Phase 8's `citation_impact` signal and `GET /papers`.
+    # Nullable rather than defaulted to 0: an arXiv-only or manually uploaded
+    # record has no count, and 0 would assert that nobody cited it.
+    citation_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

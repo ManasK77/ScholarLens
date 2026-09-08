@@ -6,35 +6,21 @@ collection through grounded research-gap reports and interactive GraphRAG.
 ## Configuration
 
 Copy the repository-level `.env.example` to `.env`, replace every placeholder,
-and choose one LLM provider.
-
-Gemini:
-
-```dotenv
-LLM_PROVIDER=gemini
-GEMINI_API_KEY=your-google-ai-studio-key
-GEMINI_MODEL=gemini-2.5-flash
-```
-
-Ollama:
+and add a Groq API key (created at <https://console.groq.com/keys>). Groq is the
+only supported LLM provider:
 
 ```dotenv
-LLM_PROVIDER=ollama
-OLLAMA_URL=http://ollama:11434
-OLLAMA_MODEL=qwen3:8b
+GROQ_API_KEY=your-groq-api-key
+# optional overrides
+LLM_PROVIDER=groq
+GROQ_MODEL=openai/gpt-oss-20b
 ```
 
-For Docker-based Ollama, start the optional profile and pull the configured
-model once:
-
-```bash
-docker compose --profile ollama up -d ollama
-docker compose exec ollama ollama pull qwen3:8b
-```
-
-Use the exact model named by `OLLAMA_MODEL`. For a 6–8B model, give Docker
-enough memory for Ollama and the roughly 2 GB GROBID service to coexist, or stop
-GROBID after ingestion while running interactive queries.
+`GROQ_MODEL` must name a Groq model that supports
+`response_format: json_schema`, which is what makes the Stage 9 report schema
+provider-enforced rather than merely requested in the prompt. Without a key the
+API still starts and every structured stage still runs; only report generation
+and `POST /query` fail, with an explicit "Groq is unavailable" error.
 
 All non-health API routes require the configured key:
 
@@ -73,7 +59,7 @@ for the life of the process.
 | `POST` | `/pipeline/run` | Run parsing through report generation in dependency order |
 
 `POST /pipeline/run` accepts `{"generate_reports": false}` when the structured
-pipeline should run without invoking Gemini or Ollama.
+pipeline should run without invoking Groq.
 
 `POST /query` searches the local corpus; it does not perform web discovery. Run
 `POST /collect` followed by `POST /pipeline/run` first. When Qdrant contains no

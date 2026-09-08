@@ -72,7 +72,17 @@ def _cosine_similarity(left: Vector, right: Vector) -> float:
 def get_embedder() -> EmbedFn:
     """Lazily construct one mean-pooled SciBERT embedder per process."""
     from sentence_transformers import SentenceTransformer
-    from sentence_transformers.sentence_transformer.modules import Pooling, Transformer
+
+    # sentence-transformers moved these in 6.x. Phase 4 pinned the library back
+    # to 5.x (gliner2[local] caps transformers<5, which 6.x forbids), so accept
+    # both layouts rather than coupling this module to one release line.
+    try:
+        from sentence_transformers.sentence_transformer.modules import (
+            Pooling,
+            Transformer,
+        )
+    except ImportError:  # sentence-transformers < 6
+        from sentence_transformers.models import Pooling, Transformer
 
     transformer = Transformer("allenai/scibert_scivocab_uncased")
     pooling = Pooling(transformer.get_embedding_dimension(), pooling_mode="mean")

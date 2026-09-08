@@ -8,7 +8,7 @@ const fixtures: Record<string, unknown> = {
   '/api/clusters': [{ id: 4, label: 'Multilingual robustness', member_count: 7, contradiction_flag: true, contradiction_score: 0.81, members: [] }],
   '/api/trends': [{ cluster_id: 4, yearly_counts: { 2023: 2, 2024: 4, 2025: 7 }, slope: 2.5 }],
   '/api/gaps?limit=100': [{ cluster_id: 4, score: 8.4, signals: { mention_frequency: 7, trend_slope: 2.5, solution_density: 0.14, citation_impact: 1.2, contradiction_flag: 1 } }],
-  '/api/reports': [{ cluster_id: 4, gap: 'Multilingual prompt injection remains underexplored.', evidence: [{ id: 'e1', paper_id: 1, title: 'A paper', text: 'Methods degrade outside English.' }], confidence: 0.91, suggested_directions: ['Build multilingual benchmarks'], provider: 'ollama', model: 'qwen3:8b' }],
+  '/api/reports': [{ cluster_id: 4, gap: 'Multilingual prompt injection remains underexplored.', evidence: [{ id: 'e1', paper_id: 1, title: 'A paper', text: 'Methods degrade outside English.' }], confidence: 0.91, suggested_directions: ['Build multilingual benchmarks'], provider: 'groq', model: 'openai/gpt-oss-20b' }],
   '/api/graph?limit=500': { nodes: [], edges: [] },
 }
 
@@ -32,8 +32,8 @@ function installFetchMock() {
         grounded: true,
         retry_count: 1,
         trace: ['retrieve:0', 'reformulate', 'retrieve:1', 'grounding:true'],
-        provider: 'ollama',
-        model: 'qwen3:8b',
+        provider: 'groq',
+        model: 'openai/gpt-oss-20b',
       }), { status: 200, headers: { 'Content-Type': 'application/json' } })
     }
     const body = fixtures[url]
@@ -51,8 +51,8 @@ function queryPayload() {
     grounded: true,
     retry_count: 1,
     trace: ['retrieve:0', 'reformulate', 'retrieve:1', 'grounding:true'],
-    provider: 'ollama',
-    model: 'qwen3:8b',
+    provider: 'groq',
+    model: 'openai/gpt-oss-20b',
   }
 }
 
@@ -126,8 +126,8 @@ describe('ScholarLens dashboard', () => {
           grounded: false,
           retry_count: 2,
           trace: ['retrieve:0', 'insufficient'],
-          provider: 'ollama',
-          model: 'qwen3:8b',
+          provider: 'groq',
+          model: 'openai/gpt-oss-20b',
         }), { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
       return populatedFetch(input, init)
