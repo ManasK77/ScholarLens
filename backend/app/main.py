@@ -2,10 +2,11 @@
 
 from fastapi import FastAPI
 
-from app.api import routes_health, routes_ingestion
+from app.api import routes_backend, routes_health, routes_ingestion
 from app.clustering import (
     storage as clustering_storage,  # noqa: F401 -- registers Cluster/ClusterMember
 )
+from app.core.schema import ensure_schema_compatibility
 from app.explanation import (
     storage as explanation_storage,  # noqa: F401 -- registers GapReport
 )
@@ -27,8 +28,11 @@ app = FastAPI(title="ScholarLens")
 
 app.include_router(routes_health.router)
 app.include_router(routes_ingestion.router)
+app.include_router(routes_backend.router)
 
 
 @app.on_event("startup")
 def _create_tables() -> None:
-    Base.metadata.create_all(get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    ensure_schema_compatibility(engine)

@@ -123,6 +123,58 @@ def query_graph(session, query: str, limit: int = 20) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def expand_paper_neighborhood(
+    session, paper_ids: list[int], limit: int = 20
+) -> list[dict[str, Any]]:
+    """Return a bounded one-hop neighborhood rooted at vector-hit papers.
+
+    Property and label access is dynamic so an empty/partially populated Neo4j
+    database does not emit ``UnknownPropertyKeyWarning`` notifications.
+    """
+    if not isinstance(limit, int) or isinstance(limit, bool):
+        raise TypeError("limit must be an integer")
+    if limit < 1:
+        raise ValueError("limit must be positive")
+
+    unique_ids: list[int] = []
+    for paper_id in paper_ids:
+        if not isinstance(paper_id, int) or isinstance(paper_id, bool) or paper_id < 0:
+            raise ValueError("paper IDs must be non-negative integers")
+        if paper_id not in unique_ids:
+            unique_ids.append(paper_id)
+    if not unique_ids:
+        return []
+
+    rows: Iterable = session.run(
+        "UNWIND $paper_ids AS seed_id "
+        "MATCH (seed) "
+        "WHERE 'Paper' IN labels(seed) "
+        "AND properties(seed)['id'] = seed_id "
+        "OPTIONAL MATCH (seed)-[seed_edge]->(entity) "
+        "WHERE 'Entity' IN labels(entity) "
+        "AND type(seed_edge) IN ['MENTIONS', 'SUPPORTS'] "
+        "OPTIONAL MATCH (neighbour)-[neighbour_edge]->(entity) "
+        "WHERE 'Paper' IN labels(neighbour) "
+        "AND type(neighbour_edge) IN ['MENTIONS', 'SUPPORTS'] "
+        "OPTIONAL MATCH (entity)-[relation]->(related) "
+        "WHERE 'Entity' IN labels(related) "
+        "WITH seed, entity, relation, related, "
+        "CASE WHEN neighbour IS NULL THEN seed ELSE neighbour END AS paper "
+        "RETURN DISTINCT properties(paper)['id'] AS paper_id, "
+        "properties(paper)['title'] AS title, "
+        "properties(seed)['id'] AS seed_paper_id, "
+        "properties(entity)['name'] AS entity, "
+        "properties(entity)['entity_type'] AS entity_type, "
+        "type(relation) AS relation, "
+        "properties(related)['name'] AS related_entity "
+        "ORDER BY paper_id, entity, relation, related_entity "
+        "LIMIT $limit",
+        paper_ids=unique_ids,
+        limit=min(limit, 100),
+    )
+    return [dict(row) for row in rows]
+
+
 def graph_snapshot(session, limit: int = 500) -> dict[str, list[dict]]:
     nodes = [
         dict(row)

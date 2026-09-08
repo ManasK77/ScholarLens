@@ -79,7 +79,9 @@ def replace_facts(
             section_index=statement.section_index,
             paragraph_index=statement.paragraph_index,
             sentence_index=statement.sentence_index,
-            confidence=statement.confidence,
+            # NumPy/SciBERT similarity math can produce numpy.float32/float64.
+            # psycopg2 only adapts native Python scalars for a FLOAT column.
+            confidence=float(statement.confidence),
             extraction_method=statement.extraction_method,
         )
         for statement in unique_statements

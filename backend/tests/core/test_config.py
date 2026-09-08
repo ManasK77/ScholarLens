@@ -4,6 +4,7 @@ Covers D-07 (config centralization) and D-09 (the full 14-variable .env contract
 """
 
 import pytest
+from pydantic import ValidationError
 
 ALL_REQUIRED_ENV = {
     "NEO4J_URI": "bolt://neo4j:7687",
@@ -171,8 +172,6 @@ def test_nerre_chunk_caps_reject_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_all_required(monkeypatch)
     monkeypatch.setenv("NERRE_MAX_CHUNKS_PER_PAPER", "0")
 
-    from pydantic import ValidationError
-
     from app.core.config import Settings
 
     with pytest.raises(ValidationError):
@@ -185,8 +184,6 @@ def test_nerre_thresholds_reject_out_of_range_values(
     """A negative threshold would accept every hallucinated entity."""
     _set_all_required(monkeypatch)
     monkeypatch.setenv("NERRE_ENTITY_THRESHOLD", "-1")
-
-    from pydantic import ValidationError
 
     from app.core.config import Settings
 
@@ -226,6 +223,49 @@ def test_embedding_settings_load_from_env(monkeypatch: pytest.MonkeyPatch) -> No
     assert settings.retrieval_top_n == 20
 
 
+def test_phase_10_settings_have_bounded_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_all_required(monkeypatch)
+
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.retrieval_round_cap == 3
+    assert settings.retrieval_min_chunks >= 1
+    assert settings.retrieval_min_papers >= 1
+    assert 0.0 <= settings.retrieval_min_score <= 1.0
+    assert settings.reranker_model == "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    assert settings.reranker_batch_size >= 1
+    assert settings.grounding_regeneration_cap == 1
+
+
+@pytest.mark.parametrize(
+    ("variable", "value"),
+    [
+        ("RETRIEVAL_ROUND_CAP", "0"),
+        ("RETRIEVAL_ROUND_CAP", "4"),
+        ("RETRIEVAL_MIN_CHUNKS", "0"),
+        ("RETRIEVAL_MIN_PAPERS", "0"),
+        ("RETRIEVAL_MIN_SCORE", "-0.1"),
+        ("RETRIEVAL_MIN_SCORE", "1.1"),
+        ("RERANKER_BATCH_SIZE", "0"),
+        ("GROUNDING_REGENERATION_CAP", "2"),
+    ],
+)
+def test_phase_10_bounds_reject_runaway_or_empty_values(
+    monkeypatch: pytest.MonkeyPatch, variable: str, value: str
+) -> None:
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv(variable, value)
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
 @pytest.mark.parametrize(
     ("variable", "value"),
     [
@@ -242,8 +282,6 @@ def test_embedding_caps_reject_non_positive_values(
     """A zero batch size or top-N would index or return nothing, silently."""
     _set_all_required(monkeypatch)
     monkeypatch.setenv(variable, value)
-
-    from pydantic import ValidationError
 
     from app.core.config import Settings
 
@@ -266,8 +304,6 @@ def test_embedding_caps_reject_unbounded_values(
     _set_all_required(monkeypatch)
     monkeypatch.setenv(variable, value)
 
-    from pydantic import ValidationError
-
     from app.core.config import Settings
 
     with pytest.raises(ValidationError):
@@ -278,8 +314,6 @@ def test_blank_qdrant_collection_is_rejected(monkeypatch: pytest.MonkeyPatch) ->
     """An empty collection name would make every Qdrant call fail obscurely."""
     _set_all_required(monkeypatch)
     monkeypatch.setenv("QDRANT_COLLECTION", "   ")
-
-    from pydantic import ValidationError
 
     from app.core.config import Settings
 
@@ -371,8 +405,6 @@ def test_clustering_caps_reject_non_positive_values(
     _set_all_required(monkeypatch)
     monkeypatch.setenv(variable, value)
 
-    from pydantic import ValidationError
-
     from app.core.config import Settings
 
     with pytest.raises(ValidationError):
@@ -396,8 +428,6 @@ def test_clustering_caps_reject_unbounded_values(
     """Pairwise NLI is O(n^2) forward passes; every knob is bounded above."""
     _set_all_required(monkeypatch)
     monkeypatch.setenv(variable, value)
-
-    from pydantic import ValidationError
 
     from app.core.config import Settings
 
@@ -441,8 +471,6 @@ def test_trend_window_rejects_an_inverted_range(
     monkeypatch.setenv("TREND_MIN_YEAR", "2030")
     monkeypatch.setenv("TREND_MAX_YEAR", "2020")
 
-    from pydantic import ValidationError
-
     from app.core.config import Settings
 
     with pytest.raises(ValidationError, match="trend_max_year"):
@@ -463,8 +491,6 @@ def test_trend_window_rejects_implausible_years(
 ) -> None:
     _set_all_required(monkeypatch)
     monkeypatch.setenv(variable, value)
-
-    from pydantic import ValidationError
 
     from app.core.config import Settings
 
@@ -523,8 +549,6 @@ def test_a_negative_gap_weight_is_rejected(
     """
     _set_all_required(monkeypatch)
     monkeypatch.setenv(variable, "-1")
-
-    from pydantic import ValidationError
 
     from app.core.config import Settings
 
@@ -603,8 +627,6 @@ def test_report_caps_reject_non_positive_values(
     _set_all_required(monkeypatch)
     monkeypatch.setenv(variable, "0")
 
-    from pydantic import ValidationError
-
     from app.core.config import Settings
 
     with pytest.raises(ValidationError):
@@ -619,8 +641,6 @@ def test_report_caps_reject_unbounded_values(
     _set_all_required(monkeypatch)
     monkeypatch.setenv(variable, "100000")
 
-    from pydantic import ValidationError
-
     from app.core.config import Settings
 
     with pytest.raises(ValidationError):
@@ -630,8 +650,6 @@ def test_report_caps_reject_unbounded_values(
 def test_llm_timeout_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_all_required(monkeypatch)
     monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "0")
-
-    from pydantic import ValidationError
 
     from app.core.config import Settings
 

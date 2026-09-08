@@ -1,5 +1,7 @@
 """Source-agnostic Stage 2 parsing orchestration."""
 
+import logging
+from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -16,6 +18,14 @@ from app.parsing import (
     tei_parser,
 )
 from app.parsing.storage import ParsedDocument
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class ParsingBatch:
+    processed: list[int]
+    missing_pdfs: list[int]
 
 
 def parse_and_store(session: Session, paper: Paper, grobid_url: str) -> ParsedDocument:
@@ -72,14 +82,38 @@ def parse_all_pending(
     grobid_url: str,
     unpaywall_email: str,
     pdf_storage_path: str,
-) -> list[int]:
-    """Parse every corpus paper that has no stored parsed representation."""
+) -> ParsingBatch:
+    """Parse pending full-text papers and reconcile stale file references."""
     processed: list[int] = []
+    missing_pdfs: list[int] = []
     for paper in session.scalars(select(Paper)):
         if storage.get_parsed_document(session, paper.id) is not None:
             continue
-        run_parsing_pipeline(
-            session, paper, grobid_url, unpaywall_email, pdf_storage_path
-        )
+        if not paper.has_full_text:
+            continue
+        if not paper.pdf_path or not Path(paper.pdf_path).is_file():
+            logger.warning(
+                "Paper %s references a missing PDF at %s; marking it metadata-only",
+                paper.id,
+                paper.pdf_path,
+            )
+            paper.has_full_text = False
+            paper.pdf_path = None
+            missing_pdfs.append(paper.id)
+            continue
+        try:
+            run_parsing_pipeline(
+                session, paper, grobid_url, unpaywall_email, pdf_storage_path
+            )
+        except FileNotFoundError:
+            # The file may disappear between the existence check and the read.
+            logger.warning(
+                "Paper %s PDF disappeared during parsing; marking it metadata-only",
+                paper.id,
+            )
+            paper.has_full_text = False
+            paper.pdf_path = None
+            missing_pdfs.append(paper.id)
+            continue
         processed.append(paper.id)
-    return processed
+    return ParsingBatch(processed, missing_pdfs)

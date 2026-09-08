@@ -64,6 +64,8 @@ services:
     env_file:
       - path: .env
         required: false
+    volumes:
+      - pdf_data:/data/pdfs
     depends_on:
       neo4j:
         condition: service_healthy
@@ -78,3 +80,4 @@ volumes:
   neo4j_data:
   qdrant_data:
   postgres_data:
+  pdf_data:

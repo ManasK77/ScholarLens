@@ -1,4 +1,5 @@
 import pytest
+from numpy import float32
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -88,6 +89,30 @@ def test_duplicate_statements_are_suppressed(session: Session) -> None:
     statement = _statement(FactType.MODEL, "We use BERT.")
     replace_facts(session, paper.id, [statement, statement])
     assert session.query(ExtractedFact).filter_by(paper_id=paper.id).count() == 1
+
+
+def test_numpy_confidence_is_normalized_before_database_persistence(
+    session: Session,
+) -> None:
+    """SciBERT cosine scores are NumPy scalars; psycopg2 needs native floats."""
+    paper = _paper(session)
+    statement = _statement(FactType.LIMITATION, "A semantic limitation.")
+    statement = ExtractedStatement(
+        fact_type=statement.fact_type,
+        text=statement.text,
+        section_type=statement.section_type,
+        section_heading=statement.section_heading,
+        section_index=statement.section_index,
+        paragraph_index=statement.paragraph_index,
+        sentence_index=statement.sentence_index,
+        confidence=float32(0.72),
+        extraction_method="semantic",
+    )
+
+    rows = replace_facts(session, paper.id, [statement])
+
+    assert type(rows[0].confidence) is float
+    assert rows[0].confidence == pytest.approx(0.72)
 
 
 def test_same_evidence_location_in_different_sections_is_preserved(

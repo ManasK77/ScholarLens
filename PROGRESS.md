@@ -5,6 +5,83 @@ holds the per-phase GSD artifacts; this file is the cross-session summary.
 
 ---
 
+## 2026-09-08 — NumPy confidence PostgreSQL persistence fix
+
+Fixed the live pipeline failure `psycopg2.ProgrammingError: can't adapt type
+'numpy.float32'`. SciBERT cosine similarity can return NumPy scalar confidence
+values even though `ExtractedStatement.confidence` is typed as `float`.
+`replace_facts()` now converts every confidence to a native Python `float` at
+the database boundary. A regression test uses a real `numpy.float32`; the full
+backend suite passes (`701 passed`, 10 integration tests deselected), and a
+rollback-only smoke against the real PostgreSQL container stored `0.72` as a
+native float. The backend image was rebuilt and is healthy.
+
+---
+
+## 2026-09-08 — Phase 10 (Interactive GraphRAG with LangGraph) complete
+
+Implemented README Phase 10 / MODEB-01..03 under plan → TDD → implementation
+→ review. Phase 9's Mode A service was inspected and left unchanged. Mode B
+uses LangGraph directly and reuses the Phase 5 `EvidenceIndex`, Phase 4 Neo4j
+paper graph, and Phase 9 direct Groq structured-output client; there are no
+application imports of LangChain and no Gemini/Ollama provider path.
+
+### Workflow delivered
+
+* `POST /query` accepts a bounded, trimmed natural-language question.
+* Each retrieval round queries Qdrant first and seeds a bounded one-hop Neo4j
+  paper/entity expansion from the returned paper IDs.
+* Sufficiency requires configurable relevant-chunk and distinct-paper minima.
+  Thin evidence is reformulated by Groq and retried, with an absolute cap of
+  three total retrieval rounds and visible trace/counter fields.
+* A lazy cross-encoder reranks the combined candidate set before generation.
+* Groq returns a schema-validated answer and per-claim evidence IDs. Structural
+  citation validation runs before a second structured Groq grounding check.
+* A failed grounding check permits exactly one stricter regeneration. A second
+  failure returns a safe failure message and never leaks the ungrounded draft.
+* Citations contain only the public evidence fields and follow deterministic
+  reranked order. Retrieved PDF text is length-bounded and explicitly fenced
+  as untrusted prompt data.
+
+### Review findings fixed
+
+The pre-existing Phase 10 prototype was not production-safe: it treated any
+non-empty text as sufficient, searched Neo4j independently of vector hits,
+routed grounding failures back through retrieval, could return an ungrounded
+draft after the retry budget, and built citations from an unordered set. The
+implementation replaces each behavior with the bounded workflow above.
+
+The live rebuild also exposed the Dockerfile pulling a CUDA Torch stack despite
+the project's CPU-only instruction. The Dockerfile now installs Torch from the
+official CPU wheel index before resolving backend dependencies.
+
+### Verification
+
+* Phase 10 focused suite: `104 passed`.
+* Complete backend default suite: `700 passed, 10 deselected` (integration
+  marker), run from `backend/` as required by fixture paths.
+* Frontend: `7 passed`; lint clean; TypeScript/Vite build successful.
+* Ruff: full `check` clean; Phase 10 changed-file format check clean. The full
+  historical tree's format check still reports two unrelated pre-existing test
+  files (`test_no_prohibited_sources.py`, `test_storage.py`).
+* Docker: rebuilt successfully with CPU Torch; backend, PostgreSQL, Qdrant,
+  Neo4j, and GROBID are healthy. Live authenticated `POST /query` returned 200
+  and the correct one-round empty-corpus response. The one-hop Cypher executed
+  successfully against real Neo4j without unknown-property notifications.
+
+### Live successful-answer status
+
+The current Qdrant collection contains zero points, so a real grounded-answer
+Groq run has no evidence to cite. The upstream `numpy.float32` persistence
+failure found during this verification was fixed in the subsequent entry
+above; the evidence pipeline and Qdrant index still need to be rerun to
+populate the corpus. Unit and API tests cover the successful grounded,
+reformulation, and regeneration paths with mocked external services.
+
+Phase 11 was not started. Awaiting explicit owner authorization.
+
+---
+
 ## 2026-09-08 — LLM provider consolidated on Groq (Gemini and Ollama removed)
 
 Owner decision: **Groq is the project's only LLM provider.** Gemini and Ollama

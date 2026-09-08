@@ -56,6 +56,8 @@ dependencies = [
     # Phase 7 trend analysis. README 7/15 fix the tech as "Pandas + NumPy";
     # app/trends/analysis.py does the per-cluster year aggregation with it.
     "pandas>=2.2,<4",
+    # Phase 10 workflow engine, used directly without a higher-level chain SDK.
+    "langgraph>=1.2,<2",
 ]
 
 [project.optional-dependencies]

@@ -3,18 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: awaiting_authorization
-stopped_at: Phase 11 partially delivered (API-key auth only). Phases 4-10 implementations are absent from the repository — see PROGRESS.md (2026-09-06) for the full reconciliation.
-last_updated: "2026-09-06"
-last_activity: 2026-09-06 -- Project-state reconciliation after the incomplete upstream push in 478597b. Phase 11 API-key auth landed and verified; routes_backend.router remains unregistered because 12 modules it imports do not exist.
+stopped_at: Phase 10 complete and verified; awaiting explicit authorization before any Phase 11 work.
+last_updated: "2026-09-08"
+last_activity: 2026-09-08 -- Fixed and real-PostgreSQL-verified the numpy.float32 confidence persistence defect found after Phase 10. Qdrant remains empty until the evidence pipeline is rerun.
 progress:
   total_phases: 15
-  # Verified by implementation + passing tests, not by planning-file claims:
-  # complete = Phases 0, 1, 2, 3 and 13 (13 is self-contained and was verified independently).
-  # Phase 12 is built but blocked; Phase 11 is partial; Phases 4-10 are absent.
-  completed_phases: 5
-  total_plans: 16
-  completed_plans: 16
-  percent: 33
+  # Complete = Phases 0-10, 12, and 13. Phase 11 remains partial and Phase 14
+  # has not started.
+  completed_phases: 13
+  total_plans: 22
+  completed_plans: 22
+  percent: 87
 ---
 
 # Project State
@@ -24,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-21)
 
 **Core value:** Every research gap ScholarLens reports is grounded in structured, retrieved evidence extracted before any LLM is involved — the LLM explains gaps already discovered by extraction, clustering, trend analysis, and ranking; it never discovers gaps on its own.
-**Current focus:** Phases 4-10 must be rebuilt before Phase 11 can be finished. Phase 4 is blocked on an owner model-choice decision.
+**Current focus:** Wait for explicit owner authorization before starting Phase 11.
 
 ## Current Position
 
-Phase: 11 (Backend API Integration) — PARTIAL; Phases 4-10 — NOT IMPLEMENTED
-Plan: no plan documents exist for Phases 4 through 11
-Status: Waiting for owner authorization and for the Phase 4 model-choice decision.
-Last activity: 2026-09-06 -- Reconciled the three conflicted planning files against git history and the source tree. Confirmed by exhaustive object-database search that the Phase 4-10 modules exist in no reachable commit, tree, blob, reflog entry, or unreachable object, and that there are zero unreachable commits.
+Phase: 10 (Mode B Interactive GraphRAG) — COMPLETE
+Plan: 10-01 complete; summary recorded in the Phase 10 planning directory
+Status: Waiting for owner authorization before Phase 11.
+Last activity: 2026-09-08 -- Phase 10 focused suite (104), backend suite (700), frontend suite (7), static checks, Docker health, and live empty-corpus /query smoke passed.
 
-Progress: [███░░░░░░░] 33% (5/15 phases verified complete)
+Progress: [█████████░] 87% (13/15 phases verified complete; Phase 11 partial)
 
 ## Performance Metrics
 
@@ -85,9 +84,10 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Phases 4-10: rebuild from scratch (not recoverable from git). Phase 4 first, and only after the owner locks the model choice.
-- Phase 11: register `routes_backend.router` and finish `/papers`, `/graph`, `/clusters`, `/trends`, `/gaps`, `/reports`, `/query`, `/pipeline/run` once Phases 4-10 exist.
-- `backend/pyproject.toml` and `backend/uv.lock` disagree: the lock records `gliner2[local]`, `langgraph`, `pandas`, `scikit-learn` and `numpy`, none of which the committed `pyproject.toml` declares. The lock is a fossil of an uncommitted `pyproject.toml`.
+- Do not start Phase 11 without explicit owner authorization.
+- Before a successful live evidence-backed Mode B query can run, rerun the
+  evidence pipeline to populate the currently empty Qdrant collection. The
+  PostgreSQL `numpy.float32` confidence adaptation defect is fixed.
 
 ### Blockers/Concerns
 

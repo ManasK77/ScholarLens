@@ -91,6 +91,22 @@ class Settings(BaseSettings):
     # Default `limit` for a semantic query when a caller does not pass one.
     retrieval_top_n: int = Field(default=12, gt=0, le=1000)
 
+    # --- Interactive GraphRAG (Phase 10) ---
+    # Hard workflow bound from README §15: initial retrieval plus at most two
+    # reformulated retries. It cannot be raised through environment config.
+    retrieval_round_cap: int = Field(default=3, ge=1, le=3)
+    # Evidence is sufficient only when enough relevant chunks come from enough
+    # distinct papers. This prevents one prolific paper from appearing broad.
+    retrieval_min_chunks: int = Field(default=2, ge=1, le=100)
+    retrieval_min_papers: int = Field(default=2, ge=1, le=100)
+    retrieval_min_score: float = Field(default=0.2, ge=0.0, le=1.0)
+    # Cross-encoder is instantiated lazily on the first Mode B request because
+    # loading it during API startup would make even /health model-dependent.
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_batch_size: int = Field(default=16, ge=1, le=256)
+    # One stricter generation attempt is permitted after grounding fails.
+    grounding_regeneration_cap: int = Field(default=1, ge=0, le=1)
+
     # --- Semantic clustering + contradiction detection (Phase 6) ---
     # HDBSCAN discovers the number of themes from the density of the SPECTER2
     # space; there is deliberately no cluster-count setting (CLUSTER-01).
@@ -221,6 +237,13 @@ class Settings(BaseSettings):
         """A blank name makes every Qdrant call fail with an opaque 4xx."""
         if not value.strip():
             raise ValueError("qdrant_collection must not be blank")
+        return value.strip()
+
+    @field_validator("reranker_model")
+    @classmethod
+    def _reject_blank_reranker_model(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reranker_model must not be blank")
         return value.strip()
 
     def gap_weights(self) -> tuple[float, float, float, float, float]:

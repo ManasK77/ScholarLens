@@ -95,6 +95,7 @@ export interface UploadResult {
 
 export interface PipelineResult {
   parsed: number[]
+  missing_pdfs?: number[]
   extracted: number[]
   graphed: number[]
   indexed: number

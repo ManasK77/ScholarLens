@@ -175,6 +175,7 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
   const [collectStatus, setCollectStatus] = useState<string | null>(null)
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const [pipelineStatus, setPipelineStatus] = useState<string | null>(null)
+  const [pipelineWarning, setPipelineWarning] = useState<string | null>(null)
   const [operationError, setOperationError] = useState<string | null>(null)
 
   async function collect(event: FormEvent) {
@@ -220,10 +221,15 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
   async function buildEvidence() {
     setBuilding(true)
     setPipelineStatus(null)
+    setPipelineWarning(null)
     setOperationError(null)
     try {
       const result = await api.runPipeline(generateReports)
       setPipelineStatus(`Evidence base ready · ${result.indexed} passages indexed`)
+      const missingCount = result.missing_pdfs?.length ?? 0
+      if (missingCount) {
+        setPipelineWarning(`${missingCount} missing ${missingCount === 1 ? 'PDF was' : 'PDFs were'} skipped. Fetch or upload ${missingCount === 1 ? 'it' : 'them'} again.`)
+      }
       await onRefresh()
     } catch (reason) {
       setOperationError(reason instanceof Error ? reason.message : 'The evidence pipeline failed.')
@@ -270,7 +276,7 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
 
       <article className="pipeline-card">
         <div><span className="step-number">03</span><p className="eyebrow">Process the corpus</p><h3>Build the evidence base</h3><p>Parse documents, extract scientific claims, build the knowledge graph, index passages, cluster limitations, and rank research gaps.</p></div>
-        <div className="pipeline-actions"><label className="checkbox-label"><input type="checkbox" checked={generateReports} onChange={(event) => setGenerateReports(event.target.checked)} />Generate grounded gap reports with the LLM</label><button className="primary-button" type="button" onClick={() => void buildEvidence()} disabled={building || (data?.papers.length ?? 0) === 0}>{building ? <RefreshCw className="spin" size={17} /> : <Database size={17} />}{building ? 'Building evidence base…' : 'Build evidence base'}</button>{(data?.papers.length ?? 0) === 0 && <small>Add at least one paper first.</small>}{pipelineStatus && <p className="success-message"><CheckCircle2 size={16} />{pipelineStatus}</p>}</div>
+        <div className="pipeline-actions"><label className="checkbox-label"><input type="checkbox" checked={generateReports} onChange={(event) => setGenerateReports(event.target.checked)} />Generate grounded gap reports with the LLM</label><button className="primary-button" type="button" onClick={() => void buildEvidence()} disabled={building || (data?.papers.length ?? 0) === 0}>{building ? <RefreshCw className="spin" size={17} /> : <Database size={17} />}{building ? 'Building evidence base…' : 'Build evidence base'}</button>{(data?.papers.length ?? 0) === 0 && <small>Add at least one paper first.</small>}{pipelineStatus && <p className="success-message"><CheckCircle2 size={16} />{pipelineStatus}</p>}{pipelineWarning && <p className="warning-message"><AlertCircle size={16} />{pipelineWarning}</p>}</div>
       </article>
 
       <section className="corpus-list" aria-labelledby="corpus-list-title">

@@ -74,15 +74,15 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 
 ### Mode A — RAG-Grounded Explanation (Phase 9)
 
-- [ ] **MODEA-01**: The top-N actual supporting paragraphs are retrieved from Qdrant per top-ranked gap cluster.
-- [ ] **MODEA-02**: The LLM produces a structured Gap/Evidence/Confidence/Suggested-Directions report in a single pass (no loop) from the retrieved paragraphs.
-- [ ] **MODEA-03**: Reports are stored and exposed via `/reports`, referencing real retrieved paragraphs/papers.
+- [x] **MODEA-01**: The top-N actual supporting paragraphs are retrieved from Qdrant per top-ranked gap cluster.
+- [x] **MODEA-02**: The LLM produces a structured Gap/Evidence/Confidence/Suggested-Directions report in a single pass (no loop) from the retrieved paragraphs.
+- [x] **MODEA-03**: Reports are stored and exposed via `/reports`, referencing real retrieved paragraphs/papers.
 
 ### Mode B — Interactive GraphRAG with LangGraph (Phase 10)
 
-- [ ] **MODEB-01**: A LangGraph stateful graph implements retrieve (vector + graph) → assess sufficiency → reformulate/retry (capped at 3 rounds) → rerank (cross-encoder) → generate → grounding check → return or regenerate.
-- [ ] **MODEB-02**: `/query` accepts a natural-language research question and returns a grounded answer with source citations.
-- [ ] **MODEB-03**: Retry/reformulation behavior is visible when initial retrieval is weak, and every returned claim traces back to a specific retrieved paper.
+- [x] **MODEB-01**: A LangGraph stateful graph implements retrieve (vector + graph) → assess sufficiency → reformulate/retry (capped at 3 rounds) → rerank (cross-encoder) → generate → grounding check → return or regenerate.
+- [x] **MODEB-02**: `/query` accepts a natural-language research question and returns a grounded answer with source citations.
+- [x] **MODEB-03**: Retry/reformulation behavior is visible when initial retrieval is weak, and every returned claim traces back to a specific retrieved paper.
 
 ### Backend API Integration (Phase 11)
 
@@ -176,12 +176,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TREND-02 | Phase 7 | Complete |
 | GAPRANK-01 | Phase 8 | Complete |
 | GAPRANK-02 | Phase 8 | Complete |
-| MODEA-01 | Phase 9 | Pending |
-| MODEA-02 | Phase 9 | Pending |
-| MODEA-03 | Phase 9 | Pending |
-| MODEB-01 | Phase 10 | Pending |
-| MODEB-02 | Phase 10 | Pending |
-| MODEB-03 | Phase 10 | Pending |
+| MODEA-01 | Phase 9 | Complete |
+| MODEA-02 | Phase 9 | Complete |
+| MODEA-03 | Phase 9 | Complete |
+| MODEB-01 | Phase 10 | Complete |
+| MODEB-02 | Phase 10 | Complete |
+| MODEB-03 | Phase 10 | Complete |
 | API-01 | Phase 11 | Pending |
 | API-02 | Phase 11 | Partial — API-key auth + OpenAPI verified on /collect and /upload; /health exempt by design |
 | API-03 | Phase 11 | Pending |

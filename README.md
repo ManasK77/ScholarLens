@@ -418,6 +418,18 @@ flow: search scholarly sources by topic, upload one or more local PDFs, inspect
 recently added papers, and run the evidence-building pipeline. The API examples
 below provide the equivalent command-line workflow.
 
+Downloaded and uploaded PDFs are stored in the Docker volume `pdf_data`, so
+recreating or rebuilding the backend container does not remove them. Avoid
+`docker compose down -v` unless you intentionally want to delete all local
+database, index, graph, and PDF data. If an older database record points to a
+PDF that is no longer present, the pipeline skips that paper, marks it as
+metadata-only, and reports its ID in `missing_pdfs`; fetch or upload that paper
+again to restore its full text.
+
+After changing backend Python code or dependencies, apply the change with
+`docker compose up -d --build backend`. A plain restart uses the existing image
+and does not include source changes.
+
 Before using **Ask ScholarLens**, populate the local evidence base. You can use
 the interactive OpenAPI page, or run the equivalent requests below:
 

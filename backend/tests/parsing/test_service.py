@@ -192,6 +192,29 @@ def test_parse_all_pending_only_processes_missing_documents(
 
     result = service.parse_all_pending(session, "url", "email", "pdfs")
 
-    assert result == [pending.id]
+    assert result.processed == [pending.id]
+    assert result.missing_pdfs == []
     assert run.call_count == 1
     assert run.call_args.args[1].id == pending.id
+
+
+def test_parse_all_pending_repairs_stale_pdf_records_and_continues(
+    session, tmp_path, monkeypatch
+) -> None:
+    valid_pdf = tmp_path / "valid.pdf"
+    valid_pdf.write_bytes(b"pdf")
+    valid = _paper(session, "arxiv", str(valid_pdf))
+    missing = _paper(session, "manual_upload", str(tmp_path / "missing.pdf"))
+    metadata_only = _paper(session, "semantic_scholar", None)
+    metadata_only.has_full_text = False
+    run = Mock()
+    monkeypatch.setattr(service, "run_parsing_pipeline", run)
+
+    result = service.parse_all_pending(session, "url", "email", "pdfs")
+
+    assert result.processed == [valid.id]
+    assert result.missing_pdfs == [missing.id]
+    assert missing.has_full_text is False
+    assert missing.pdf_path is None
+    assert metadata_only.id not in result.missing_pdfs
+    assert [call.args[1].id for call in run.call_args_list] == [valid.id]

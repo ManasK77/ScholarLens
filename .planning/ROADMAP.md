@@ -19,8 +19,8 @@ ScholarLens is built in 15 fixed phases (0 through 14), taken verbatim from READ
 - [x] **Phase 6: Semantic Clustering + Contradiction Detection (Stage 6)** - Similar limitations clustered; contradictions flagged via NLI
 - [x] **Phase 7: Trend Analysis (Stage 7)** - Per-cluster mention time series and trend score exposed via the API
 - [x] **Phase 8: Gap Ranking (Stage 8)** - Transparent weighted gap-score formula ranks clusters, queryable via the API
-- [ ] **Phase 9: Mode A - RAG-Grounded Explanation Generation (Stage 9)** - Top-ranked gaps get complete, evidence-grounded reports
-- [ ] **Phase 10: Mode B - Interactive GraphRAG with LangGraph (Stage 10)** - On-demand questions get grounded, cited answers with retry behavior
+- [x] **Phase 9: Mode A - RAG-Grounded Explanation Generation (Stage 9)** - Top-ranked gaps get complete, evidence-grounded reports
+- [x] **Phase 10: Mode B - Interactive GraphRAG with LangGraph (Stage 10)** - On-demand questions get grounded, cited answers with retry behavior
 - [ ] **Phase 11: Backend API Integration** - Full REST surface wiring Phases 1-10 together, documented, with API-key auth *(partial: API-key auth built and verified; routes_backend.router not registerable)*
 - [x] **Phase 12: Frontend Dashboard** - Researcher-facing UI for gap reports, trends, graph exploration, and Mode B chat *(built, tested and building; end-to-end blocked on Phases 4-11)*
 - [x] **Phase 13: Evaluation Harness** - Time-shifted validation, survey cross-check, and expert scoring produce a concrete evaluation report *(self-contained; 4 tests pass, example report reproduced)*
@@ -273,9 +273,9 @@ Phases execute in numeric order: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 →
 | 5. Embeddings & Vector Indexing | 1/1 | Complete | 2026-09-06 |
 | 6. Semantic Clustering + Contradiction Detection | 1/1 | Complete | 2026-09-06 |
 | 7. Trend Analysis | 1/1 | Complete | 2026-09-07 |
-| 8. Gap Ranking | 0/TBD | Not started | - |
-| 9. Mode A - RAG-Grounded Explanation Generation | 0/TBD | Not started | - |
-| 10. Mode B - Interactive GraphRAG with LangGraph | 0/TBD | Not started | - |
+| 8. Gap Ranking | 1/1 | Complete | 2026-09-07 |
+| 9. Mode A - RAG-Grounded Explanation Generation | 1/1 | Complete | 2026-09-07 |
+| 10. Mode B - Interactive GraphRAG with LangGraph | 1/1 | Complete | 2026-09-08 |
 | 11. Backend API Integration | 0/TBD | Partial (API-key auth only) | - |
 | 12. Frontend Dashboard | 1/1 | Built, blocked on Phases 4-11 | 2026-09-06 |
 | 13. Evaluation Harness | 1/1 | Complete | 2026-09-06 |

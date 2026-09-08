@@ -1,6 +1,13 @@
 from types import SimpleNamespace
 
-from app.ner_re.graph import graph_snapshot, query_graph, write_paper_graph
+import pytest
+
+from app.ner_re.graph import (
+    expand_paper_neighborhood,
+    graph_snapshot,
+    query_graph,
+    write_paper_graph,
+)
 from app.ner_re.schema import EntityMention, JointExtractionResult, RelationMention
 
 
@@ -77,3 +84,29 @@ def test_graph_query_uses_dynamic_labels_relationships_and_properties():
     assert "properties(e)['name']" in query
     assert "(p:Paper)" not in query
     assert "e.name" not in query
+
+
+def test_graph_expansion_is_seeded_by_vector_hit_papers_and_bounded():
+    session = EmptyGraphSession()
+
+    assert expand_paper_neighborhood(session, [9, 4, 9], limit=7) == []
+
+    query, parameters = session.calls[0]
+    assert "UNWIND $paper_ids AS seed_id" in query
+    assert "properties(seed)['id']" in query
+    assert "properties(entity)['name']" in query
+    assert "properties(related)['name']" in query
+    assert "ORDER BY paper_id" in query
+    assert parameters == {"paper_ids": [9, 4], "limit": 7}
+
+
+@pytest.mark.parametrize("paper_ids", [[], [True], [1, "2"], [-1]])
+def test_graph_expansion_rejects_missing_or_invalid_seed_paper_ids(paper_ids):
+    session = EmptyGraphSession()
+
+    if not paper_ids:
+        assert expand_paper_neighborhood(session, paper_ids) == []
+        assert session.calls == []
+    else:
+        with pytest.raises((TypeError, ValueError)):
+            expand_paper_neighborhood(session, paper_ids)

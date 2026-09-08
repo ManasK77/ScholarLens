@@ -3,7 +3,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -33,6 +33,16 @@ logger = logging.getLogger(__name__)
 
 class QueryRequest(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
+
+    @field_validator("question")
+    @classmethod
+    def _strip_non_blank_question(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError(
+                "question must contain at least 3 non-whitespace characters"
+            )
+        return value
 
 
 class PipelineRequest(BaseModel):
@@ -207,6 +217,10 @@ def query(body: QueryRequest):
             default_services(settings),
             settings.retrieval_round_cap,
             settings.retrieval_top_n,
+            settings.retrieval_min_chunks,
+            settings.retrieval_min_papers,
+            settings.retrieval_min_score,
+            settings.grounding_regeneration_cap,
         )
     except LLMUnavailableError as exc:
         logger.warning("Interactive GraphRAG LLM provider unavailable: %s", exc)
@@ -225,12 +239,13 @@ def run_pipeline(
     session: Session = Depends(corpus.get_session),  # noqa: B008
 ):
     settings = get_settings()
-    parsed = parse_all_pending(
+    parsing = parse_all_pending(
         session,
         settings.grobid_url,
         settings.unpaywall_email,
         settings.pdf_storage_path,
     )
+    parsed = parsing.processed
     extracted = extract_all_parsed(session)
     with graph_session(settings) as neo4j:
         graphed = graph_service.extract_all(session, neo4j)
@@ -246,6 +261,7 @@ def run_pipeline(
     session.commit()
     return {
         "parsed": parsed,
+        "missing_pdfs": parsing.missing_pdfs,
         "extracted": extracted,
         "graphed": graphed,
         "indexed": indexed,

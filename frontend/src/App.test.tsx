@@ -196,7 +196,8 @@ describe('ScholarLens dashboard', () => {
     await user.click(screen.getByRole('button', { name: /^add papers$/i }))
 
     expect(screen.getByRole('button', { name: /building evidence base/i })).toBeDisabled()
-    resolvePipeline(new Response(JSON.stringify({ parsed: [1], extracted: [1], graphed: [1], indexed: 8, clusters: [4], trends: [4], gaps: [4], reports: [4] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    resolvePipeline(new Response(JSON.stringify({ parsed: [1], missing_pdfs: [51], extracted: [1], graphed: [1], indexed: 8, clusters: [4], trends: [4], gaps: [4], reports: [4] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     expect(await screen.findByText('Evidence base ready · 8 passages indexed')).toBeInTheDocument()
+    expect(screen.getByText(/1 missing PDF was skipped/i)).toBeInTheDocument()
   })
 })
