@@ -217,3 +217,57 @@ def test_download_anthology_export_is_noop_when_dest_exists(monkeypatch, tmp_pat
 
     assert calls["count"] == 0
     assert dest_path.read_bytes() == b"already here"
+
+
+def test_search_topic_only_parses_records_that_could_match(monkeypatch):
+    """The 178MB Anthology export must not be parsed in full for one topic.
+
+    `bibtexparser.load` over the real export holds ~3GB and pins a core for
+    tens of minutes — and `/collect` pays it on every call, not just the first.
+    Records are pre-filtered as raw text so only plausible matches are parsed.
+    """
+    parsed_inputs = []
+    real_loads = acl_anthology.bibtexparser.loads
+
+    def spy_loads(text, *args, **kwargs):
+        parsed_inputs.append(text)
+        return real_loads(text, *args, **kwargs)
+
+    monkeypatch.setattr(acl_anthology.bibtexparser, "loads", spy_loads)
+
+    out = acl_anthology.search_topic(FIXTURE_PATH, "semantic role labeling")
+
+    assert len(out) == 1
+    assert len(parsed_inputs) == 1
+    handed_to_parser = parsed_inputs[0]
+    # Only the one plausible record reaches the parser.
+    assert handed_to_parser.count("@") >= 1
+    assert "2023.acl-long.310" in handed_to_parser
+    assert "Abstractive Summarization" not in handed_to_parser
+
+
+def test_search_topic_prefilter_sees_through_latex_brace_protection():
+    """`{I}ndian` must still match the topic `indian`, as full parsing did."""
+    out = acl_anthology.search_topic(FIXTURE_PATH, "indian")
+
+    assert [c["acl_id"] for c in out] == ["2026.wildre-1.1"]
+
+
+def test_search_topic_prefilter_sees_through_wrapped_field_values(tmp_path):
+    """A topic split across a wrapped line must not be lost by the prefilter."""
+    bib = tmp_path / "wrapped.bib"
+    bib.write_text(
+        "@inproceedings{wrapped-1,\n"
+        '    title = "Cross Lingual\n'
+        '             Transfer for Tagging",\n'
+        '    author = "Doe, Jane",\n'
+        '    year = "2024",\n'
+        '    url = "https://aclanthology.org/2024.acl-long.1/",\n'
+        '    abstract = "We study cross lingual transfer.",\n'
+        "}\n",
+        encoding="utf-8",
+    )
+
+    out = acl_anthology.search_topic(str(bib), "cross lingual transfer")
+
+    assert [c["acl_id"] for c in out] == ["2024.acl-long.1"]

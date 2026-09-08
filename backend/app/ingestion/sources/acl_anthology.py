@@ -35,12 +35,57 @@ def _derive_id_and_pdf_url(entry: dict) -> tuple[str, str]:
     return acl_id, pdf_url
 
 
+def _candidate_records(bib_path: str, topic_lower: str) -> str:
+    """The raw BibTeX records that could possibly match `topic_lower`.
+
+    `bibtexparser.load` over the real ~180MB Anthology export builds every one
+    of its entries in memory — roughly 3GB, tens of minutes of CPU, and paid on
+    *every* `/collect` call, not just the first. Streaming the file record by
+    record and handing the parser only plausible matches costs one pass over
+    the text instead.
+
+    The prefilter is deliberately a strict *superset* of the real filter below,
+    so it can never change which papers `search_topic` returns:
+
+    * braces are dropped, so LaTeX protection (`{I}ndian`) still matches the
+      parsed value (`Indian`) the caller searched for;
+    * whitespace is collapsed, so a topic split across a wrapped field value
+      still matches, exactly as it does once bibtexparser has joined the line.
+
+    Anything that survives is still checked against the parsed `title` and
+    `abstract` fields; this only decides what is worth parsing.
+    """
+
+    def _matches(record: str) -> bool:
+        return (
+            topic_lower
+            in " ".join(record.replace("{", "").replace("}", "").split()).lower()
+        )
+
+    chunks: list[str] = []
+    current: list[str] = []
+    with open(bib_path, encoding="utf-8") as handle:
+        for line in handle:
+            # Records begin at column 0 with `@type{key,` — the one boundary the
+            # export guarantees, and the reason this needs no BibTeX grammar.
+            if line.startswith("@") and current:
+                record = "".join(current)
+                if _matches(record):
+                    chunks.append(record)
+                current = []
+            current.append(line)
+    if current:
+        record = "".join(current)
+        if _matches(record):
+            chunks.append(record)
+    return "".join(chunks)
+
+
 def search_topic(bib_path: str, topic: str) -> list[dict]:
     """Filter the local .bib file's entries by a case-insensitive topic substring match."""
-    with open(bib_path, encoding="utf-8") as f:
-        bib_database = bibtexparser.load(f)
-
     topic_lower = topic.lower()
+    bib_database = bibtexparser.loads(_candidate_records(bib_path, topic_lower))
+
     results = []
     for entry in bib_database.entries:
         title = entry.get("title", "")
