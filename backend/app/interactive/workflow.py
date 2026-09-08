@@ -7,8 +7,10 @@ module owns the iterative retrieval and controlled regeneration used by Mode B.
 from __future__ import annotations
 
 import json
+import logging
 import math
 from collections.abc import Callable
+from contextlib import closing
 from dataclasses import dataclass
 from functools import lru_cache
 from hashlib import sha256
@@ -16,11 +18,15 @@ from typing import Protocol, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import select
 
 from app.core.config import Settings, get_settings
 from app.embeddings.indexer import EvidenceIndex
 from app.explanation.llm import StructuredLLM, get_llm_client
+from app.ingestion.corpus import Paper, get_session
 from app.ner_re.graph import expand_paper_neighborhood, graph_session
+
+logger = logging.getLogger(__name__)
 
 MAX_QUERY_CHARS = 2_000
 MAX_ANSWER_CHARS = 8_000
@@ -149,6 +155,11 @@ class InteractiveServices:
     graph_expand: Callable[[list[int], int], list[dict]]
     llm: StructuredLLM
     reranker: Callable[[str, list[dict]], list[dict]] | None = None
+    # Qdrant payloads carry no `title` (app/embeddings/schema.PAYLOAD_FIELDS),
+    # so a citation's paper name comes from the corpus, exactly as Mode A's
+    # `explanation.service._paper_titles` resolves it. Optional: a citation
+    # without a title is still real evidence.
+    title_lookup: Callable[[list[int]], dict[int, str | None]] | None = None
 
 
 def _valid_paper_id(value: object) -> bool:
@@ -222,6 +233,31 @@ def _graph_evidence(rows: list[dict]) -> list[dict]:
             }
         )
     return evidence
+
+
+def _apply_corpus_titles(
+    lookup: Callable[[list[int]], dict[int, str | None]] | None,
+    evidence: list[dict],
+) -> None:
+    """Fill in each item's `title` from the corpus, in place.
+
+    One query for the whole round rather than one per item. A lookup failure is
+    logged and swallowed: a missing title degrades a citation's display, while
+    losing the answer over it would fail the question outright.
+    """
+    if lookup is None:
+        return
+    missing = [item["paper_id"] for item in evidence if not item.get("title")]
+    if not missing:
+        return
+    try:
+        titles = lookup(list(dict.fromkeys(missing)))
+    except Exception:
+        logger.warning("Mode B could not resolve citation titles", exc_info=True)
+        return
+    for item in evidence:
+        if not item.get("title"):
+            item["title"] = titles.get(item["paper_id"])
 
 
 def _public_citation(item: dict) -> dict:
@@ -305,6 +341,7 @@ def build_workflow(services: InteractiveServices):
         for item in vector:
             if not item.get("title") and item["paper_id"] in titles:
                 item["title"] = titles[item["paper_id"]]
+        _apply_corpus_titles(services.title_lookup, [*vector, *graph])
         combined = list({item["id"]: item for item in [*vector, *graph]}.values())
         rounds = state.get("retrieval_rounds", 0) + 1
         has_evidence = getattr(services.retriever, "has_evidence", None)
@@ -551,4 +588,18 @@ def default_services(settings: Settings | None = None) -> InteractiveServices:
             question, evidence
         )
 
-    return InteractiveServices(index, expand, get_llm_client(settings), rerank)
+    def titles(paper_ids: list[int]) -> dict[int, str | None]:
+        if not paper_ids:
+            return {}
+        # `get_session` is a FastAPI dependency generator; closing it runs its
+        # own `finally: session.close()` rather than leaving that to the GC.
+        with closing(get_session()) as sessions:
+            session = next(sessions)
+            return {
+                paper_id: title
+                for paper_id, title in session.execute(
+                    select(Paper.id, Paper.title).where(Paper.id.in_(paper_ids))
+                ).all()
+            }
+
+    return InteractiveServices(index, expand, get_llm_client(settings), rerank, titles)

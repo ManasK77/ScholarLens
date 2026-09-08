@@ -429,3 +429,72 @@ def test_phase_10_declares_langgraph_without_langchain():
 
     assert '"langgraph>=1.2,<2"' in pyproject
     assert "langchain" not in pyproject.casefold()
+
+
+class TestCitationTitles:
+    """Mode B citations must name the paper, not just its surrogate id.
+
+    Qdrant payloads carry no `title` (app/embeddings/schema.PAYLOAD_FIELDS), so
+    without a corpus lookup every Mode B citation rendered as "Paper 7" while
+    Mode A's reports — which do join Postgres — showed the real title.
+    """
+
+    def test_vector_citations_carry_the_corpus_paper_title(self):
+        retriever = FakeRetriever([[_point("a", 1), _point("b", 2)]])
+        llm = ScriptedLLM(
+            answer=[_answer("a", "b")],
+            verify=[{"grounded": True, "unsupported_claim_indexes": []}],
+        )
+        services = InteractiveServices(
+            retriever=retriever,
+            graph_expand=FakeGraphExpander(),
+            llm=llm,
+            reranker=None,
+            title_lookup=lambda paper_ids: {1: "Multilingual Jailbreaks", 2: None},
+        )
+
+        result = _run("Where does prompt injection defence fail?", services)
+
+        assert result["grounded"] is True
+        titles = {c["paper_id"]: c["title"] for c in result["citations"]}
+        assert titles == {1: "Multilingual Jailbreaks", 2: None}
+
+    def test_a_failing_title_lookup_does_not_lose_the_answer(self):
+        def _broken(paper_ids):
+            raise RuntimeError("postgres unavailable")
+
+        retriever = FakeRetriever([[_point("a", 1), _point("b", 2)]])
+        llm = ScriptedLLM(
+            answer=[_answer("a", "b")],
+            verify=[{"grounded": True, "unsupported_claim_indexes": []}],
+        )
+        services = InteractiveServices(
+            retriever=retriever,
+            graph_expand=FakeGraphExpander(),
+            llm=llm,
+            reranker=None,
+            title_lookup=_broken,
+        )
+
+        result = _run("Where does prompt injection defence fail?", services)
+
+        assert result["grounded"] is True
+        assert [c["title"] for c in result["citations"]] == [None, None]
+
+    def test_graph_titles_still_win_when_no_lookup_is_configured(self):
+        retriever = FakeRetriever([[_point("a", 1), _point("b", 2)]])
+        graph = FakeGraphExpander(
+            [{"paper_id": 1, "title": "From Neo4j", "entity": "BERT"}]
+        )
+        llm = ScriptedLLM(
+            answer=[_answer("a", "b")],
+            verify=[{"grounded": True, "unsupported_claim_indexes": []}],
+        )
+        services = _services(retriever, llm, graph=graph)
+
+        result = _run("Where does prompt injection defence fail?", services)
+
+        titles = {
+            c["paper_id"]: c["title"] for c in result["citations"] if c["id"] == "a"
+        }
+        assert titles == {1: "From Neo4j"}
