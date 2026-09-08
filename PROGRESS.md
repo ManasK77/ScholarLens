@@ -5,6 +5,141 @@ holds the per-phase GSD artifacts; this file is the cross-session summary.
 
 ---
 
+## 2026-09-08 — Phase 10 independent verification + four ingestion/citation fixes
+
+A second maintainer pulled `main` and verified Phase 10 rather than extending
+it. No phase was started; every change below is a defect fix in already-shipped
+code, each written test-first. Phase 10's own design — the LangGraph node set,
+bounded retrieval, grounding check, regeneration cap — was reviewed and found
+sound and is unchanged.
+
+### Verification baseline reproduced
+
+`langgraph` was declared in `pyproject.toml` but missing from the checked-in
+`backend/.venv`, so five test modules failed to *collect* on a fresh pull.
+Installing it into the existing venv reproduced the teammate's numbers exactly:
+701 passed / 10 deselected. Frontend 7 passed, tsc, oxlint and build clean.
+Evaluation harness 4 passed. Docker stack rebuilt: all five services healthy,
+`/health` 200 with neo4j/qdrant/postgres all true.
+
+Hard constraints re-checked mechanically: LangGraph is imported only by
+`app/interactive/workflow.py`; no `langchain` import anywhere in `app/`
+(`langchain-core` arrives only as langgraph's own transitive dependency); no
+loop around Stage 8→9 in `app/explanation/service.py`; no IEEE / Springer /
+ACM reference in `app/` or `frontend/src/`.
+
+The leading space in `.env`'s `GROQ_API_KEY=` value was investigated and is
+**not** a defect — both Compose's `env_file` parser and python-dotenv strip it.
+A live Groq call from inside the container returned 200 with the key as
+configured.
+
+### D-VER-01 — `/collect` no longer loses a run to one flaky source
+
+Semantic Scholar answers unauthenticated callers with 429/500 routinely. The
+exception propagated out of the handler, so `session.commit()` never ran: a
+live run left **50 arXiv PDFs on disk and 0 rows in Postgres**, with the PDFs
+orphaned. Each source now runs inside its own `begin_nested()` savepoint;
+a failure is rolled back to that savepoint, logged, and reported per source in
+a new additive `sources` key on the response. Only an all-discovery-sources-down
+run is an outage, and that returns 502 rather than a misleading empty success.
+
+`CollectResult.sources` is optional in `frontend/src/types.ts`, and the
+dashboard's collect status line now names any source that was unreachable.
+
+### D-VER-02 — the ACL export was re-parsed in full on every `/collect`
+
+`bibtexparser.load()` over the ~180MB Anthology export held ~3.0GB RSS and
+pinned a core for **45+ minutes**, and it ran on *every* `/collect` call, not
+just the first. `search_topic` now streams the file, splits on the `@` record
+boundary the export guarantees, and hands the parser only records whose raw
+text could match.
+
+The prefilter is a deliberate strict superset of the real filter, so the set of
+returned papers cannot change: braces are dropped so LaTeX protection
+(`{I}ndian`) still matches `indian`, and whitespace is collapsed so a topic
+wrapped across a line still matches. The original precise title/abstract check
+on the parsed entry is untouched and still decides the result. All ten
+pre-existing ACL tests pass unchanged, which is what pins the equivalence.
+
+Measured: a full `/collect` went from 45+ min / ~3.0GB (never completing) to
+**40 seconds / ~0.5GB**, returning 50 deduplicated papers while Semantic
+Scholar was still 429ing.
+
+### D-VER-03 — Mode B citations now name the paper
+
+`app/embeddings/schema.PAYLOAD_FIELDS` has no `title`, and unlike Phase 9 —
+which joins Postgres in `explanation.service._paper_titles` — Phase 10 took
+titles only from Neo4j graph rows. With graph expansion empty, every Mode B
+citation rendered as "Paper 7" while Mode A's reports showed real titles.
+`InteractiveServices` gained an optional `title_lookup`, wired in
+`default_services` to one batched `select(Paper.id, Paper.title)` per retrieval
+round. A lookup failure is logged and swallowed: a missing title degrades a
+citation's display, whereas failing the question over it would be worse.
+
+### D-VER-04 — caches survive a backend rebuild
+
+`ACL_ANTHOLOGY_BIB_PATH` defaults inside the image and the Hugging Face cache
+lives at `/root/.cache/huggingface`, so every `up -d --build backend` — the
+command README §12 prescribes after *any* code change — re-downloaded the
+~180MB export **and** ~1.6GB of models (SPECTER2, GLiNER2, DeBERTa-MNLI, the
+cross-encoder). Added the `corpus_cache` (`/app/data`) and `model_cache`
+(`/root/.cache/huggingface`) volumes, matching the existing `pdf_data` pattern,
+and documented both in README §12.
+
+### D-VER-05 — the two "unformatted" test files are correct as they are
+
+The Phase 10 entry noted `tests/ingestion/test_no_prohibited_sources.py` and
+`tests/trends/test_storage.py` still failing `ruff format --check`. They are
+not a defect and must not be reformatted: **`.pre-commit-config.yaml` pins
+ruff `v0.6.9`, and `backend/.venv` currently has ruff `0.16.6`**, and the two
+versions disagree on exactly these files (0.16 moved to the trailing-parenthesis
+assert-message style). The pinned hook is the repo's authority — it reverted an
+attempted reformat during commit.
+
+So `ruff format --check` run from the venv reports 2 files while the pinned
+pre-commit hook reports none. Use the hook's verdict. Reconciling the two by
+bumping the pin is a deliberate change worth making on its own, not a drive-by.
+
+### Still unproven — Phase 10's "Done when" is not yet demonstrated live
+
+README §15 requires "a test question reliably returns an answer whose claims
+trace back to specific retrieved papers". **That has still never happened.**
+The Phase 10 entry above flagged the same thing; this session did not close it.
+
+What is true now:
+
+* `/collect` succeeded live — Postgres holds **50 papers** (arXiv + ACL;
+  Semantic Scholar 429'd and was degraded past, as designed by D-VER-01).
+* `/pipeline/run` was started and **interrupted at 202 s** when the containers
+  were torn down. The handler commits only at the end, so nothing downstream
+  persisted: `parsed_documents` is 0 and the Qdrant collection is still empty.
+* Consequently `POST /query` still answers on its empty-corpus branch. Every
+  grounded, reformulation and regeneration path remains covered only by unit
+  and API tests with mocked external services.
+
+The owner **deliberately deferred** the rerun: it needs GROBID plus four
+CPU-bound models over 50 papers (15-40 min, no GPU on this machine), and
+README 13.6 puts machine stability above phase completion. Closing this needs
+one `/collect` (~40 s since D-VER-02) and one `/pipeline/run`, then a real
+`POST /query`.
+
+Phase 10 therefore stands as: **implementation and test coverage complete and
+reviewed; live end-to-end evidence still outstanding.** No phase was started or
+advanced in this session.
+
+### Files modified
+
+* `backend/app/api/routes_ingestion.py`, `backend/tests/api/test_routes_ingestion.py`
+* `backend/app/ingestion/sources/acl_anthology.py`,
+  `backend/tests/ingestion/sources/test_acl_anthology.py`
+* `backend/app/interactive/workflow.py`, `backend/tests/interactive/test_workflow.py`
+* `docker-compose.yml`, `README.md`, `frontend/src/App.tsx`, `frontend/src/types.ts`
+
+Committed to `main` as five commits (`fdd03e3`, `e3f13fe`, `dbeacc6`, `34e3889`,
+plus this entry). Nothing was pushed.
+
+---
+
 ## 2026-09-08 — NumPy confidence PostgreSQL persistence fix
 
 Fixed the live pipeline failure `psycopg2.ProgrammingError: can't adapt type

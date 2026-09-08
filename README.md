@@ -418,8 +418,12 @@ flow: search scholarly sources by topic, upload one or more local PDFs, inspect
 recently added papers, and run the evidence-building pipeline. The API examples
 below provide the equivalent command-line workflow.
 
-Downloaded and uploaded PDFs are stored in the Docker volume `pdf_data`, so
-recreating or rebuilding the backend container does not remove them. Avoid
+Downloaded and uploaded PDFs are stored in the Docker volume `pdf_data`, the
+cached ACL Anthology bibliographic export in `corpus_cache`, and the Hugging
+Face model downloads (SPECTER2, GLiNER2, DeBERTa-MNLI, the cross-encoder —
+~1.6GB together) in `model_cache`, so recreating or rebuilding the backend
+container does not remove them: the ~180MB export and each model are fetched
+once and reused by every later run. Avoid
 `docker compose down -v` unless you intentionally want to delete all local
 database, index, graph, and PDF data. If an older database record points to a
 PDF that is no longer present, the pipeline skips that paper, marks it as
