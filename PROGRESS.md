@@ -5,6 +5,276 @@ holds the per-phase GSD artifacts; this file is the cross-session summary.
 
 ---
 
+## 2026-09-13 — Phase 12 (Frontend Dashboard) audited, completed and closed out
+
+### Phase 12 was already built — it was never recorded
+
+The previous entry ends "Phase 12 (Frontend Dashboard) was **not** started".
+That is wrong, and this session began by establishing it. `git log -- frontend/src`
+shows the dashboard landed in `478597b` *Frontend and backend integration
+implemented* (2026-09-06) and was touched again by `2c9086a`, `26067fc` and
+`fdd03e3`. README §12 already documents its **Connect API**, **Add papers** and
+**Ask ScholarLens** flows as though they exist — because they do.
+
+So Phase 12 arrived with no PROGRESS entry, no audit, and **no code review**,
+which README §13.3 requires for it (its Testing column is "—"; its Review
+column is not). This session audited it, completed the genuine gaps, and ran
+the missing review.
+
+### Audit result — ~85% complete on arrival
+
+Baseline before any edit: **7/7 vitest tests passed, `npm run build` succeeded,
+`npm run lint` clean.**
+
+COMPLETE and left untouched: dashboard shell and sidebar navigation; ranked
+Mode A reports (`ReportsView`/`ReportCard`, `/gaps` order joined to `/reports`
+by `cluster_id`); trend charts (`TrendChart.tsx`, Plotly, real `/trends`);
+knowledge graph (`KnowledgeGraph.tsx`, d3-force, 180-node cap, click-to-select);
+the corpus builder; loading, empty and error states; API-key auth; the three
+responsive breakpoints.
+
+Every frontend type was checked field-by-field against `routes_backend.py` and
+`routes_ingestion.py` rather than assumed. All shapes match; nothing is mocked
+in a production path (mocks exist only in `App.test.tsx`).
+
+### What was actually missing, and what was done
+
+* **Cluster exploration — MISSING.** README §15 Phase 12 names
+  "cluster/knowledge-graph exploration"; only the graph half existed.
+  `/clusters` was fetched but used solely for a count tile and a label lookup,
+  so `members[]` — the differently-phrased statements that are the entire
+  premise of README §3 — were never rendered. Added a `Clusters` view that
+  **mirrors `ReportsView` exactly**, reusing `report-card`, `report-rank`,
+  `report-meta`, `score-pill`, `contradiction-pill`, `text-button`,
+  `evidence-list` and `blockquote`. Clusters sort by `member_count` desc.
+* **Mode B was not chat-style — PARTIAL.** Each answer overwrote the previous
+  one, so a researcher could not "continue asking questions" and review what
+  came before. `AskView` now keeps an `Exchange[]` transcript rendered through
+  a new `AnswerCard`. `/query` is stateless and stays that way — **no
+  conversational context was invented**; the transcript is a frontend record
+  only. The draft clears when the answer arrives, not on submit, which is what
+  keeps the pre-existing in-flight/view-switch test honest.
+* **Gap signals were never shown — PARTIAL.** `/gaps` returns all five Stage 8
+  signals and the UI displayed only the composite score. Since a transparent,
+  interpretable formula is the project's core credibility claim, added
+  `SignalBreakdown` inside the expanded report card. Values are the backend's
+  own, unnormalised and unweighted. The breakdown also now renders for a ranked
+  cluster that has **no** report yet, which previously showed nothing at all.
+* **A citation offered a link that does not exist — PARTIAL.** Each Mode B
+  citation rendered an `ExternalLink` icon, but `_public_citation` exposes no
+  URL. Removed the false affordance and replaced it with the real metadata the
+  API does return (year), matching how Mode A's `<cite>` already reads. The
+  `.citation` grid dropped its now-empty third column.
+* **`aria-modal` was not honoured — PARTIAL.** The Connect API dialog claimed
+  it without focus management. It now focuses the key field on open, closes on
+  Escape, and restores focus to its opener.
+* **A malformed payload blanked the page — MISSING.** `response.json()` was
+  cast straight to `T`; a non-array body threw inside render and unmounted the
+  app. `api.ts` now coerces the five collection endpoints and the graph
+  snapshot through `asList`. Against a healthy backend this changes nothing —
+  it degrades one panel to its empty state instead of losing the dashboard.
+
+### UI/UX system preserved, not replaced
+
+No redesign. Same Newsreader/Manrope/DM Mono type, same `--teal #087b6d` on
+`#102b27` with `--amber`, same `--paper`/`--line`/`--ink`/`--muted` tokens, same
+card, pill, blockquote and button patterns. The one structural tidy was
+replacing the nested-ternary section heading with a `sectionHeadings` lookup so
+a sixth view could be added without a fourth ternary branch. New CSS is 8 lines
+(`.signal-grid`, `.ask-thread`, `.asked-question`, `.citation small`) built
+from existing tokens. **No new dependency was added.**
+
+### Files changed
+
+* `frontend/src/App.tsx` — clusters view, signal breakdown, Mode B transcript,
+  citation attribution, dialog focus handling, heading lookup.
+* `frontend/src/api.ts` — `asList` response coercion.
+* `frontend/src/App.css` — 8 lines added, `.citation` columns corrected.
+* `frontend/src/App.test.tsx` — 6 tests added (written first, all 6 confirmed
+  failing before implementation).
+* `frontend/README.md`, `PROGRESS.md`.
+
+`frontend/src/types.ts` and both visualization components were **not** modified.
+No backend file was touched.
+
+### Verification
+
+**13/13 vitest tests pass** (7 pre-existing, unmodified and still green, plus 6
+new). `npm run build` succeeds — `tsc -b` clean. `npm run lint` clean; the gate
+was proven live by feeding oxlint a deliberate rules-of-hooks violation, which
+it caught, before removing the probe.
+
+### Code review — 2 findings in this session's own code, both fixed
+
+1. `ConnectionPanel`'s focus effect keyed off `onClose`, which App passed as an
+   inline arrow — a new identity every render would tear the effect down
+   mid-interaction and bounce focus. Wrapped in `useCallback`.
+2. `report.suggested_directions.map` and `report.evidence.length` were still
+   unguarded; `asList` protects the top-level array but not a null JSON column
+   inside a stored report row. Both now default to `[]`.
+
+### Deviations and assumptions
+
+* Phase 12's Testing column in README §13.3 is "—", but the repo already had a
+  vitest suite, so the six gaps were still built test-first to match convention.
+* `Promise.all` in `dashboard()` still fails the whole load if one of the five
+  endpoints errors. Left as-is: all five share one Postgres session, so a
+  partial failure is not a realistic state, and restructuring it would be
+  unrequested churn. The graph call keeps its existing separate fallback.
+* Cluster members carry no `title` from `/clusters` (the backend returns
+  `point_id`/`paper_id`/`text`/`year`), so they attribute as `Paper {id}` via
+  the shared `evidenceLabel` helper. No title was fabricated.
+
+### Pre-existing working-tree state, untouched
+
+Three uncommitted items predate this session and were deliberately left alone:
+the Phase 11 `PROGRESS.md` entry, the untracked
+`backend/tests/api/test_routes_backend.py`, and a change in
+`backend/app/ingestion/sources/arxiv.py` lowering `search_topic`'s
+`max_results` default from 50 to 10. That last one is an undocumented
+behavioural change to ingestion breadth and is **worth a decision** — it is not
+recorded in any entry.
+
+### Phase 12 status: COMPLETE
+
+README §15 Phase 12's "Done when" — *"a researcher can browse gap reports and
+ask interactive questions entirely through the UI"* — is satisfied, and all
+four named views (ranked gap reports, trend charts, cluster/knowledge-graph
+exploration, chat-style Mode B with citations) now exist. Phase 13 was **not**
+started.
+
+---
+
+## 2026-09-12 — Phase 11 (Backend API Integration) audited and closed out
+
+### Why this session started with an audit, not an assumption
+
+The last explicit Phase 11 entry (2026-09-06, below) says "Phase 11 is **not
+complete**" and blames it on Phases 4–10 not existing yet. Phases 4–10 have
+since all landed (2026-09-06 through 2026-09-08), so that status was stale.
+Rather than trust either "still incomplete" or "must be done by now," this
+session read `app/main.py`, `app/api/routes_backend.py`, `app/api/security.py`
+and every test under `tests/api/`, and checked git history for when and how
+the router actually went live.
+
+### What was already true
+
+* `routes_backend.router` **is** registered in `app/main.py`, with router-level
+  `Depends(require_api_key)` covering every route on it.
+* Every endpoint README §15 Phase 11 names is present and wired to the correct
+  phase's service layer: `/collect`, `/upload` (routes_ingestion — Phase 1),
+  `/papers`, `/graph`, `/clusters`, `/trends`, `/gaps`, `/reports`, `/query`
+  (routes_backend — Phases 3–10), plus `/index` and `/pipeline/run`.
+* API-key auth (`app/api/security.py`) is fail-closed, constant-time, and
+  already had 23 focused unit/wiring tests from the 2026-09-06 session
+  (`tests/api/test_security.py`) covering `/collect`/`/upload` and the
+  dependency in isolation.
+* FastAPI's default `/docs` / `/openapi.json` satisfy "Adds OpenAPI docs" —
+  nothing was disabling them.
+
+### The gap: the router went live with no Phase 11 TDD or security-review pass
+
+`git log -- backend/app/main.py` shows exactly one commit registered
+`routes_backend.router`: `26067fc` ("feat: Add PDF data volume to Docker
+Compose and enhance pipeline handling", 2026-09-08, authored by the
+collaborator who pushed the incomplete `478597b` tree). That commit's own
+message is about a Docker volume and pipeline warnings — the router
+registration is an incidental one-line diff inside it, not a planned Phase 11
+step. No PROGRESS.md entry ever announced it, no dedicated plan or TDD pass
+covered it, and no security review looked at the surface it exposed.
+
+The evidence this left behind: `tests/{explanation,ranking,trends}/
+test_api_contract.py` each carry a docstring stating "when Phase 10 makes
+this module importable, these tests should be replaced by a `TestClient`
+call" — and Phase 10 did, five days before this session started, and they
+never were. `tests/api/test_main_routes.py` (added in the same commit) only
+asserts the paths exist in the OpenAPI schema; it never calls an endpoint.
+**No test anywhere sent a real HTTP request through the mounted app to
+`/papers`, `/graph`, `/clusters`, `/trends`, `/gaps`, `/reports`, `/index` or
+`/pipeline/run`, authenticated or not**, until this session. That is a real
+Phase 11 gap against README §13.3's "TDD" + "code review + security review"
+requirement for this specific phase — not a functional defect in the wiring
+itself, which was already correct.
+
+**Classification: PARTIALLY COMPLETE at the start of this session** — the
+build was done, the required security-focused review of the live surface was
+not.
+
+### What this session did
+
+Added `tests/api/test_routes_backend.py` (32 tests, all against a real
+mounted `FastAPI`/`TestClient`, external services mocked): every GET/POST
+route on `routes_backend` — including `/query` and `/pipeline/run` —
+rejects an unauthenticated request; the whole router fails closed when
+`API_KEY` is unset; each GET handler returns the right shape from real
+seeded SQLite rows written through the same `replace_*` storage functions
+the service layer uses; each POST handler calls the right service function
+and commits; `/pipeline/run` calls every stage in order and correctly skips
+report generation when asked; `/reports`' existing 502-on-failure path is
+verified to never leak the underlying exception text into the response; and
+the full mounted app's OpenAPI schema marks every required Phase 11 path as
+authenticated.
+
+**No functional bugs were found or fixed.** The auth wiring, the fail-closed
+behavior, the per-route dependency, and the generic error responses were all
+already correct — this was a test-coverage and review-process gap, not an
+implementation one. Nothing in `routes_backend.py` or `security.py` was
+changed.
+
+### Security review of the now-verified live surface
+
+* Every route is behind `APIRouter(dependencies=[Depends(require_api_key)])` —
+  router-level, so a future route added to this file is protected by default
+  rather than by remembering a per-route decorator.
+* No CORS middleware exists anywhere in `app/` (confirmed by search) — matches
+  D-11-06's deliberate decision; the dashboard is same-origin via the Vite
+  proxy.
+* No debug/reload mode: `Dockerfile`'s `CMD` runs plain `uvicorn app.main:app`
+  with no `--reload`, so Starlette's default unhandled-exception path returns
+  a generic response and logs the traceback server-side only — verified
+  directly for `/reports`' explicit handler, and true by framework default for
+  every other route since none override it.
+* Noted, not fixed: `/reports` and `/query` catch broad exceptions and return
+  a generic 502 detail; `/graph`, `/index`, `/clusters`, `/trends`, `/gaps`
+  POST and `/pipeline/run` do not, so an internal failure there falls through
+  to Starlette's default handler instead. That default handler already
+  returns a generic body with no exception text (confirmed above), so this is
+  a consistency gap, not a leak — adding matching `try/except` blocks across
+  five more handlers is a drive-by refactor of already-correct behavior, which
+  CLAUDE.md's no-unrelated-refactors rule argues against doing unprompted.
+* List-returning GET routes bound their inputs (`limit`/`offset` `Query(...,
+  ge=, le=)`), so none of them can be made to return or scan an unbounded
+  result set.
+* `/papers` filters go through SQLAlchemy's parameterized `select()`, not raw
+  SQL — no injection surface.
+
+### Files changed
+
+* `backend/tests/api/test_routes_backend.py` (new).
+* `PROGRESS.md` (this entry).
+
+### Verification
+
+`743 passed, 10 deselected` (`uv run pytest -q` from `backend/`, integration
+marker excluded as usual). `ruff check app tests` clean. `ruff format --check`
+reports the same two pre-existing files as D-VER-05
+(`tests/ingestion/test_no_prohibited_sources.py` and `tests/trends/
+test_storage.py`) — unchanged, still the ruff-0.6.9-vs-0.16.6 formatting
+disagreement recorded in that entry (the pinned pre-commit hook, not the
+venv's newer ruff, is the repo's authority). This session's new file formats
+clean under both.
+
+### Phase 11 status: COMPLETE
+
+With the missing endpoint-level TDD coverage and security review now done and
+no defects found, README §15 Phase 11's "Done when" — *"the full backend is
+usable end-to-end via documented REST endpoints without needing to run
+internal scripts manually"* — is satisfied and verified, not merely present in
+source. Phase 12 (Frontend Dashboard) was **not** started; this session did
+not touch `frontend/`.
+
+---
+
 ## 2026-09-08 — Phase 10 independent verification + four ingestion/citation fixes
 
 A second maintainer pulled `main` and verified Phase 10 rather than extending

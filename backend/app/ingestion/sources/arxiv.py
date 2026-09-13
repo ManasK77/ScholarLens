@@ -15,7 +15,7 @@ import arxiv
 from app.ingestion import corpus
 
 
-def search_topic(topic: str, max_results: int = 50) -> list[dict]:
+def search_topic(topic: str, max_results: int = 10) -> list[dict]:
     """Search arXiv for `topic` and return a list of corpus-shaped dicts."""
     client = arxiv.Client()
     search = arxiv.Search(query=topic, max_results=max_results)

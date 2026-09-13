@@ -4,8 +4,9 @@ The React dashboard exposes the complete evidence-backed research workflow
 without requiring direct API access. Its **Add papers** workspace can discover
 research from arXiv, Semantic Scholar, and ACL Anthology, accept multi-PDF
 uploads, run the evidence pipeline, and display the local corpus. It also
-includes ranked Mode A reports, longitudinal trends, an interactive Neo4j
-snapshot, and Mode B grounded Q&A.
+includes ranked Mode A reports with their gap-score signal breakdown, semantic
+cluster exploration, longitudinal trends, an interactive Neo4j snapshot, and
+Mode B grounded Q&A with a transcript of every question asked.
 
 ## Local development
 

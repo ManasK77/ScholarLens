@@ -53,6 +53,10 @@ h3 { margin-bottom: 8px; font: 600 21px/1.25 'Newsreader', Georgia, serif; }
 .directions span { color: #596a64; font-size: 12px; border: 1px solid #d8ddd5; border-radius: 999px; padding: 6px 9px; }
 .text-button { appearance: none; border: 0; background: transparent; color: var(--teal); font-weight: 700; padding: 17px 0 0; display: flex; align-items: center; gap: 5px; }
 .text-button svg { transition: transform .18s; }.text-button svg.rotate { transform: rotate(180deg); }
+.signal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 1px; margin: 15px 0 0; background: var(--line); border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.signal-grid > div { background: #f3f4ee; padding: 11px 13px; }
+.signal-grid dt { font: 500 9px/1.3 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .05em; color: #79847f; }
+.signal-grid dd { margin: 5px 0 0; font: 600 15px 'Newsreader', Georgia, serif; color: var(--ink); }
 .evidence-list { display: grid; gap: 9px; margin-top: 15px; }
 blockquote { margin: 0; padding: 15px 18px; background: #f3f4ee; border-left: 3px solid #91b9ae; border-radius: 0 9px 9px 0; }
 blockquote p { margin-bottom: 7px; color: #40514b; font-size: 13px; line-height: 1.55; }
@@ -83,9 +87,11 @@ blockquote cite { font-style: normal; color: #79847f; font-size: 11px; }
 .prompt-examples { display: grid; gap: 8px; margin-top: 34px; }.prompt-examples button { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid rgba(255,255,255,.13); background: rgba(255,255,255,.04); color: #d9e5e1; padding: 12px 13px; border-radius: 9px; text-align: left; font-size: 12px; }
 .query-panel { background: var(--paper); color: var(--ink); padding: 38px; }
 .query-form { display: grid; gap: 10px; }.query-form label, .connection-card label { font-size: 12px; font-weight: 700; }.query-form textarea, .connection-card input { width: 100%; resize: vertical; border: 1px solid #cfd5cc; background: #fff; border-radius: 10px; padding: 13px 14px; color: var(--ink); line-height: 1.5; }.query-form .primary-button { justify-self: end; }
+.ask-thread { display: grid; }
+.asked-question { margin: 0 0 15px; padding-left: 13px; border-left: 3px solid var(--teal); font: 600 14px/1.5 'Manrope', sans-serif; color: var(--ink); }
 .answer-card { margin-top: 26px; padding-top: 24px; border-top: 1px solid var(--line); }.answer-status { display: flex; justify-content: space-between; gap: 12px; align-items: center; }.answer-status > span { display: inline-flex; gap: 5px; align-items: center; font: 500 10px 'DM Mono', monospace; text-transform: uppercase; }.grounded { color: var(--teal); }.ungrounded { color: #b85e46; }.answer-status small { color: var(--muted); font-size: 10px; }
 .answer-text { font: 500 clamp(19px, 2.5vw, 27px)/1.45 'Newsreader', Georgia, serif; margin: 21px 0; }
-.citation-list { display: grid; gap: 8px; }.citation-list h3 { font: 700 11px 'Manrope', sans-serif; text-transform: uppercase; letter-spacing: .07em; margin: 5px 0; }.citation { display: grid; grid-template-columns: 24px 1fr 18px; gap: 10px; background: #f0f2eb; border-radius: 9px; padding: 12px; }.citation > span { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: #d8e8e2; color: var(--teal); font: 500 10px 'DM Mono', monospace; }.citation strong { font-size: 12px; }.citation p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.citation-list { display: grid; gap: 8px; }.citation-list h3 { font: 700 11px 'Manrope', sans-serif; text-transform: uppercase; letter-spacing: .07em; margin: 5px 0; }.citation { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; background: #f0f2eb; border-radius: 9px; padding: 12px; }.citation > span { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: #d8e8e2; color: var(--teal); font: 500 10px 'DM Mono', monospace; }.citation strong { font-size: 12px; }.citation small { display: block; margin-top: 2px; color: #79847f; font: 500 10px 'DM Mono', monospace; }.citation p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .error-banner { display: flex; gap: 9px; margin-top: 18px; color: #98492f; background: #f8e6de; border-radius: 9px; padding: 12px; font-size: 12px; }
 .corpus-warning { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 18px; color: #805029; background: #fbefd9; border: 1px solid #efd7aa; border-radius: 9px; padding: 12px; font-size: 12px; line-height: 1.5; }.corpus-warning svg { flex: 0 0 auto; margin-top: 1px; }
 .library-workspace { display: grid; gap: 20px; }

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import {
   AlertCircle,
   ArrowRight,
@@ -6,10 +6,10 @@ import {
   CheckCircle2,
   ChevronDown,
   Database,
-  ExternalLink,
   FileUp,
   Globe2,
   KeyRound,
+  Layers,
   Network,
   RefreshCw,
   Search,
@@ -19,24 +19,54 @@ import {
   X,
 } from 'lucide-react'
 import { ApiError, ScholarLensApi } from './api'
-import type { DashboardData, GapReport, GapRanking, QueryResult } from './types'
+import type { Cluster, DashboardData, Evidence, GapReport, GapRanking, QueryResult } from './types'
 import './App.css'
 
 const TrendChart = lazy(() => import('./components/TrendChart'))
 const KnowledgeGraph = lazy(() => import('./components/KnowledgeGraph'))
 
-type View = 'reports' | 'library' | 'trends' | 'graph' | 'ask'
+type View = 'reports' | 'library' | 'trends' | 'clusters' | 'graph' | 'ask'
 
 const navItems: Array<{ id: View; label: string; icon: typeof BookOpenText }> = [
   { id: 'reports', label: 'Gap reports', icon: BookOpenText },
   { id: 'library', label: 'Add papers', icon: FileUp },
   { id: 'trends', label: 'Trends', icon: TrendingUp },
+  { id: 'clusters', label: 'Clusters', icon: Layers },
   { id: 'graph', label: 'Knowledge graph', icon: Network },
   { id: 'ask', label: 'Ask ScholarLens', icon: Sparkles },
 ]
 
+const sectionHeadings: Partial<Record<View, { eyebrow: string; title: string }>> = {
+  reports: { eyebrow: 'Mode A', title: 'Ranked research gaps' },
+  trends: { eyebrow: 'Longitudinal analysis', title: 'Evidence trends over time' },
+  clusters: { eyebrow: 'Semantic clustering', title: 'Limitations grouped by meaning' },
+  graph: { eyebrow: 'Neo4j exploration', title: 'Paper–entity relationships' },
+}
+
+/** The five Stage 8 ranking signals, in the order the gap-score formula reads them. */
+const signalLabels: Array<{ key: keyof GapRanking['signals']; label: string }> = [
+  { key: 'mention_frequency', label: 'Mentioning papers' },
+  { key: 'trend_slope', label: 'Trend slope' },
+  { key: 'solution_density', label: 'Solution density' },
+  { key: 'citation_impact', label: 'Citation impact' },
+  { key: 'contradiction_flag', label: 'Contradiction' },
+]
+
 function formatScore(value: number) {
   return Number.isFinite(value) ? value.toFixed(2) : '—'
+}
+
+/** Raw signal values, shown as the backend stores them — counts stay whole. */
+function formatSignal(value: number) {
+  if (!Number.isFinite(value)) return '—'
+  return Number.isInteger(value) ? String(value) : value.toFixed(2)
+}
+
+/** Render one evidence chunk's attribution. The API exposes no URL for a chunk,
+ *  so this is plain text: a title when the corpus still has the paper, its id
+ *  otherwise, plus the publication year when one is known. */
+function evidenceLabel(item: Evidence) {
+  return `${item.title || `Paper ${item.paper_id}`}${item.year ? ` · ${item.year}` : ''}`
 }
 
 function connectionMessage(reason: unknown) {
@@ -48,6 +78,24 @@ function connectionMessage(reason: unknown) {
 
 function ConnectionPanel({ currentKey, onSave, onClose }: { currentKey: string; onSave: (key: string) => void; onClose: () => void }) {
   const [value, setValue] = useState(currentKey)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // `aria-modal` promises the rest of the page is inert, so the dialog has to
+  // behave like one: it takes focus on open, Escape dismisses it, and focus
+  // returns to whatever opened it.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null
+    inputRef.current?.focus()
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      opener?.focus?.()
+    }
+  }, [onClose])
+
   return (
     <div className="connection-panel" role="dialog" aria-modal="true" aria-labelledby="connection-title">
       <div className="connection-card">
@@ -58,7 +106,7 @@ function ConnectionPanel({ currentKey, onSave, onClose }: { currentKey: string; 
         <p className="muted-copy">Use the same API key configured in your local <code>.env</code>. It stays in this browser tab and is never written to the project.</p>
         <form onSubmit={(event) => { event.preventDefault(); onSave(value.trim()) }}>
           <label htmlFor="api-key">API key</label>
-          <input id="api-key" type="password" value={value} onChange={(event) => setValue(event.target.value)} placeholder="Enter X-API-Key" autoComplete="off" />
+          <input ref={inputRef} id="api-key" type="password" value={value} onChange={(event) => setValue(event.target.value)} placeholder="Enter X-API-Key" autoComplete="off" />
           <button className="primary-button full-button" type="submit">Save and reconnect <ArrowRight size={17} /></button>
         </form>
       </div>
@@ -108,25 +156,91 @@ function ReportCard({ report, gap, rank }: { report?: GapReport; gap?: GapRankin
         </div>
         <h3>{title}</h3>
         {report ? (
+          <div className="directions">
+            {(report.suggested_directions ?? []).map((direction) => <span key={direction}>{direction}</span>)}
+          </div>
+        ) : <p className="subtle">Generate Mode A reports to attach a grounded explanation and research directions.</p>}
+        {(report || gap) && (
           <>
-            <div className="directions">
-              {report.suggested_directions.map((direction) => <span key={direction}>{direction}</span>)}
-            </div>
             <button className="text-button" type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
-              {expanded ? 'Hide' : 'View'} supporting evidence <ChevronDown className={expanded ? 'rotate' : ''} size={17} />
+              {expanded ? 'Hide' : 'View'} {report ? 'supporting evidence' : 'score breakdown'} <ChevronDown className={expanded ? 'rotate' : ''} size={17} />
             </button>
             {expanded && (
-              <div className="evidence-list">
-                {report.evidence.length ? report.evidence.map((item, evidenceIndex) => (
-                  <blockquote key={item.id ?? item.point_id ?? evidenceIndex}>
-                    <p>{item.text}</p>
-                    <cite>{item.title || `Paper ${item.paper_id}`}{item.year ? ` · ${item.year}` : ''}</cite>
-                  </blockquote>
-                )) : <p className="subtle">No evidence payload is attached to this stored report.</p>}
-              </div>
+              <>
+                {gap && <SignalBreakdown signals={gap.signals} />}
+                {report && (
+                  <div className="evidence-list">
+                    {(report.evidence ?? []).length ? (report.evidence ?? []).map((item, evidenceIndex) => (
+                      <blockquote key={item.id ?? item.point_id ?? evidenceIndex}>
+                        <p>{item.text}</p>
+                        <cite>{evidenceLabel(item)}</cite>
+                      </blockquote>
+                    )) : <p className="subtle">No evidence payload is attached to this stored report.</p>}
+                  </div>
+                )}
+              </>
             )}
           </>
-        ) : <p className="subtle">Generate Mode A reports to attach a grounded explanation and research directions.</p>}
+        )}
+      </div>
+    </article>
+  )
+}
+
+/** The Stage 8 formula's inputs, so a researcher can see *why* a gap ranks where
+ *  it does rather than trusting an opaque score. Values are the backend's own —
+ *  nothing here is normalised or re-weighted in the UI. */
+function SignalBreakdown({ signals }: { signals: GapRanking['signals'] }) {
+  return (
+    <dl className="signal-grid">
+      {signalLabels.map(({ key, label }) => {
+        const value = signals?.[key]
+        return (
+          <div key={key}>
+            <dt>{label}</dt>
+            <dd>{key === 'contradiction_flag' ? (value ? 'Yes' : 'No') : formatSignal(value as number)}</dd>
+          </div>
+        )
+      })}
+    </dl>
+  )
+}
+
+function ClustersView({ data }: { data: DashboardData }) {
+  const sorted = useMemo(() => [...data.clusters].sort((a, b) => b.member_count - a.member_count), [data.clusters])
+
+  if (!sorted.length) {
+    return <EmptyState title="No clusters yet">Build the evidence base after collecting papers. Limitations that mean the same thing are grouped here, however differently each author phrased them.</EmptyState>
+  }
+
+  return <div className="report-list">{sorted.map((cluster, index) => <ClusterCard key={cluster.id} cluster={cluster} rank={index + 1} />)}</div>
+}
+
+function ClusterCard({ cluster, rank }: { cluster: Cluster; rank: number }) {
+  const [expanded, setExpanded] = useState(rank === 1)
+  const members = cluster.members ?? []
+  return (
+    <article className="report-card">
+      <div className="report-rank">{String(rank).padStart(2, '0')}</div>
+      <div className="report-content">
+        <div className="report-meta">
+          <span className="score-pill">{cluster.member_count} {cluster.member_count === 1 ? 'statement' : 'statements'}</span>
+          {cluster.contradiction_flag ? <span className="contradiction-pill">Conflicting evidence</span> : null}
+        </div>
+        <h3>{cluster.label || `Cluster ${cluster.id}`}</h3>
+        <button className="text-button" type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
+          {expanded ? 'Hide' : 'View'} clustered statements <ChevronDown className={expanded ? 'rotate' : ''} size={17} />
+        </button>
+        {expanded && (
+          <div className="evidence-list">
+            {members.length ? members.map((member, memberIndex) => (
+              <blockquote key={member.point_id ?? member.id ?? memberIndex}>
+                <p>{member.text}</p>
+                <cite>{evidenceLabel(member)}</cite>
+              </blockquote>
+            )) : <p className="subtle">This cluster's member statements are not stored with it.</p>}
+          </div>
+        )}
       </div>
     </article>
   )
@@ -148,7 +262,7 @@ function TrendsView({ data }: { data: DashboardData }) {
         {sorted.length ? sorted.slice(0, 8).map((trend, index) => (
           <div className="trend-row" key={trend.cluster_id}>
             <span>{index + 1}</span>
-            <div><strong>{clusterNames.get(trend.cluster_id)}</strong><small>{Object.values(trend.yearly_counts).reduce((sum, count) => sum + count, 0)} mentions</small></div>
+            <div><strong>{clusterNames.get(trend.cluster_id)}</strong><small>{Object.values(trend.yearly_counts ?? {}).reduce((sum, count) => sum + count, 0)} mentions</small></div>
             <b className={trend.slope >= 0 ? 'positive' : 'negative'}>{trend.slope >= 0 ? '+' : ''}{trend.slope.toFixed(2)}</b>
           </div>
         )) : <p className="subtle">No trend scores are available.</p>}
@@ -291,19 +405,31 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
   )
 }
 
+interface Exchange {
+  id: number
+  question: string
+  result: QueryResult
+}
+
 function AskView({ api, corpusSize }: { api: ScholarLensApi; corpusSize: number }) {
   const [question, setQuestion] = useState('')
-  const [result, setResult] = useState<QueryResult | null>(null)
+  const [exchanges, setExchanges] = useState<Exchange[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (question.trim().length < 3) return
+    const asked = question.trim()
+    if (asked.length < 3) return
     setLoading(true)
     setError(null)
     try {
-      setResult(await api.query(question.trim()))
+      const result = await api.query(asked)
+      // `/query` is stateless — each question is answered on its own. The
+      // transcript is a frontend record so earlier answers and their citations
+      // stay readable, not a conversation the backend carries any context for.
+      setExchanges((previous) => [...previous, { id: previous.length, question: asked, result }])
+      setQuestion('')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'The query could not be completed.')
     } finally {
@@ -338,22 +464,33 @@ function AskView({ api, corpusSize }: { api: ScholarLensApi; corpusSize: number 
           </button>
         </form>
         {error && <div className="error-banner"><AlertCircle size={18} /><span>{error}</span></div>}
-        {result && (
-          <article className="answer-card">
-            <div className="answer-status">
-              <span className={result.grounded ? 'grounded' : 'ungrounded'}>{result.grounded ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}{result.grounded ? 'Grounded answer' : result.citations.length === 0 ? 'No indexed evidence' : 'Evidence incomplete'}</span>
-              <small>{result.retry_count ? `${result.retry_count} retrieval retry` : 'First-pass retrieval'} · {result.model}</small>
-            </div>
-            <p className="answer-text">{result.answer}</p>
-            {result.citations.length > 0 && <div className="citation-list"><h3>Sources</h3>{result.citations.map((citation, index) => (
-              <div className="citation" key={citation.id ?? citation.point_id ?? index}>
-                <span>{index + 1}</span><div><strong>{citation.title || `Paper ${citation.paper_id}`}</strong><p>{citation.text}</p></div><ExternalLink size={15} />
-              </div>
-            ))}</div>}
-          </article>
+        {exchanges.length > 0 && (
+          <div className="ask-thread" aria-live="polite">
+            {exchanges.map((exchange) => <AnswerCard key={exchange.id} exchange={exchange} />)}
+          </div>
         )}
       </div>
     </div>
+  )
+}
+
+function AnswerCard({ exchange: { question, result } }: { exchange: Exchange }) {
+  const citations = result.citations ?? []
+  return (
+    <article className="answer-card">
+      <p className="asked-question">{question}</p>
+      <div className="answer-status">
+        <span className={result.grounded ? 'grounded' : 'ungrounded'}>{result.grounded ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}{result.grounded ? 'Grounded answer' : citations.length === 0 ? 'No indexed evidence' : 'Evidence incomplete'}</span>
+        <small>{result.retry_count ? `${result.retry_count} retrieval retry` : 'First-pass retrieval'} · {result.model}</small>
+      </div>
+      <p className="answer-text">{result.answer}</p>
+      {citations.length > 0 && <div className="citation-list"><h3>Sources</h3>{citations.map((citation, index) => (
+        <div className="citation" key={citation.id ?? citation.point_id ?? index}>
+          <span>{index + 1}</span>
+          <div><strong>{citation.title || `Paper ${citation.paper_id}`}</strong>{citation.year ? <small>{citation.year}</small> : null}<p>{citation.text}</p></div>
+        </div>
+      ))}</div>}
+    </article>
   )
 }
 
@@ -396,7 +533,11 @@ function App() {
     setShowConnection(false)
   }
 
-  const pageTitle = { reports: 'Evidence, not guesswork.', library: 'Build your research corpus.', trends: 'See where the field is moving.', graph: 'Trace the research landscape.', ask: 'Question the corpus directly.' }[view]
+  // Stable identity: the dialog's focus/Escape effect keys off this handler, and
+  // a fresh closure each render would tear that effect down mid-interaction.
+  const closeConnection = useCallback(() => setShowConnection(false), [])
+
+  const pageTitle = { reports: 'Evidence, not guesswork.', library: 'Build your research corpus.', trends: 'See where the field is moving.', clusters: 'One gap, many phrasings.', graph: 'Trace the research landscape.', ask: 'Question the corpus directly.' }[view]
   const reportsCount = data?.reports.length ?? 0
 
   return (
@@ -422,17 +563,18 @@ function App() {
         </section>}
 
         <section className={`workspace-card ${view === 'ask' ? 'dark-workspace' : ''}`}>
-          {view !== 'ask' && view !== 'library' && <div className="section-heading"><div><p className="eyebrow">{view === 'reports' ? 'Mode A' : view === 'trends' ? 'Longitudinal analysis' : 'Neo4j exploration'}</p><h2>{view === 'reports' ? 'Ranked research gaps' : view === 'trends' ? 'Evidence trends over time' : 'Paper–entity relationships'}</h2></div>{data && <span className="quiet-pill">Updated from local API</span>}</div>}
+          {sectionHeadings[view] && <div className="section-heading"><div><p className="eyebrow">{sectionHeadings[view]?.eyebrow}</p><h2>{sectionHeadings[view]?.title}</h2></div>{data && <span className="quiet-pill">Updated from local API</span>}</div>}
           {loading && <div className="loading-block"><RefreshCw className="spin" size={22} />Loading the evidence base…</div>}
           {!loading && error && <div className="error-state"><AlertCircle size={28} /><h3>Connection needed</h3><p>{error}</p><button className="primary-button" type="button" onClick={() => setShowConnection(true)}>Open API settings</button></div>}
           {!loading && !error && data && view === 'reports' && <ReportsView data={data} />}
           {!loading && !error && data && view === 'trends' && <TrendsView data={data} />}
+          {!loading && !error && data && view === 'clusters' && <ClustersView data={data} />}
           {!loading && !error && data && view === 'graph' && <GraphView data={data} />}
           {!error && <div hidden={view !== 'library' || (loading && !data)}><LibraryView api={api} data={data} onRefresh={loadDashboard} /></div>}
           {!error && <div hidden={view !== 'ask' || (loading && !data)}><AskView api={api} corpusSize={data?.papers.length ?? 0} /></div>}
         </section>
       </main>
-      {showConnection && <ConnectionPanel currentKey={apiKey} onSave={saveApiKey} onClose={() => setShowConnection(false)} />}
+      {showConnection && <ConnectionPanel currentKey={apiKey} onSave={saveApiKey} onClose={closeConnection} />}
     </div>
   )
 }

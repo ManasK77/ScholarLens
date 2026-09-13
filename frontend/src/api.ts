@@ -12,6 +12,18 @@ export class ApiError extends Error {
   }
 }
 
+/** Collection endpoints return a JSON array. Anything else is treated as empty.
+ *
+ * The backend contract (`routes_backend.py`) always returns a list from
+ * `/papers`, `/clusters`, `/trends`, `/gaps` and `/reports`, so this never
+ * changes behaviour against a healthy API. It exists so a proxy error page or
+ * a mid-deploy shape change degrades one panel to its empty state instead of
+ * throwing inside render and blanking the whole dashboard.
+ */
+function asList<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : []
+}
+
 export class ScholarLensApi {
   private readonly apiKey: string
   private readonly baseUrl: string
@@ -43,21 +55,32 @@ export class ScholarLensApi {
 
   async dashboard(): Promise<DashboardData> {
     const [papers, clusters, trends, gaps, reports] = await Promise.all([
-      this.request<DashboardData['papers']>('/papers?limit=500'),
-      this.request<DashboardData['clusters']>('/clusters'),
-      this.request<DashboardData['trends']>('/trends'),
-      this.request<DashboardData['gaps']>('/gaps?limit=100'),
-      this.request<DashboardData['reports']>('/reports'),
+      this.request<unknown>('/papers?limit=500'),
+      this.request<unknown>('/clusters'),
+      this.request<unknown>('/trends'),
+      this.request<unknown>('/gaps?limit=100'),
+      this.request<unknown>('/reports'),
     ])
     let graph: DashboardData['graph'] = { nodes: [], edges: [] }
     try {
-      graph = await this.request<DashboardData['graph']>('/graph?limit=500')
+      const snapshot = await this.request<Partial<DashboardData['graph']>>('/graph?limit=500')
+      graph = {
+        nodes: asList<DashboardData['graph']['nodes'][number]>(snapshot?.nodes),
+        edges: asList<DashboardData['graph']['edges'][number]>(snapshot?.edges),
+      }
     } catch (error) {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) throw error
       // Graph exploration is optional for the reports/trends workspace. Keep the
       // rest of the dashboard useful when Neo4j is temporarily unavailable.
     }
-    return { papers, clusters, trends, gaps, reports, graph }
+    return {
+      papers: asList<DashboardData['papers'][number]>(papers),
+      clusters: asList<DashboardData['clusters'][number]>(clusters),
+      trends: asList<DashboardData['trends'][number]>(trends),
+      gaps: asList<DashboardData['gaps'][number]>(gaps),
+      reports: asList<DashboardData['reports'][number]>(reports),
+      graph,
+    }
   }
 
   query(question: string): Promise<QueryResult> {
