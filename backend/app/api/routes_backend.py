@@ -197,10 +197,24 @@ def reports(session: Session = Depends(corpus.get_session)):  # noqa: B008
     ]
 
 
+def _llm_http_error(exc: LLMError, prefix: str = "") -> HTTPException:
+    """An LLM failure as the explicit error README §12 promises.
+
+    `LLMError` messages are this project's own fixed strings (a missing or
+    rejected key, an outage, a rate limit), so unlike an arbitrary exception
+    they are safe to return; `/query` already returns them the same way.
+    """
+    status_code = 503 if isinstance(exc, LLMUnavailableError) else 502
+    return HTTPException(status_code=status_code, detail=f"{prefix}{exc}")
+
+
 @router.post("/reports")
 def generate_reports(session: Session = Depends(corpus.get_session)):  # noqa: B008
     try:
         ids = report_service.generate_top_reports(session)
+    except LLMError as exc:
+        logger.warning("Mode A report generation stopped: %s", exc)
+        raise _llm_http_error(exc) from exc
     except Exception as exc:
         logger.exception("Mode A report generation failed")
         raise HTTPException(status_code=502, detail="Report generation failed") from exc
@@ -253,12 +267,22 @@ def run_pipeline(
     clusters = clustering_service.rebuild_clusters(session, settings=settings)
     trends = trend_service.rebuild_trends(session)
     gaps = ranking_service.rebuild_rankings(session, settings)
-    reports = (
-        report_service.generate_top_reports(session, settings)
-        if body.generate_reports
-        else []
-    )
+    # Commit the evidence base before the one stage that needs the LLM. The
+    # Neo4j graph and Qdrant vectors are already written by now, so a missing
+    # Groq key or an outage must not roll back the Postgres rows that describe
+    # them: README §12 promises every non-LLM stage works without a key.
     session.commit()
+    reports: list[int] = []
+    if body.generate_reports:
+        try:
+            reports = report_service.generate_top_reports(session, settings)
+        except LLMError as exc:
+            session.rollback()
+            logger.warning("Pipeline report generation stopped: %s", exc)
+            raise _llm_http_error(
+                exc, "The evidence base was built, but reports were not generated: "
+            ) from exc
+        session.commit()
     return {
         "parsed": parsed,
         "missing_pdfs": parsing.missing_pdfs,

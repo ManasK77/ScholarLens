@@ -60,6 +60,13 @@ def parse_and_store(session: Session, paper: Paper, grobid_url: str) -> ParsedDo
     )
 
 
+def _needs_metadata_backfill(paper: Paper) -> bool:
+    """D-32/PARSE-05 intentionally scopes late metadata recovery to manual
+    uploads. This is Stage 2's only source check; the parsing core stays fully
+    source-agnostic."""
+    return paper.source == "manual_upload" and paper.title is None
+
+
 def run_parsing_pipeline(
     session: Session,
     paper: Paper,
@@ -68,9 +75,7 @@ def run_parsing_pipeline(
     pdf_storage_path: str,
 ) -> ParsedDocument:
     document = parse_and_store(session, paper, grobid_url)
-    # D-32/PARSE-05 intentionally scopes late metadata recovery to manual
-    # uploads. The parsing core above remains fully source-agnostic.
-    if paper.source == "manual_upload" and paper.title is None:
+    if _needs_metadata_backfill(paper):
         header_backfill.backfill_metadata(
             session, paper, grobid_url, unpaywall_email, pdf_storage_path
         )
@@ -88,6 +93,18 @@ def parse_all_pending(
     missing_pdfs: list[int] = []
     for paper in session.scalars(select(Paper)):
         if storage.get_parsed_document(session, paper.id) is not None:
+            # A document stored while GROBID was unreachable came from the
+            # fallback parser, and its header backfill silently did nothing.
+            # Retry just the header call, or metadata GROBID can recover is
+            # never recovered on any later run.
+            if (
+                _needs_metadata_backfill(paper)
+                and paper.pdf_path
+                and Path(paper.pdf_path).is_file()
+            ):
+                header_backfill.backfill_metadata(
+                    session, paper, grobid_url, unpaywall_email, pdf_storage_path
+                )
             continue
         if not paper.has_full_text:
             continue

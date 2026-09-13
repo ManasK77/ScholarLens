@@ -5,6 +5,122 @@ holds the per-phase GSD artifacts; this file is the cross-session summary.
 
 ---
 
+## 2026-09-13 — Phases 0–12 audited against README "Done when"; three blockers fixed
+
+Scope: audit only, with fixes limited to concrete defects that stop a phase
+meeting its README §15 "Done when". Nothing was redesigned. Phase 13 was not
+started, and `evaluation/` was neither audited nor touched.
+
+### Baseline, before any change
+
+Backend **743 passed, 10 deselected** (integration marker), `ruff check`
+clean. Frontend 13/13 (unchanged since the Phase 12 entry below). The
+Docker daemon was **not running**, so no live `docker compose up`, `/health`,
+GROBID, Neo4j, Qdrant or Groq call was possible this session. Every verdict
+below rests on source, tests and wiring, not on a live run.
+
+### Per-phase verdict
+
+| Phase | Verdict | Basis / remaining note |
+|---|---|---|
+| 0 Scaffolding | COMPLETE (code) | Compose runs neo4j, qdrant, postgres, grobid, backend; `/health` round-trips three services, 200/503. Last live pass recorded 2026-09-08 (STATE.md), not re-run. |
+| 1 Collection | COMPLETE after fix **F2** | All four sources + Unpaywall + upload + `/collect`, `/upload`; dedup chain in `dedup.py`. Risk R1 below. |
+| 2 Parsing | COMPLETE after fix **F3** | GROBID → PyMuPDF/pdfplumber fallback; headings → seven roles (keyword map, then SciBERT exemplar similarity). Only full-text papers can have sections. |
+| 3 IE | COMPLETE | Rules + SciBERT fallback; six fact types stored by `paper_id` in `extracted_facts`. |
+| 4 NER+RE | COMPLETE | GLiNER2 `JointIE` (owner-approved D-04-01); `MENTIONS` + typed `trained_on`/`evaluated_using`/`fails_on`/`achieves` edges. |
+| 5 Embeddings | COMPLETE | SPECTER2; payload carries paper id, year, venue, section type, Neo4j node id. Risk R2 below. |
+| 6 Clustering | COMPLETE | `sklearn.cluster.HDBSCAN` + DeBERTa-MNLI flags. Decision D-06-01, see "owner items". |
+| 7 Trends | COMPLETE | Per-cluster distinct-paper series + OLS slope; `/trends`. |
+| 8 Ranking | COMPLETE | README formula, configurable weights, signal breakdown on `/gaps`. |
+| 9 Mode A | COMPLETE (code) | Single pass, no LangGraph, invented evidence ids dropped; `/reports`. Live Groq generation still unevidenced. |
+| 10 Mode B | **Code complete, Done-when UNPROVEN** | Unchanged from 2026-09-08: no live grounded answer has ever been produced. Needs Docker, a Groq key and one real pipeline run; owner-deferred. |
+| 11 API | COMPLETE after fix **F1** | Every named route wired, OpenAPI, fail-closed API key. |
+| 12 Frontend | COMPLETE | Closed out in the entry below. |
+
+Hard constraints hold: LangGraph is imported only in
+`interactive/workflow.py`; no IEEE/Springer/ACM access; Stage 2+ branches on
+`source` only for the README-mandated manual-upload backfill, now one predicate
+(`_needs_metadata_backfill`). `langchain-core` appears in `uv.lock` purely as a
+transitive dependency of `langgraph`; nothing imports it.
+
+### F1 — `/pipeline/run` threw away Phases 2–8 when the LLM stage failed
+
+The handler committed once, after report generation. With rankings present,
+`generate_top_reports` builds the Groq client **outside** its own try, so a
+missing `GROQ_API_KEY` (`LLMError`) or a 429/outage (`LLMUnavailableError`)
+escaped as a 500 and rolled back every parsed document, fact, cluster, trend
+and ranking, while the Neo4j graph and Qdrant vectors written mid-run
+survived. That contradicts README §12 ("until the key is set … parsing,
+extraction, clustering, trends and ranking all still work") and the dashboard
+sends `generate_reports: true` by default. Now the evidence base commits before
+the LLM stage; an `LLMError` rolls back only the report stage and returns
+503/502 naming the Groq cause. `POST /reports` returned a generic "Report
+generation failed" for the same errors and now names them too; arbitrary
+exceptions keep the generic, non-leaking 502.
+
+### F2 — one Unpaywall timeout aborted enrichment, or the whole pipeline
+
+`resolve_oa_pdf` caught no `httpx` error. In `/collect` a single timeout rolled
+back the Unpaywall step's savepoint, losing every enrichment already made. In
+Phase 2 the manual-upload backfill calls `unpaywall.enrich`, so the same
+timeout escaped `parse_all_pending` and aborted `/pipeline/run`. Network errors
+and non-JSON 200s now mean "no copy found this run".
+
+### F3 — a manual upload parsed while GROBID was down stayed untitled forever
+
+`grobid_client` returns `None` on failure, so `parse_and_store` stored a
+fallback document and the header backfill no-opped. `parse_all_pending` then
+skipped the paper on every later run because a document existed — directly
+failing Phase 2's "no manually uploaded paper remains without metadata that
+GROBID could recover". Already-parsed, untitled manual uploads now retry only
+the header backfill (no re-parse).
+
+### Risks found and deliberately not fixed
+
+* **R1 — two dedup tiers never match across sources.** Semantic Scholar, the
+  only source that overlaps both arXiv and ACL, does not map
+  `externalIds.ArXiv`/`ACL`, and arXiv stores *versioned* ids
+  (`get_short_id()` → `2301.00001v1`). Cross-source dedup therefore rests on
+  DOI and title+year, which misses when S2 reports a venue year. Not fixed: no
+  observed duplicate, and a real fix changes stored id and PDF filename formats.
+  The S2 module docstring also claims `openaccess_pdf_url` is stored; it is
+  dropped in `_to_paper_dict` (README: metadata-only by design).
+* **R2 — a paper with no Neo4j node is never indexed** (EMBED-03, by design).
+  A paper gets a node only if it has an abstract or Phase 3 facts *and* its
+  GLiNER2 call succeeds, so e.g. an abstract-less manual upload with zero facts
+  is invisible to clustering and Mode B.
+* After a failed pipeline run the Add papers view does not auto-refresh; the
+  header refresh button shows the now-committed evidence.
+
+### Owner items
+
+1. Phase 10's live "Done when" remains open (unchanged).
+2. D-06-01 (scikit-learn HDBSCAN instead of the `hdbscan`/BERTopic packages)
+   was decided inside the Phase 6 entry, but the reconciliation entry listed it
+   as needing an owner decision, and no approval is recorded the way D-04-01's is.
+3. Record-keeping only: PROGRESS has no entries for Phases 0–3 (their records
+   are `.planning/phases/00–03`), `.planning/` has no Phase 9 or 11 directory,
+   and `.planning/STATE.md` still reads "awaiting Phase 11".
+4. arXiv's default `max_results` 50→10 is now committed (`057d485`) with its
+   reason in the commit message only.
+
+### Files changed
+
+* `backend/app/api/routes_backend.py` (F1), `backend/app/ingestion/unpaywall.py`
+  (F2), `backend/app/parsing/service.py` (F3).
+* Tests, written first and each confirmed failing before its fix:
+  `tests/api/test_routes_backend.py` (+4 parametrized cases),
+  `tests/ingestion/test_unpaywall.py` (+1), `tests/parsing/test_service.py` (+1).
+* `PROGRESS.md` (this entry).
+
+### Verification
+
+**749 passed, 10 deselected** (743 + 6 new). `ruff check app tests` clean;
+`ruff format --check` clean on all six changed files. The 10 integration tests
+(real models/services) were not run. No frontend file changed.
+
+---
+
 ## 2026-09-13 — Phase 12 (Frontend Dashboard) audited, completed and closed out
 
 ### Phase 12 was already built — it was never recorded

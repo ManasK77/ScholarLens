@@ -14,13 +14,25 @@ from app.ingestion import corpus
 
 
 def resolve_oa_pdf(doi: str, email: str) -> str | None:
-    with httpx.Client(transport=httpx.HTTPTransport(retries=2)) as client:
-        resp = client.get(
-            f"https://api.unpaywall.org/v2/{doi}", params={"email": email}, timeout=10.0
-        )
+    try:
+        with httpx.Client(transport=httpx.HTTPTransport(retries=2)) as client:
+            resp = client.get(
+                f"https://api.unpaywall.org/v2/{doi}",
+                params={"email": email},
+                timeout=10.0,
+            )
+    except httpx.HTTPError:
+        # Unreachable this run means no copy was found, not a failure. `enrich`
+        # also runs inside Phase 2's manual-upload backfill, where an escaping
+        # error aborts the whole `/pipeline/run`; in `/collect` it would roll
+        # back every enrichment already made in the same step.
+        return None
     if resp.status_code != 200:
         return None  # 404 = DOI not found in Unpaywall's index; not "no OA"
-    body = resp.json()
+    try:
+        body = resp.json()
+    except ValueError:
+        return None  # a 200 that is not JSON carries no location to act on
     best = body.get("best_oa_location")
     if not best:
         return None  # valid DOI, genuinely no OA copy

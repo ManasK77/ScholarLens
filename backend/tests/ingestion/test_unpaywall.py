@@ -165,3 +165,31 @@ def test_enrich_skips_rows_with_no_oa_copy(monkeypatch: pytest.MonkeyPatch) -> N
 
     assert enrich_paper_calls == []
     assert result == []
+
+
+def test_resolve_oa_pdf_returns_none_when_unpaywall_is_unreachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A timeout means "no OA copy found this run", not a crash.
+
+    `enrich` runs inside `/collect` and inside Phase 2's manual-upload backfill.
+    An escaping `httpx` error there discards every enrichment already made and,
+    in the backfill case, aborts the whole `/pipeline/run`.
+    """
+
+    class _UnreachableClient:
+        def __init__(self, transport=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, params=None, timeout=None):
+            raise httpx.ConnectTimeout("timed out")
+
+    monkeypatch.setattr(httpx, "Client", _UnreachableClient)
+
+    assert resolve_oa_pdf("10.1/xyz", "test@example.org") is None

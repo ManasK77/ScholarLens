@@ -29,6 +29,7 @@ from app.api import routes_backend
 from app.api.security import API_KEY_HEADER_NAME, require_api_key
 from app.clustering.schema import GapStatement, StatementCluster
 from app.clustering.storage import replace_clusters
+from app.explanation.llm import LLMError, LLMUnavailableError
 from app.explanation.schema import GapReportRecord
 from app.explanation.storage import replace_reports
 from app.ingestion import corpus
@@ -603,3 +604,115 @@ def test_full_app_serves_openapi_docs_for_every_required_endpoint() -> None:
     for path in required:
         for operation in schema["paths"][path].values():
             assert operation.get("security"), f"{path} is not marked as authenticated"
+
+
+def _stub_evidence_stages(monkeypatch: pytest.MonkeyPatch, events: list[str]) -> None:
+    """Stub every pre-LLM stage of `/pipeline/run`, recording the ranking step."""
+    monkeypatch.setattr(
+        routes_backend,
+        "get_settings",
+        lambda: SimpleNamespace(
+            grobid_url="http://grobid:8070",
+            unpaywall_email="you@example.com",
+            pdf_storage_path="/data/pdfs",
+        ),
+    )
+    monkeypatch.setattr(
+        routes_backend,
+        "parse_all_pending",
+        lambda *a, **k: SimpleNamespace(processed=[1], missing_pdfs=[]),
+    )
+    monkeypatch.setattr(routes_backend, "extract_all_parsed", lambda session: [1])
+    monkeypatch.setattr(
+        routes_backend, "graph_session", lambda *a, **k: _NullContext(object())
+    )
+    monkeypatch.setattr(
+        routes_backend.graph_service, "extract_all", lambda session, neo4j: [1]
+    )
+    monkeypatch.setattr(routes_backend, "EvidenceIndex", lambda settings: object())
+    monkeypatch.setattr(
+        routes_backend, "index_all", lambda session, neo4j, index=None: 4
+    )
+    monkeypatch.setattr(
+        routes_backend.clustering_service,
+        "rebuild_clusters",
+        lambda session, settings=None: [1],
+    )
+    monkeypatch.setattr(
+        routes_backend.trend_service, "rebuild_trends", lambda session: [1]
+    )
+
+    def _rankings(session, settings=None):
+        events.append("rankings")
+        return [1]
+
+    monkeypatch.setattr(routes_backend.ranking_service, "rebuild_rankings", _rankings)
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code"),
+    [
+        (LLMUnavailableError("Groq is unavailable. Check network access."), 503),
+        (LLMError("GROQ_API_KEY is required to call the Groq API"), 502),
+    ],
+)
+def test_pipeline_run_keeps_the_evidence_base_when_report_generation_fails(
+    client: TestClient,
+    db_session: SASession,
+    monkeypatch: pytest.MonkeyPatch,
+    error: LLMError,
+    status_code: int,
+) -> None:
+    """README §12: with no Groq key, every non-LLM stage "still works".
+
+    The handler committed once, at the very end, so an LLM failure in the last
+    stage rolled back parsing, extraction, clusters, trends and rankings, while
+    the Neo4j graph and Qdrant vectors written mid-run survived.
+    """
+    events: list[str] = []
+    _stub_evidence_stages(monkeypatch, events)
+    real_commit = db_session.commit
+
+    def _recording_commit() -> None:
+        events.append("commit")
+        real_commit()
+
+    monkeypatch.setattr(db_session, "commit", _recording_commit)
+
+    def _reports(session, settings=None):
+        events.append("reports")
+        raise error
+
+    monkeypatch.setattr(routes_backend.report_service, "generate_top_reports", _reports)
+
+    response = client.post("/pipeline/run", json={"generate_reports": True})
+
+    assert response.status_code == status_code
+    assert str(error) in response.json()["detail"]
+    assert events.index("rankings") < events.index("commit") < events.index("reports")
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code"),
+    [
+        (LLMUnavailableError("Groq rate limit reached. Retry later."), 503),
+        (LLMError("GROQ_API_KEY is required to call the Groq API"), 502),
+    ],
+)
+def test_post_reports_names_the_llm_failure_instead_of_a_generic_error(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    error: LLMError,
+    status_code: int,
+) -> None:
+    """README §12: report generation returns an explicit Groq error."""
+
+    def _fail(session):
+        raise error
+
+    monkeypatch.setattr(routes_backend.report_service, "generate_top_reports", _fail)
+
+    response = client.post("/reports")
+
+    assert response.status_code == status_code
+    assert response.json() == {"detail": str(error)}

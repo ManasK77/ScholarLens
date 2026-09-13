@@ -218,3 +218,33 @@ def test_parse_all_pending_repairs_stale_pdf_records_and_continues(
     assert missing.pdf_path is None
     assert metadata_only.id not in result.missing_pdfs
     assert [call.args[1].id for call in run.call_args_list] == [valid.id]
+
+
+def test_parse_all_pending_retries_backfill_for_parsed_untitled_manual_uploads(
+    session, tmp_path, monkeypatch
+) -> None:
+    """A manual upload parsed while GROBID was down must not stay untitled forever.
+
+    GROBID failure makes `parse_and_store` fall back and still store a document,
+    and the header backfill silently no-ops. Skipping every already-parsed paper
+    then leaves metadata GROBID can recover unrecovered on every later run
+    (README §15 Phase 2 "Done when").
+    """
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"pdf")
+    untitled_upload = _paper(session, "manual_upload", str(pdf), title=None)
+    titled_upload = _paper(session, "manual_upload", str(pdf))
+    untitled_arxiv = _paper(session, "arxiv", str(pdf), title=None)
+    for paper in (untitled_upload, titled_upload, untitled_arxiv):
+        storage.upsert_parsed_document(session, paper.id, [], "fallback")
+    run = Mock()
+    backfill = Mock()
+    monkeypatch.setattr(service, "run_parsing_pipeline", run)
+    monkeypatch.setattr(service.header_backfill, "backfill_metadata", backfill)
+
+    result = service.parse_all_pending(session, "url", "email", "pdfs")
+
+    assert run.call_count == 0
+    assert result.processed == []
+    backfilled = [call.args[1].id for call in backfill.call_args_list]
+    assert backfilled == [untitled_upload.id]
