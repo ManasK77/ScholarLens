@@ -5,6 +5,448 @@ holds the per-phase GSD artifacts; this file is the cross-session summary.
 
 ---
 
+## 2026-09-15 — D-429-03: a 429 with no Retry-After is not retried
+
+### The diagnostic that prompted it
+
+One direct request to `export.arxiv.org/api/query` from inside the backend
+container, using **no ScholarLens code** (bare `urllib`, no retry, identical
+URL), returned `429 Rate exceeded.` in 0.36s. Headers: `server: Google
+Frontend`, `via: 1.1 google, 1.1 varnish ×3`, `X-Cache: MISS, MISS, MISS`,
+14-byte `text/html` body, and **no `Retry-After`, no `X-RateLimit-*`**. Same
+container answered Semantic Scholar, ACL and Unpaywall fine; single uvicorn
+process; no proxy env vars.
+
+That is an IP-level block at arXiv's edge, independent of ScholarLens: one
+request from a process with no prior arXiv traffic cannot exceed a rate limit.
+**No code change can make arXiv answer 200 while that block stands.**
+
+### What the old behaviour cost
+
+`ARXIV_NUM_RETRIES=2` turned that one refusal into **three** requests spaced
+10s and 20s — against a host refusing all of them — and added ~30s to every
+`/collect`.
+
+### The change
+
+`send_with_retries` gained `retry_429_without_retry_after: bool = True`.
+Default True, so **Semantic Scholar is byte-identical** (same opt-in pattern as
+D-TIMEOUT-01's `retryable_exceptions`). `PoliteSession` passes `False`, so both
+arXiv paths — metadata and PDF — stop retrying a 429 that names no Retry-After.
+
+Deliberately **not** a shorter cooldown: declining to retry defers the shared
+limiter by the full `backoff_max_seconds` (60s default), which is *longer* than
+the exhausted-retry path's final `defer(40)`. Strictly fewer requests, strictly
+longer wait.
+
+Untouched: a 429 that *does* carry Retry-After still retries; every 5xx still
+retries; transport failures keep D-TIMEOUT-01's budget; the limiter, spacing
+floor, User-Agent/contact, PDF pacing, ≤10 caps and per-source isolation are
+unchanged.
+
+### Result
+
+A throttled run makes **one** arXiv request, records
+`arxiv: failed: HTTPError: ... 429`, and continues with Semantic Scholar and
+ACL exactly as before.
+
+### Files
+
+`backend/app/ingestion/rate_limit.py` (opt-in parameter),
+`backend/app/ingestion/sources/arxiv.py` (opts in),
+`backend/app/core/config.py` + `.env.example` (document the contract). No
+change to routes, Unpaywall, Semantic Scholar, ACL, caps or dedup.
+
+### Verification
+
+TDD: 11 tests red first. The end-to-end route test was additionally proven to
+catch the regression by temporarily restoring the old flag — it failed
+`assert 3 == 1` — then the flag was restored. Full backend suite: **913 passed,
+10 deselected** (899 before). `ruff check app tests` clean.
+
+---
+
+## 2026-09-15 — arXiv PDF downloads brought under the shared limiter; all-fields query
+
+Follow-up to the owner-requested arXiv integration audit. The audit confirmed
+the metadata path is compliant (correct endpoint, ≥3s floor, bounded retries,
+ScholarLens User-Agent, library retry/delay off) and found the real gap on the
+**full-text** path, which had been flagged as "known and not changed" since
+2026-09-13 and never fixed.
+
+### Root cause: arXiv PDFs bypassed every politeness control
+
+`arxiv.fetch_pdf` → `corpus.download_pdf` used a bare `httpx` client. It took
+no turn on the limiter, sent httpx's default User-Agent, had no backoff and no
+Retry-After handling. So one `/collect` sent **one paced** metadata request to
+`export.arxiv.org` and then **up to ten unpaced** requests to `arxiv.org`,
+back to back — plus any arXiv-hosted copy Unpaywall resolved afterwards. That
+is the only traffic ScholarLens sends that is out of line with arXiv's
+"play nice" guidance, and the most plausible trigger for an IP-level throttle
+that then also answers 429 to the compliant metadata requests.
+
+### D-PDF-01 — one session, one limiter, for every arXiv request
+
+`sources/arxiv.download_pdf` streams the PDF through the same `PoliteSession`
+and the same process-wide `LIMITER` the API requests use: ScholarLens
+User-Agent with the configured contact, spacing at `ARXIV_MIN_INTERVAL_SECONDS`
+(≥3s floor unchanged), and `send_with_retries`' existing bounded budget
+honouring Retry-After. Metadata and PDF traffic now share one queue and cannot
+form independent bursts, and a 429 answered to a PDF defers the limiter for the
+*next* arXiv request of either kind. Retry counts were **not** raised.
+
+Failure is graceful and never raised: a 404, a 429 that outlived the retry
+budget, an active `CooldownActive` cooldown, or a transport error all return
+`False`, leaving that paper as a metadata-only row while the run continues.
+`corpus.download_pdf` is untouched and still serves every non-arXiv OA host —
+arbitrary legal OA locations are deliberately not paced by arXiv's limiter.
+
+`unpaywall.enrich` dispatches on `arxiv.is_arxiv_url(url)` (parsed hostname,
+never a substring, so `arxiv.org.example` is not arXiv) and defaults to the
+polite downloader, so no call site can silently fall back to an unpaced fetch.
+`/collect` injects one downloader carrying the run's Settings into both the
+discovery and the enrichment path.
+
+**Cost:** a full 10-paper arXiv run is now 11 paced requests — roughly 50s at
+the 5s default rather than a burst. That is the intended trade.
+
+### D-QUERY-01 — the topic is sent as an explicit all-fields phrase
+
+`search_query=prompt injection` left both the field and the word grouping to
+arXiv's parser. It is now `all:"prompt injection"` — every field, the phrase as
+typed. Embedded double quotes are dropped (arXiv documents no escape for one
+inside a quoted phrase; left in they close the phrase early). Relevance sorting,
+descending order, `start`, `max_results` and URL encoding are unchanged.
+**This is a search-relevance fix and does not address the 429.** Trade-off:
+a phrase query is narrower than AND-ing the topic's words, so a long topic may
+return fewer arXiv hits — the alternative was rejected because AND-ing invents
+an operator the user did not type and would match papers sharing only stray words.
+
+### Verified unchanged (no code needed)
+
+* **Per-source caps** — ≤10 each for arXiv/S2/ACL, uploads uncapped, duplicates
+  don't consume a slot, no PDF fetched past a cap. Already enforced in
+  `_process_capped` and covered by existing tests.
+* **Config bounds** — `*_MAX_RESULTS` `le=10`, `ARXIV_MIN_INTERVAL_SECONDS`
+  `ge=3.0`; 11 and 2.9 already rejected by tests. Nothing loosened.
+* **Failure isolation** — per-source savepoints intact; ACL-failure case added
+  to complete the matrix. arXiv remains best-effort, never required.
+* **Link-back (audit UNKNOWN → resolved)** — `/papers` returns `has_full_text`
+  only; no `pdf_path`, no `FileResponse`/`StaticFiles`, and the frontend renders
+  no paper links. Downloaded PDFs are pipeline input only, so arXiv's
+  redistribution guidance is already satisfied. Left alone, with a regression
+  test guarding the boundary.
+* **arxiv 4.0.1** — re-inspected: `self._session.get` at `__init__.py:567` is
+  the package's only network call, `num_retries=0` disables its retry
+  (`_try_index < 0` is never true) and `delay_seconds=0` its sleep. Package not
+  upgraded or downgraded.
+
+### Files
+
+`backend/app/ingestion/sources/arxiv.py` (`is_arxiv_url`, `download_pdf`,
+`_polite_session`, `_all_fields_query`, `PoliteSession` log label,
+`fetch_pdf(download=...)`), `backend/app/ingestion/unpaywall.py` (host
+dispatch), `backend/app/api/routes_ingestion.py` (one configured downloader for
+both paths), `.env.example`. Tests: `tests/ingestion/sources/test_arxiv.py`,
+`tests/ingestion/test_unpaywall.py`, `tests/api/test_routes_ingestion.py`,
+`tests/api/test_routes_backend.py`, `tests/api/test_security.py`.
+`corpus.py` and `config.py` unchanged.
+
+### Verification
+
+TDD: every new behaviour's test written and watched fail first (9 red on the
+query form, 30 red on the PDF path, 4 red on Unpaywall dispatch, 2 red on the
+route wiring). Full backend suite **899 passed, 10 deselected** (852 before).
+`ruff check app tests` clean; changed files ruff-formatted. `evaluation/tests`
+4 passed; frontend 13 passed. No test makes a real network call.
+
+### Known limitations
+
+* A download interrupted mid-stream leaves a partial file in
+  `PDF_STORAGE_PATH`. It is never read — parsing iterates `Paper.pdf_path`,
+  which is only set on success — and a later retry overwrites it. Matches the
+  pre-existing `corpus.download_pdf` behaviour; not changed here.
+* `parsing/header_backfill.py` calls `unpaywall.enrich` without injecting a
+  downloader, so an arXiv copy resolved there uses `download_pdf`'s module
+  defaults (still polite, still the same shared limiter) rather than the
+  operator's configured contact/interval.
+* None of this can lift a throttle arXiv is already enforcing on this IP. It
+  removes ScholarLens's own contribution to triggering one.
+
+---
+
+## 2026-09-14 — arXiv `ReadTimeout` fixed: transport-level failures now retried
+
+Owner-reported live failure after the per-source-cap change:
+
+```
+"arxiv": "failed: ReadTimeout: HTTPSConnectionPool(host='export.arxiv.org',
+port=443): Read timed out. (read timeout=30.0)"
+```
+
+Semantic Scholar and ACL Anthology were unaffected and were not touched.
+
+### Diagnosis
+
+`export.arxiv.org`, the 30s per-request timeout, and the User-Agent/contact
+config are all correct — not the cause. `send_with_retries` (`rate_limit.py`)
+only retried **HTTP status codes** in `RETRYABLE_STATUS` (429/500/502/503/504),
+checked on the `resp` that `send()` returns. A `ReadTimeout` is a
+transport-level exception raised by `send()` itself — TLS/connection
+succeeded, the request was sent, but the response never finished within 30s —
+so it propagated immediately with **zero retries**, unlike a 429 (already
+covered by 2 retries). Confirmed against the installed `arxiv` v4.0.1 source:
+`Client.__try_parse_feed` calls `self._session.get(url, headers=...)` with no
+timeout of its own (ours supplies 30s via `kwargs.setdefault`), and the
+library's own retry wrapper (`_parse_feed`) only catches `HTTPError`,
+`UnexpectedEmptyPageError` and `ConnectionError` — never `Timeout`/
+`ReadTimeout` — and is a no-op regardless since `Client(num_retries=0)`.
+
+### D-TIMEOUT-01 — `send_with_retries` gained an opt-in `retryable_exceptions` parameter
+
+Default `()`, so any caller that does not pass it — Semantic Scholar's call
+site was **not modified** — keeps byte-identical behavior. `PoliteSession`
+(arXiv only) now passes `retryable_exceptions=(requests.exceptions.Timeout,
+requests.exceptions.ConnectionError)`, so a read/connect timeout or a
+connection failure is retried through the same bounded budget
+(`num_retries`/backoff) a 429/5xx already gets — same limiter, same
+exponential backoff, same `defer()` holding back other callers, but no
+Retry-After (there is no response to read one from). Once retries are
+exhausted the exception itself is re-raised, not swallowed into a fabricated
+answer; `/collect`'s existing per-source exception handling records it as
+that source's failure exactly like any other exception, without touching
+Semantic Scholar or ACL Anthology.
+
+### Explicitly not changed
+
+Per-source caps (arXiv/S2/ACL ≤10, uploads unlimited), the rate limiter's
+spacing/backoff/cooldown logic, the arXiv library's disabled retry/delay
+layers, the 30s timeout value, Semantic Scholar, ACL Anthology, Unpaywall,
+manual upload, and deduplication.
+
+### Files
+
+`backend/app/ingestion/rate_limit.py` (new `retryable_exceptions` param, opt-in),
+`backend/app/ingestion/sources/arxiv.py` (`PoliteSession` opts in); tests in
+`tests/ingestion/test_rate_limit.py` (8 new: default behavior unchanged,
+retry-then-succeed, backoff doubling, exhaustion re-raises, limiter deferred,
+untyped exception not caught, minimum-interval respected) and
+`tests/ingestion/sources/test_arxiv.py` (4 new: `ReadTimeout` and
+`ConnectionError` retried-then-succeed, repeated timeouts bounded and
+re-raised, minimum interval still respected).
+
+### Verification
+
+TDD: all 12 new tests red before implementation (`AttributeError`/no retry
+before the `retryable_exceptions` param existed). Full backend suite: 852
+passed, 10 deselected (841 before this fix). `ruff check app tests` clean;
+changed files ruff-formatted. No live network request made — findings verified
+by reading the installed `arxiv` v4.0.1 source directly. Not yet re-verified
+against the live `export.arxiv.org` outage; recommend one `/collect` once
+rebuilt to confirm the retry recovers a transient timeout in practice, and if
+timeouts persist across all retries, that arXiv itself is unavailable right
+now (an outage, not a code defect) — the safest next diagnostic step, not a
+larger timeout or a bypass.
+
+---
+
+## 2026-09-13 — Per-source caps on `/collect`: at most 10 papers from each automatic source
+
+Owner request: arXiv, Semantic Scholar and ACL Anthology each add at most 10
+papers per `/collect` run. Manual uploads stay unlimited. Dedup is unchanged,
+and a source with fewer matches returns what it has.
+
+### What was wrong
+
+arXiv and Semantic Scholar were already asked for 10, but the setting allowed
+up to 100. **ACL Anthology had no cap at all.** Every export record matching the
+topic was written and had its PDF downloaded (`"prompt injection"` matches 70).
+
+### D-CAP-01 — the cap is enforced in `/collect`, on distinct corpus rows
+
+`routes_ingestion._process_capped` stops consuming a source's candidates once
+`limit` distinct paper ids have been touched. The check comes before the PDF
+fetch, so nothing past the cap is downloaded. A candidate that dedups onto a
+row this source already touched is merged as usual and does not use up a slot.
+A cross-source duplicate, for example an S2 hit merging into an arXiv row,
+*does* count toward the later source's cap because that source did collect the
+paper. Source modules are unchanged: arXiv/S2 still request exactly the cap, and
+ACL's local search still returns every match. The first N distinct papers are
+kept in export order.
+
+### D-CAP-02 — 10 is a hard ceiling in Settings
+
+`ARXIV_MAX_RESULTS` and `SEMANTIC_SCHOLAR_MAX_RESULTS` bounds tightened from
+1–100 to **1–10**. The new `ACL_ANTHOLOGY_MAX_RESULTS` defaults to 10 with the
+same 1–10 bound. Config can lower a cap but never raise it, so a `.env` value
+above 10 now fails Settings validation at startup instead of being clipped
+silently. (The local `.env` sets none of these.) The Settings table in the
+rate-limiting entry below is superseded for the two `*_MAX_RESULTS` rows.
+
+### Not changed
+
+No over-fetching to backfill duplicates. If arXiv/S2 return a within-source or
+already-counted duplicate among their 10, that run keeps fewer than 10. The
+response shape of `/collect` is unchanged.
+
+### Files
+
+`backend/app/api/routes_ingestion.py`, `backend/app/core/config.py`,
+`.env.example`; tests in `tests/api/test_routes_ingestion.py` (6 new: default
+caps plus no PDF fetched past them, lower configured caps, fewer-than-cap,
+within-source dup, cross-source merge, 12-file upload uncapped) and
+`tests/core/test_config.py` (ACL default/env, 11 rejected for all three).
+
+### Verification
+
+TDD: 10 tests red before implementation. Full backend suite: 841 passed,
+10 deselected. `ruff check app tests` clean; changed files ruff-formatted.
+
+---
+
+## 2026-09-13 — Process-wide rate limiting for arXiv and Semantic Scholar
+
+Owner-requested follow-up: the bounded retry below did not stop live 429s from
+either API. Goal is a compliant client that never causes its own violations and
+handles a temporary 429 correctly — not a guarantee arXiv answers 200. No
+bypass of any kind (parallelism, IP rotation, multiple identities).
+
+### What was wrong with pacing
+
+* Spacing lived per `arxiv.Client`, and `search_topic` built a new one on
+  every call — two `/collect` runs, or concurrent requests, were never spaced.
+* The `arxiv` library retried 429s itself at a flat 3s, dropped Retry-After
+  (its `HTTPError` keeps only the status), and sent `arxiv.py/4.0.1` as the
+  User-Agent on every request.
+* Semantic Scholar had backoff but no spacing across calls or threads.
+
+### D-RL-01 — one shared `RateLimiter` per source (`app/ingestion/rate_limit.py`)
+
+Thread-safe minimum spacing between request starts: a slot is reserved under a
+lock and slept for outside it, so concurrent callers queue one interval apart.
+`defer()` pushes the next slot back for *every* caller after a 429/5xx. Each
+source module owns one module-level `LIMITER`; uvicorn runs one worker, so
+that covers every request the backend process makes. Intervals come from
+Settings via `/collect`; source modules still never read Settings.
+
+### D-RL-02 — one retry loop, `send_with_retries`
+
+Every attempt, retries included, goes through `acquire()`. Wait before retry
+n = max(Retry-After [seconds or HTTP-date], base × 2ⁿ). 403 and other 4xx are
+never retried. A required wait above the backoff max ends retrying instead of
+retrying early, and is still recorded: a later call inside that cooldown
+raises `CooldownActive` without sending anything. Remembered cooldowns are
+capped at 1 hour. Logs carry source, status, attempt and wait only — never a
+URL or header, so the S2 key cannot appear.
+
+### D-RL-03 — arXiv: `PoliteSession`, library retry/delay switched off
+
+`arxiv.Client(num_retries=0, delay_seconds=0)` with `client._session` set to a
+`requests.Session` subclass that applies the ScholarLens User-Agent
+(`ScholarLens/<version> (automatic research-gap identification; contact: …)`),
+a 30s timeout, and `send_with_retries` to every API request, pagination
+included. One retry layer only, so a 429 is never retried twice. Exhausted
+retries surface as the library's `arxiv.HTTPError(429)`, which `/collect`
+records as that source's failure while the others continue. `_session` is a
+private attribute, stable within the pinned `arxiv>=4,<5`; tests exercise the
+real client end to end through a fake `requests` adapter, so a change there
+fails loudly. `requests` is now declared in pyproject (already installed as
+arxiv's dependency).
+
+### Settings (all bounded)
+
+| Setting | Default | Bounds |
+|---|---|---|
+| `ARXIV_MAX_RESULTS` | 10 | 1–100 |
+| `ARXIV_NUM_RETRIES` | 2 | 0–3 |
+| `ARXIV_MIN_INTERVAL_SECONDS` | 5 | 3–60 (3 = arXiv's ToU floor) |
+| `ARXIV_BACKOFF_BASE_SECONDS` / `_MAX_SECONDS` | 10 / 60 | ≤120 / ≤600 |
+| `ARXIV_CONTACT` | unset | ≤200 printable chars, blank = unset |
+| `SEMANTIC_SCHOLAR_MAX_RESULTS` | 10 | 1–100 |
+| `SEMANTIC_SCHOLAR_MAX_RETRIES` | 3 | 0–5 |
+| `SEMANTIC_SCHOLAR_MIN_INTERVAL_SECONDS` | 1.5 | 1–60 |
+| `SEMANTIC_SCHOLAR_BACKOFF_BASE_SECONDS` / `_MAX_SECONDS` | 2 / 30 | ≤30 / ≤300 |
+
+### Files
+
+New: `backend/app/ingestion/rate_limit.py`, `backend/tests/ingestion/test_rate_limit.py`,
+`backend/tests/ingestion/fake_clock.py`. Modified: `sources/arxiv.py`,
+`sources/semantic_scholar.py`, `core/config.py`, `api/routes_ingestion.py`,
+`pyproject.toml`, `.env.example`, and tests for both sources, settings and the
+route.
+
+### Verification
+
+TDD: new test modules failed to import before implementation. Full backend
+suite: 833 passed, 10 deselected. No test makes a network request; all
+limiters but one 0.4s wall-clock concurrency check run on a fake clock. Pinned
+pre-commit hooks (ruff v0.6.9) pass. **Not yet verified live** — needs a rebuild
+and one `/collect` once arXiv's throttle has cleared.
+
+### Known and not changed
+
+* arXiv PDF downloads (`fetch_pdf`, arxiv.org/pdf) are not API requests and
+  are not paced by the limiter.
+* `_failure_status` still truncates a source's error text at 200 characters.
+* The limiter is per process; running uvicorn with several workers would give
+  each worker its own.
+
+---
+
+## 2026-09-13 — `/collect` 429s: bounded Semantic Scholar retry, right-sized arXiv requests
+
+Owner-approved fix after a diagnosis-only session. No architectural change: the
+per-source savepoints and 200-with-`sources` / 502-when-all-down behaviour of
+D-VER-01 are untouched.
+
+### What the diagnosis found
+
+* **Semantic Scholar** — the API key loads and is sent correctly (`x-api-key`);
+  a keyed request returned 200. The `/collect` 429 was transient, but
+  `search_topic` called `raise_for_status()` on the first answer, so one 429
+  failed the source for the whole run. It also sent no `limit`, so S2 could
+  return up to 100 papers (and 100 Unpaywall lookups) per run.
+* **arXiv** — a single 10-result request still got `429 Rate exceeded.`: IP
+  throttling, not page size. But `arxiv.Client()` put its default
+  `page_size=100` into the URL to keep 10 results, and retried a 429 three
+  more times, extending the throttle. Waiting it out is operational, not code.
+* **Count 0** — ACL matches the topic as an exact title/abstract substring:
+  `"multilingual prompt injection"` matches 0 records, `"prompt injection"` 70.
+  Left as designed.
+
+### D-429-01 — Semantic Scholar retries 429/5xx with capped backoff
+
+Up to `SEMANTIC_SCHOLAR_MAX_RETRIES` (3) retries; each wait honours a numeric
+`Retry-After`, otherwise `BASE * 2**attempt`, never above
+`SEMANTIC_SCHOLAR_BACKOFF_MAX_SECONDS` (10). Other 4xx (e.g. 403 bad key) fail
+immediately. Hand-written loop — no retry library added. `sleep` is injectable
+so tests never wait.
+
+### D-429-02 — explicit request sizes, fewer arXiv retries
+
+`SEMANTIC_SCHOLAR_MAX_RESULTS=10` is sent as `limit`. `arxiv.Client` is now
+built with `page_size=ARXIV_MAX_RESULTS` (10), `delay_seconds=3.0` and
+`num_retries=ARXIV_NUM_RETRIES` (1). All six values are bounded `Settings`
+fields passed in by `/collect`; source modules still never read Settings.
+
+### Files changed
+
+`backend/app/core/config.py`, `backend/app/ingestion/sources/semantic_scholar.py`,
+`backend/app/ingestion/sources/arxiv.py`, `backend/app/api/routes_ingestion.py`,
+`.env.example`; tests in `tests/ingestion/sources/test_semantic_scholar.py`,
+`tests/ingestion/sources/test_arxiv.py`, `tests/core/test_config.py`,
+`tests/api/test_routes_ingestion.py`, `tests/api/test_security.py` (source
+fakes now accept the new keyword arguments).
+
+### Verification
+
+TDD: 24 new tests red before implementation. Full backend suite afterwards:
+773 passed, 10 deselected. Pinned pre-commit hooks (ruff v0.6.9) pass on every
+changed file. Not yet re-verified live: needs a backend rebuild and one
+`/collect` after arXiv's throttle clears.
+
+---
+
 ## 2026-09-13 — Phases 0–12 audited against README "Done when"; three blockers fixed
 
 Scope: audit only, with fixes limited to concrete defects that stop a phase

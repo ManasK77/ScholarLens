@@ -167,6 +167,119 @@ def test_enrich_skips_rows_with_no_oa_copy(monkeypatch: pytest.MonkeyPatch) -> N
     assert result == []
 
 
+# ---------------------------------------------------------------------------
+# arXiv-hosted OA copies (D-PDF-01)
+#
+# Unpaywall resolves open-access copies on arbitrary hosts, and for CS/ML DOIs
+# that is very often arXiv itself. Such a download is an arXiv request and owes
+# arXiv's pacing and User-Agent; every other host keeps the shared, unpaced
+# downloader, which is what the architecture intends for arbitrary legal OA
+# locations.
+# ---------------------------------------------------------------------------
+
+
+def _enrich_with(monkeypatch, url: str, **kwargs):
+    """Run `enrich` over one row whose OA copy resolves to `url`."""
+
+    class FakeRow:
+        id = 42
+        doi = "10.1/xyz"
+
+    monkeypatch.setattr(corpus, "rows_missing_fulltext", lambda session: [FakeRow()])
+    monkeypatch.setattr(
+        "app.ingestion.unpaywall.resolve_oa_pdf", lambda doi, email: url
+    )
+    monkeypatch.setattr(corpus, "enrich_paper", lambda session, paper_id, updates: None)
+    return enrich(
+        session=object(), email="test@example.org", dest_dir="/tmp/pdfs", **kwargs
+    )
+
+
+def test_an_arxiv_hosted_copy_is_downloaded_through_the_polite_downloader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    polite_calls = []
+
+    monkeypatch.setattr(
+        corpus,
+        "download_pdf",
+        lambda *a, **k: pytest.fail("an arXiv PDF must not use the unpaced downloader"),
+    )
+
+    result = _enrich_with(
+        monkeypatch,
+        "https://arxiv.org/pdf/2401.00001v1",
+        download_arxiv_pdf=lambda url, dest_path: (
+            polite_calls.append((url, dest_path)) or True
+        ),
+    )
+
+    assert polite_calls == [("https://arxiv.org/pdf/2401.00001v1", "/tmp/pdfs/42.pdf")]
+    assert result == [42]
+
+
+def test_a_non_arxiv_host_keeps_the_shared_downloader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Publisher and repository OA copies are not arXiv's traffic and are not
+    paced by arXiv's limiter."""
+    shared_calls = []
+
+    monkeypatch.setattr(
+        corpus,
+        "download_pdf",
+        lambda url, dest_path, **k: shared_calls.append((url, dest_path)) or True,
+    )
+
+    result = _enrich_with(
+        monkeypatch,
+        "https://link.example.org/article.pdf",
+        download_arxiv_pdf=lambda url, dest_path: pytest.fail(
+            "a non-arXiv host must not go through arXiv's limiter"
+        ),
+    )
+
+    assert shared_calls == [
+        ("https://link.example.org/article.pdf", "/tmp/pdfs/42.pdf")
+    ]
+    assert result == [42]
+
+
+def test_an_arxiv_copy_is_polite_even_when_no_downloader_is_injected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Safe by default: a caller that passes nothing still gets the paced,
+    identified path, never the unpaced one."""
+    polite_calls = []
+
+    monkeypatch.setattr(
+        "app.ingestion.sources.arxiv.download_pdf",
+        lambda url, dest_path: polite_calls.append(url) or True,
+    )
+    monkeypatch.setattr(
+        corpus,
+        "download_pdf",
+        lambda *a, **k: pytest.fail("an arXiv PDF must not use the unpaced downloader"),
+    )
+
+    _enrich_with(monkeypatch, "https://export.arxiv.org/pdf/2401.00001")
+
+    assert polite_calls == ["https://export.arxiv.org/pdf/2401.00001"]
+
+
+def test_a_failed_arxiv_download_leaves_the_row_unenriched_without_raising(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A throttled arXiv PDF is one missing full text, not a failed run."""
+    result = _enrich_with(
+        monkeypatch,
+        "https://arxiv.org/pdf/2401.00001v1",
+        download_arxiv_pdf=lambda url, dest_path: False,
+    )
+
+    assert result == []
+
+
 def test_resolve_oa_pdf_returns_none_when_unpaywall_is_unreachable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

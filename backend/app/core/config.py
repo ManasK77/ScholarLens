@@ -41,6 +41,44 @@ class Settings(BaseSettings):
     unpaywall_email: str
     semantic_scholar_api_key: str | None = None
     acl_anthology_bib_path: str = "data/acl_anthology_export.bib"
+    # Per-source caps: each automatic discovery source adds at most this many
+    # distinct papers to the corpus per /collect run. 10 is a hard ceiling —
+    # config may lower a cap, never raise it. Manual uploads are not capped.
+    #
+    # Papers requested from arXiv per /collect. The `arxiv` client's page size
+    # follows this, so the request asks for what is kept rather than the
+    # library's default page of 100.
+    arxiv_max_results: int = Field(default=10, gt=0, le=10)
+    # Retries of a 429/5xx arXiv answer, made by ScholarLens itself: the arxiv
+    # library's own retry layer is switched off so no 429 is retried twice.
+    # A 429 carrying no Retry-After is not retried at all (D-429-03) — arXiv
+    # sends none, and retrying a block it never dated only adds requests — so
+    # this budget applies to 5xx, transport failures, and dated 429s.
+    arxiv_num_retries: int = Field(default=2, ge=0, le=3)
+    # Minimum spacing between any two arXiv API requests this process makes.
+    # arXiv's API Terms of Use ask for at most one request every three seconds,
+    # so that is the floor; the default leaves headroom.
+    arxiv_min_interval_seconds: float = Field(default=5.0, ge=3.0, le=60.0)
+    # The wait before retry n is max(Retry-After, base * 2**n). A wait above
+    # the max ends retrying rather than being cut short.
+    arxiv_backoff_base_seconds: float = Field(default=10.0, gt=0.0, le=120.0)
+    arxiv_backoff_max_seconds: float = Field(default=60.0, gt=0.0, le=600.0)
+    # Operator contact (an email or URL) sent in the arXiv User-Agent, as arXiv
+    # asks of automated clients. Optional.
+    arxiv_contact: str | None = None
+    # Sent as Semantic Scholar's search `limit`, which otherwise defaults to 100.
+    semantic_scholar_max_results: int = Field(default=10, gt=0, le=10)
+    # ACL Anthology is searched in the local export, which can match hundreds
+    # of records; only the first this-many distinct papers (and their PDFs)
+    # are collected, in export order.
+    acl_anthology_max_results: int = Field(default=10, gt=0, le=10)
+    # Semantic Scholar's introductory keyed rate is one request per second;
+    # the default leaves headroom.
+    semantic_scholar_min_interval_seconds: float = Field(default=1.5, ge=1.0, le=60.0)
+    # Bounded retry on 429/5xx, the same policy as arXiv's above.
+    semantic_scholar_max_retries: int = Field(default=3, ge=0, le=5)
+    semantic_scholar_backoff_base_seconds: float = Field(default=2.0, gt=0.0, le=30.0)
+    semantic_scholar_backoff_max_seconds: float = Field(default=30.0, gt=0.0, le=300.0)
 
     # --- GROBID (Stage 2 parsing service) ---
     grobid_url: str
@@ -245,6 +283,17 @@ class Settings(BaseSettings):
         if not value.strip():
             raise ValueError("reranker_model must not be blank")
         return value.strip()
+
+    @field_validator("arxiv_contact")
+    @classmethod
+    def _clean_arxiv_contact(cls, value: str | None) -> str | None:
+        """Blank means unset; a control character would break the User-Agent header."""
+        if value is None or not value.strip():
+            return None
+        value = value.strip()
+        if len(value) > 200 or any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+            raise ValueError("arxiv_contact must be at most 200 printable characters")
+        return value
 
     def gap_weights(self) -> tuple[float, float, float, float, float]:
         """`(w1, w2, w3, w4, w5)` in README §8's order.

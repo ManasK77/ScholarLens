@@ -193,6 +193,35 @@ def test_get_papers_lists_seeded_papers(
     assert paper["citation_count"] == 5
 
 
+def test_get_papers_never_exposes_the_stored_pdf(
+    client: TestClient, db_session: SASession
+) -> None:
+    """arXiv's full-text terms ask tools built on its PDFs to link back to arXiv
+    rather than redistribute the file. ScholarLens downloads PDFs purely as
+    pipeline input (parsing, extraction, embeddings), and `/papers` reports only
+    *whether* a full text is held — never its path, and never the bytes. This
+    guards that boundary: serving `pdf_path` would turn the corpus into a
+    redistribution point."""
+    db_session.add(
+        corpus.Paper(
+            title="A paper",
+            source="arxiv",
+            arxiv_id="2401.00001v1",
+            pdf_path="/data/pdfs/2401.00001v1.pdf",
+            has_full_text=True,
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/papers")
+
+    assert response.status_code == 200
+    [paper] = response.json()
+    assert paper["has_full_text"] is True
+    assert "pdf_path" not in paper
+    assert "/data/pdfs" not in response.text
+
+
 def test_get_papers_filters_by_year(client: TestClient, db_session: SASession) -> None:
     db_session.add_all(
         [

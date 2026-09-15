@@ -2,7 +2,9 @@
 
 /collect orchestrates arXiv + Semantic Scholar + ACL Anthology discovery
 through dedup.py, then Unpaywall enrichment, returning the count/ids of
-papers touched (new inserts + enriched rows) for the run.
+papers touched (new inserts + enriched rows) for the run. Each discovery source
+contributes at most its configured cap of distinct papers (10 by default and at
+most); manual uploads are uncapped.
 
 Each source runs in isolation: a third-party outage degrades the run to the
 sources that answered instead of aborting it. Semantic Scholar answers
@@ -14,6 +16,7 @@ rows pointed at stayed on disk.
 """
 
 import logging
+from collections.abc import Callable, Iterable
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -93,6 +96,29 @@ def _process_one(session: Session, paper_dict: dict) -> int:
     return paper.id
 
 
+def _process_capped(
+    session: Session,
+    candidates: Iterable[dict],
+    source: str,
+    limit: int,
+    fetch_pdf: Callable[[dict], str | None] | None = None,
+) -> set[int]:
+    """Write `source`'s candidates until `limit` distinct corpus rows are touched.
+
+    The cap counts papers, not candidates: a candidate that dedups onto a row
+    this source already touched is merged as usual but does not use up a slot.
+    A source with fewer matches simply returns fewer. The check runs before a
+    candidate's PDF is fetched, so nothing past the cap is downloaded.
+    """
+    kept: set[int] = set()
+    for candidate in candidates:
+        if len(kept) >= limit:
+            break
+        pdf_path = fetch_pdf(candidate) if fetch_pdf is not None else None
+        kept.add(_process_one(session, _to_paper_dict(candidate, source, pdf_path)))
+    return kept
+
+
 DISCOVERY_SOURCES = ("arxiv", "semantic_scholar", "acl_anthology")
 
 
@@ -110,6 +136,23 @@ def collect(
     settings = get_settings()
     touched: set[int] = set()
     statuses: dict[str, str] = {}
+
+    def _download_arxiv_pdf(url: str, dest_path: str) -> bool:
+        """Every arXiv-hosted PDF this run fetches, from discovery or Unpaywall.
+
+        One downloader for both so the run's configured contact, spacing and
+        retry budget reach the full-text path as well as the API path, and so
+        all of it queues on arXiv's single process-wide limiter (D-PDF-01).
+        """
+        return arxiv.download_pdf(
+            url,
+            dest_path,
+            contact=settings.arxiv_contact,
+            num_retries=settings.arxiv_num_retries,
+            min_interval_seconds=settings.arxiv_min_interval_seconds,
+            backoff_base_seconds=settings.arxiv_backoff_base_seconds,
+            backoff_max_seconds=settings.arxiv_backoff_max_seconds,
+        )
 
     def _run(name: str, step) -> None:
         """Run one ingestion step, recording rather than propagating its failure.
@@ -130,38 +173,68 @@ def collect(
             statuses[name] = "ok"
 
     def _arxiv() -> None:
-        for candidate in arxiv.search_topic(body.topic):
-            pdf_path = arxiv.fetch_pdf(candidate, settings.pdf_storage_path)
-            touched.add(
-                _process_one(session, _to_paper_dict(candidate, "arxiv", pdf_path))
+        candidates = arxiv.search_topic(
+            body.topic,
+            max_results=settings.arxiv_max_results,
+            num_retries=settings.arxiv_num_retries,
+            min_interval_seconds=settings.arxiv_min_interval_seconds,
+            backoff_base_seconds=settings.arxiv_backoff_base_seconds,
+            backoff_max_seconds=settings.arxiv_backoff_max_seconds,
+            contact=settings.arxiv_contact,
+        )
+        touched.update(
+            _process_capped(
+                session,
+                candidates,
+                "arxiv",
+                settings.arxiv_max_results,
+                lambda c: arxiv.fetch_pdf(
+                    c, settings.pdf_storage_path, download=_download_arxiv_pdf
+                ),
             )
+        )
 
     def _semantic_scholar() -> None:
-        for candidate in semantic_scholar.search_topic(
-            body.topic, settings.semantic_scholar_api_key
-        ):
-            touched.add(
-                _process_one(
-                    session, _to_paper_dict(candidate, "semantic_scholar", None)
-                )
+        candidates = semantic_scholar.search_topic(
+            body.topic,
+            settings.semantic_scholar_api_key,
+            limit=settings.semantic_scholar_max_results,
+            max_retries=settings.semantic_scholar_max_retries,
+            min_interval_seconds=settings.semantic_scholar_min_interval_seconds,
+            backoff_base_seconds=settings.semantic_scholar_backoff_base_seconds,
+            backoff_max_seconds=settings.semantic_scholar_backoff_max_seconds,
+        )
+        touched.update(
+            _process_capped(
+                session,
+                candidates,
+                "semantic_scholar",
+                settings.semantic_scholar_max_results,
             )
+        )
 
     def _acl_anthology() -> None:
         acl_anthology.download_anthology_export(settings.acl_anthology_bib_path)
-        for candidate in acl_anthology.search_topic(
+        candidates = acl_anthology.search_topic(
             settings.acl_anthology_bib_path, body.topic
-        ):
-            pdf_path = acl_anthology.fetch_pdf(candidate, settings.pdf_storage_path)
-            touched.add(
-                _process_one(
-                    session, _to_paper_dict(candidate, "acl_anthology", pdf_path)
-                )
+        )
+        touched.update(
+            _process_capped(
+                session,
+                candidates,
+                "acl_anthology",
+                settings.acl_anthology_max_results,
+                lambda c: acl_anthology.fetch_pdf(c, settings.pdf_storage_path),
             )
+        )
 
     def _unpaywall() -> None:
         touched.update(
             unpaywall.enrich(
-                session, settings.unpaywall_email, settings.pdf_storage_path
+                session,
+                settings.unpaywall_email,
+                settings.pdf_storage_path,
+                download_arxiv_pdf=_download_arxiv_pdf,
             )
         )
 

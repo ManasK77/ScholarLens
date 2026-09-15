@@ -152,6 +152,134 @@ def test_acl_anthology_bib_path_defaults_when_unset(
     assert settings.acl_anthology_bib_path == "data/acl_anthology_export.bib"
 
 
+def test_ingestion_request_limits_have_polite_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each /collect asks each discovery source for a small, explicit page."""
+    _set_all_required(monkeypatch)
+
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.arxiv_max_results == 10
+    assert settings.arxiv_num_retries == 2
+    assert settings.arxiv_min_interval_seconds == 5.0
+    assert settings.arxiv_backoff_base_seconds == 10.0
+    assert settings.arxiv_backoff_max_seconds == 60.0
+    assert settings.arxiv_contact is None
+    assert settings.semantic_scholar_max_results == 10
+    assert settings.semantic_scholar_max_retries == 3
+    assert settings.semantic_scholar_min_interval_seconds == 1.5
+    assert settings.semantic_scholar_backoff_base_seconds == 2.0
+    assert settings.semantic_scholar_backoff_max_seconds == 30.0
+    assert settings.acl_anthology_max_results == 10
+
+
+def test_ingestion_request_limits_load_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv("ARXIV_MAX_RESULTS", "7")
+    monkeypatch.setenv("ARXIV_NUM_RETRIES", "0")
+    monkeypatch.setenv("SEMANTIC_SCHOLAR_MAX_RESULTS", "9")
+    monkeypatch.setenv("ACL_ANTHOLOGY_MAX_RESULTS", "4")
+    monkeypatch.setenv("SEMANTIC_SCHOLAR_MAX_RETRIES", "2")
+    monkeypatch.setenv("SEMANTIC_SCHOLAR_BACKOFF_BASE_SECONDS", "0.5")
+    monkeypatch.setenv("SEMANTIC_SCHOLAR_BACKOFF_MAX_SECONDS", "4")
+    monkeypatch.setenv("SEMANTIC_SCHOLAR_MIN_INTERVAL_SECONDS", "2.5")
+    monkeypatch.setenv("ARXIV_MIN_INTERVAL_SECONDS", "8")
+    monkeypatch.setenv("ARXIV_BACKOFF_BASE_SECONDS", "15")
+    monkeypatch.setenv("ARXIV_BACKOFF_MAX_SECONDS", "90")
+    monkeypatch.setenv("ARXIV_CONTACT", "ops@example.org")
+
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.arxiv_max_results == 7
+    assert settings.arxiv_num_retries == 0
+    assert settings.semantic_scholar_max_results == 9
+    assert settings.acl_anthology_max_results == 4
+    assert settings.semantic_scholar_max_retries == 2
+    assert settings.semantic_scholar_backoff_base_seconds == 0.5
+    assert settings.semantic_scholar_backoff_max_seconds == 4.0
+    assert settings.semantic_scholar_min_interval_seconds == 2.5
+    assert settings.arxiv_min_interval_seconds == 8.0
+    assert settings.arxiv_backoff_base_seconds == 15.0
+    assert settings.arxiv_backoff_max_seconds == 90.0
+    assert settings.arxiv_contact == "ops@example.org"
+
+
+@pytest.mark.parametrize(
+    ("variable", "value"),
+    [
+        # Each automatic discovery source contributes at most 10 papers per run.
+        ("ARXIV_MAX_RESULTS", "0"),
+        ("ARXIV_MAX_RESULTS", "11"),
+        ("ARXIV_NUM_RETRIES", "-1"),
+        ("ARXIV_NUM_RETRIES", "4"),
+        ("SEMANTIC_SCHOLAR_MAX_RESULTS", "0"),
+        ("SEMANTIC_SCHOLAR_MAX_RESULTS", "11"),
+        ("ACL_ANTHOLOGY_MAX_RESULTS", "0"),
+        ("ACL_ANTHOLOGY_MAX_RESULTS", "11"),
+        ("SEMANTIC_SCHOLAR_MAX_RETRIES", "-1"),
+        ("SEMANTIC_SCHOLAR_MAX_RETRIES", "6"),
+        ("SEMANTIC_SCHOLAR_BACKOFF_BASE_SECONDS", "0"),
+        ("SEMANTIC_SCHOLAR_BACKOFF_MAX_SECONDS", "0"),
+        ("SEMANTIC_SCHOLAR_BACKOFF_BASE_SECONDS", "31"),
+        ("SEMANTIC_SCHOLAR_BACKOFF_MAX_SECONDS", "301"),
+        ("SEMANTIC_SCHOLAR_MIN_INTERVAL_SECONDS", "0.5"),
+        ("SEMANTIC_SCHOLAR_MIN_INTERVAL_SECONDS", "61"),
+        # arXiv's API terms: no more than one request every three seconds.
+        ("ARXIV_MIN_INTERVAL_SECONDS", "2.9"),
+        ("ARXIV_MIN_INTERVAL_SECONDS", "61"),
+        ("ARXIV_BACKOFF_BASE_SECONDS", "0"),
+        ("ARXIV_BACKOFF_BASE_SECONDS", "121"),
+        ("ARXIV_BACKOFF_MAX_SECONDS", "0"),
+        ("ARXIV_BACKOFF_MAX_SECONDS", "601"),
+    ],
+)
+def test_ingestion_request_limits_reject_runaway_or_empty_values(
+    monkeypatch: pytest.MonkeyPatch, variable: str, value: str
+) -> None:
+    """Zero asks for nothing; an unbounded retry budget hammers a throttled API."""
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv(variable, value)
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_arxiv_contact_is_trimmed_and_blank_means_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_all_required(monkeypatch)
+
+    from app.core.config import Settings
+
+    monkeypatch.setenv("ARXIV_CONTACT", "  ops@example.org  ")
+    assert Settings(_env_file=None).arxiv_contact == "ops@example.org"
+
+    monkeypatch.setenv("ARXIV_CONTACT", "   ")
+    assert Settings(_env_file=None).arxiv_contact is None
+
+
+@pytest.mark.parametrize("value", ["ops@example.org\r\nX-Injected: 1", "x" * 201])
+def test_arxiv_contact_rejects_header_breaking_or_oversized_values(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    """The contact is sent inside the User-Agent header."""
+    _set_all_required(monkeypatch)
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, arxiv_contact=value)
+
+
 def test_nerre_settings_have_sane_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """Phase 4 joint NER+RE knobs live in the central settings module."""
     _set_all_required(monkeypatch)

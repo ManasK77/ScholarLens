@@ -17,6 +17,9 @@ dependencies = [
     "psycopg2-binary>=2.9,<3",
     "httpx>=0.28,<1",
     "arxiv>=4.0,<5",
+    # Imported directly by the arXiv source for its PoliteSession. Already a
+    # dependency of `arxiv`, so this pins what is installed rather than adding.
+    "requests>=2.31,<3",
     "bibtexparser>=1.4,<2",
     "python-multipart>=0.0.12,<1",
     "pymupdf>=1.28,<2",

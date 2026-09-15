@@ -219,16 +219,16 @@ def client(monkeypatch: pytest.MonkeyPatch):
     def _override_get_session():
         yield session
 
-    monkeypatch.setattr(arxiv, "search_topic", lambda topic: [])
+    monkeypatch.setattr(arxiv, "search_topic", lambda topic, **kwargs: [])
     monkeypatch.setattr(
-        semantic_scholar, "search_topic", lambda topic, api_key=None: []
+        semantic_scholar, "search_topic", lambda topic, api_key=None, **kwargs: []
     )
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
     monkeypatch.setattr(
-        routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir: []
+        routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir, **kw: []
     )
 
     app.dependency_overrides[corpus.get_session] = _override_get_session

@@ -7,10 +7,13 @@ Distinguishes "no OA copy" (200, best_oa_location=null) from "DOI not found"
 the status_code guard runs before any .json() call.
 """
 
+from collections.abc import Callable
+
 import httpx
 from sqlalchemy.orm import Session
 
 from app.ingestion import corpus
+from app.ingestion.sources import arxiv
 
 
 def resolve_oa_pdf(doi: str, email: str) -> str | None:
@@ -39,14 +42,32 @@ def resolve_oa_pdf(doi: str, email: str) -> str | None:
     return best.get("url_for_pdf") or best.get("url")
 
 
-def enrich(session: Session, email: str, dest_dir: str) -> list[int]:
+def enrich(
+    session: Session,
+    email: str,
+    dest_dir: str,
+    download_arxiv_pdf: Callable[[str, str], bool] | None = None,
+) -> list[int]:
+    """Resolve and store an OA full text for every DOI-bearing row that lacks one.
+
+    An OA copy Unpaywall resolves to arXiv is an arXiv request like any other
+    (D-PDF-01), so it goes through `arxiv.download_pdf` — paced by arXiv's
+    process-wide limiter and carrying the ScholarLens User-Agent — while every
+    other OA host keeps the shared downloader. `download_arxiv_pdf` lets
+    `/collect` inject a downloader carrying that run's Settings; the default
+    stays polite so no call site can silently fall back to an unpaced fetch.
+    """
+    download_arxiv = (
+        arxiv.download_pdf if download_arxiv_pdf is None else download_arxiv_pdf
+    )
     enriched_ids: list[int] = []
     for row in corpus.rows_missing_fulltext(session):
         url = resolve_oa_pdf(row.doi, email)
         if url is None:
             continue
         dest_path = f"{dest_dir}/{row.id}.pdf"
-        if not corpus.download_pdf(url, dest_path):
+        fetch = download_arxiv if arxiv.is_arxiv_url(url) else corpus.download_pdf
+        if not fetch(url, dest_path):
             continue
         corpus.enrich_paper(
             session, row.id, {"has_full_text": True, "pdf_path": dest_path}
