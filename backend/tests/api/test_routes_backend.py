@@ -56,6 +56,40 @@ REQUIRED_ENV = {
     "GROBID_URL": "http://grobid:8070",
 }
 
+
+def test_pipeline_rerun_skips_unchanged_derived_work(client, monkeypatch):
+    events = []
+    _stub_evidence_stages(monkeypatch, events)
+    assert client.post('/pipeline/run', json={'generate_reports': False}).status_code == 200
+    assert client.post('/pipeline/run', json={'generate_reports': False}).status_code == 200
+    assert events == ['rankings']
+
+
+def test_all_writers_reject_lock_contention(client, db_session):
+    from app.core.pipeline import writer_lock
+    with writer_lock(db_session):
+        for path in ['/pipeline/run', '/graph', '/index', '/clusters', '/trends', '/gaps', '/reports']:
+            assert client.post(path, json={}).status_code == 409
+
+
+def test_failed_clustering_preserves_old_reports_and_no_completion_marker(client, db_session, monkeypatch):
+    from app.core.pipeline import DerivedState, PipelineRun
+    from app.explanation.storage import list_reports
+    from sqlalchemy import select
+    cluster_id = _seed_cluster(db_session)
+    replace_reports(db_session, [GapReportRecord(cluster_id=cluster_id, gap='Stored gap', evidence=[{'id': 'e1'}], confidence=.8, suggested_directions=['Investigate'], provider='groq', model='test')])
+    db_session.commit()
+    _stub_evidence_stages(monkeypatch, [])
+    def fail(session, settings=None):
+        replace_clusters(session, [])
+        raise RuntimeError('injected failure')
+    monkeypatch.setattr(routes_backend.clustering_service, 'rebuild_clusters', fail)
+    with pytest.raises(RuntimeError):
+        client.post('/pipeline/run', json={'generate_reports': False})
+    assert list_reports(db_session)
+    assert db_session.get(DerivedState, 's6-s8') is None
+    assert db_session.scalar(select(PipelineRun)).status == 'failed'
+
 PROTECTED_GET_ROUTES = [
     "/papers",
     "/graph",
@@ -65,6 +99,8 @@ PROTECTED_GET_ROUTES = [
     "/reports",
 ]
 PROTECTED_POST_ROUTES = [
+    '/parse',
+    '/extract',
     "/graph",
     "/index",
     "/clusters",
@@ -718,7 +754,7 @@ def test_pipeline_run_keeps_the_evidence_base_when_report_generation_fails(
 
     assert response.status_code == status_code
     assert str(error) in response.json()["detail"]
-    assert events.index("rankings") < events.index("commit") < events.index("reports")
+    assert 'commit' in events[events.index('rankings') + 1:events.index('reports')]
 
 
 @pytest.mark.parametrize(

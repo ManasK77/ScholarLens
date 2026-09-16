@@ -42,6 +42,8 @@ PROJECTED_FIELDS = {"cluster_id", "score"} | SIGNAL_FIELDS
 
 
 def _handler(name: str) -> ast.FunctionDef:
+    if name == 'run_pipeline':
+        name = '_execute_pipeline'
     tree = ast.parse(ROUTES.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name == name:

@@ -128,6 +128,8 @@ def replace_clusters(session: Session, clusters: list[StatementCluster]) -> list
     because SQLite does not enforce foreign keys by default — leaving orphaned
     members would silently inflate the next rebuild's `/clusters` payload.
     """
+    from app.explanation.storage import archive_reports
+    archive_reports(session)
     for table in _dependent_tables():
         session.execute(delete(table))
     session.execute(delete(Cluster))

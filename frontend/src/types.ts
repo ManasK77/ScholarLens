@@ -47,6 +47,9 @@ export interface GapRanking {
 }
 
 export interface GapReport {
+  stale?: boolean
+  snapshot_id?: string
+  snapshot_created_at?: string
   cluster_id: number
   gap: string
   evidence: Evidence[]

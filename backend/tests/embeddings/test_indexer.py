@@ -229,6 +229,8 @@ def test_records_carry_every_metadata_field(index) -> None:
         "venue": "ACL",
         "section_type": "Limitations",
         "graph_node_id": "4:abc:17",
+        "text_sha256": record.payload()['text_sha256'],
+        "embed_version": None,
     }
     assert set(record.payload()) == set(PAYLOAD_FIELDS)
 
@@ -636,6 +638,8 @@ def test_an_unknown_filter_key_is_rejected(populated) -> None:
 def test_every_indexed_field_is_filterable(populated) -> None:
     """No payload field is accidentally excluded from the allow-list."""
     probes = {
+        'text_sha256': 'hash',
+        'embed_version': 'version',
         "paper_id": 1,
         "text": "unused",
         "source_type": "limitation",
@@ -860,8 +864,8 @@ def test_pruning_never_touches_another_paper(session, index) -> None:
     ]
 
 
-def test_a_failed_prune_does_not_cost_a_paper_its_index(session, index, caplog) -> None:
-    """Cleanup is best-effort: the upsert already succeeded."""
+def test_failed_prune_does_not_count_paper_as_complete(session, index, caplog) -> None:
+    """Durable upserts alone do not establish a consistent paper snapshot."""
     _store_paper(session, 1)
     _store_document(session, 1, "A paragraph.")
     replace_facts(session, 1, [_statement()])
@@ -873,5 +877,5 @@ def test_a_failed_prune_does_not_cost_a_paper_its_index(session, index, caplog) 
     index.client.delete = exploding_delete  # type: ignore[method-assign]
 
     with caplog.at_level(logging.WARNING):
-        assert index_all(session, neo4j, index) == 2
-    assert "Could not prune stale vectors for paper 1" in caplog.text
+        assert index_all(session, neo4j, index) == 0
+    assert "Indexing failed for paper 1" in caplog.text

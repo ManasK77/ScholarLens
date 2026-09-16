@@ -74,5 +74,5 @@ def backfill_metadata(
         updates["doi"] = fields["doi"]
     updated = corpus.enrich_paper(session, paper.id, updates)
     if fields["doi"]:
-        unpaywall.enrich(session, unpaywall_email, pdf_storage_path)
+        unpaywall.enrich(session, unpaywall_email, pdf_storage_path, paper_id=paper.id)
     return updated

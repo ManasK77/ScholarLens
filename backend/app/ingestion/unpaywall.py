@@ -47,6 +47,8 @@ def enrich(
     email: str,
     dest_dir: str,
     download_arxiv_pdf: Callable[[str, str], bool] | None = None,
+    *,
+    paper_id: int | None = None,
 ) -> list[int]:
     """Resolve and store an OA full text for every DOI-bearing row that lacks one.
 
@@ -62,6 +64,8 @@ def enrich(
     )
     enriched_ids: list[int] = []
     for row in corpus.rows_missing_fulltext(session):
+        if paper_id is not None and row.id != paper_id:
+            continue
         url = resolve_oa_pdf(row.doi, email)
         if url is None:
             continue

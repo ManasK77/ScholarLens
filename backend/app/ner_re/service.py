@@ -21,10 +21,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.core.pipeline import current_run, fingerprint, settings_fingerprint
+from app.core.logging import ProgressLogger
 from app.extraction.storage import ExtractedFact
 from app.ingestion.corpus import Paper
 from app.ner_re.extractor import SupportsExtractMany, get_joint_extractor
-from app.ner_re.graph import ensure_graph_schema, write_paper_graph
+from app.ner_re.graph import ensure_graph_schema, write_paper_graph, paper_graph_current
+from app.ner_re.schema import ENTITY_DESCRIPTIONS, RELATION_ENDPOINTS, JointExtractionResult
 
 logger = logging.getLogger(__name__)
 
@@ -129,17 +132,37 @@ def extract_all(
         settings = settings or get_settings()
         max_chars_per_chunk = max_chars_per_chunk or settings.nerre_max_chars_per_chunk
         max_chunks = max_chunks or settings.nerre_max_chunks_per_paper
-    extractor = extractor or get_joint_extractor()
-
     ensure_graph_schema(neo4j)
 
     processed: list[int] = []
-    for paper in session.scalars(select(Paper).order_by(Paper.id)):
+    papers = list(session.scalars(select(Paper).order_by(Paper.id)))
+    progress = ProgressLogger(logger, 's4', len(papers))
+    for position, paper in enumerate(papers, 1):
         try:
+            run = current_run()
+            if run:
+                chunks = collect_paper_text(session, paper, max_chars_per_chunk, max_chunks)
+                digest = fingerprint({'chunks': chunks, 'settings': settings_fingerprint(settings or get_settings(), ('nerre_',)), 'caps': [max_chars_per_chunk, max_chunks], 'schema': [ENTITY_DESCRIPTIONS, RELATION_ENDPOINTS], 'version': 1, 'metadata': [paper.title, paper.year, paper.venue, paper.doi]})
+                def write():
+                    nonlocal extractor
+                    if chunks:
+                        extractor = extractor or get_joint_extractor()
+                        result = extractor.extract_many(chunks)
+                    else:
+                        result = JointExtractionResult([], [])
+                    write_paper_graph(neo4j, paper, result, input_hash=digest)
+                if run.paper(paper.id, 's4', digest, write, verify=lambda: paper_graph_current(neo4j, paper.id, digest)):
+                    processed.append(paper.id)
+                continue
+            extractor = extractor or get_joint_extractor()
             if extract_paper(
                 session, neo4j, paper, extractor, max_chars_per_chunk, max_chunks
             ):
                 processed.append(paper.id)
         except Exception:
+            if current_run():
+                raise
             logger.exception("Joint extraction failed for paper %s; skipping", paper.id)
+        finally:
+            progress.update(position)
     return processed

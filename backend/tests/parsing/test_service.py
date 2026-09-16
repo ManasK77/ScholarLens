@@ -48,7 +48,7 @@ def test_parse_and_store_is_source_agnostic(session, tmp_path, monkeypatch) -> N
     xml = FULLTEXT_FIXTURE.read_text(encoding="utf-8")
     monkeypatch.setattr(service.grobid_client, "parse_fulltext", Mock(return_value=xml))
     monkeypatch.setattr(
-        service.section_classifier, "classify_section", lambda heading: "Introduction"
+        service.section_classifier, "classify_sections", lambda headings: ["Introduction"] * len(headings)
     )
 
     outputs = []
@@ -77,7 +77,7 @@ def test_parse_and_store_uses_fallback_on_grobid_failure(
     fallback = Mock(return_value=raw)
     monkeypatch.setattr(service.fallback, "extract_fallback_sections", fallback)
     monkeypatch.setattr(
-        service.section_classifier, "classify_section", lambda heading: "Conclusion"
+        service.section_classifier, "classify_sections", lambda headings: ["Conclusion"] * len(headings)
     )
 
     document = service.parse_and_store(
@@ -100,7 +100,7 @@ def test_parse_and_store_uses_fallback_on_malformed_tei(
     fallback = Mock(return_value=[{"heading": None, "type": None, "paragraphs": []}])
     monkeypatch.setattr(service.fallback, "extract_fallback_sections", fallback)
     monkeypatch.setattr(
-        service.section_classifier, "classify_section", lambda heading: "Introduction"
+        service.section_classifier, "classify_sections", lambda headings: ["Introduction"] * len(headings)
     )
 
     document = service.parse_and_store(
@@ -123,7 +123,7 @@ def test_parse_and_store_uses_fallback_when_tei_has_no_body_sections(
     fallback = Mock(return_value=[{"heading": None, "type": None, "paragraphs": []}])
     monkeypatch.setattr(service.fallback, "extract_fallback_sections", fallback)
     monkeypatch.setattr(
-        service.section_classifier, "classify_section", lambda heading: "Introduction"
+        service.section_classifier, "classify_sections", lambda headings: ["Introduction"] * len(headings)
     )
 
     document = service.parse_and_store(
@@ -142,7 +142,7 @@ def test_parse_and_store_classifies_grobid_sections(
     xml = FULLTEXT_FIXTURE.read_text(encoding="utf-8")
     monkeypatch.setattr(service.grobid_client, "parse_fulltext", Mock(return_value=xml))
     monkeypatch.setattr(
-        service.section_classifier, "classify_section", lambda heading: "Discussion"
+        service.section_classifier, "classify_sections", lambda headings: ["Discussion"] * len(headings)
     )
 
     document = service.parse_and_store(

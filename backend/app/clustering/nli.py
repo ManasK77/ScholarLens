@@ -23,6 +23,10 @@ import math
 from collections.abc import Callable, Sequence
 from functools import lru_cache
 from itertools import combinations, islice
+from sqlalchemy import Float, String
+from sqlalchemy.orm import Mapped, mapped_column
+from app.ingestion.corpus import Base
+from app.core.pipeline import current_run, fingerprint, settings_fingerprint
 
 from app.clustering.schema import ContradictionPair, GapStatement
 from app.core.config import Settings, get_settings
@@ -42,6 +46,12 @@ StatementPair = tuple[GapStatement, GapStatement]
 # Hard ceilings, independent of what `.env` asks for (README §13.6).
 MAX_PAIRS_CEILING = 2000
 MAX_BATCH_SIZE = 64
+
+
+class NliPairScore(Base):
+    __tablename__ = 'nli_pair_scores'
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    score: Mapped[float] = mapped_column(Float)
 
 
 def label_index(label2id: dict[str, int]) -> dict[str, int]:
@@ -107,6 +117,7 @@ class ContradictionDetector:
         batch_size: int = 8,
         max_chars: int = 1000,
         max_pairs_per_cluster: int = 50,
+        cache_version: str | None = None,
     ) -> None:
         if not 0.0 <= threshold <= 1.0:
             raise ValueError(f"threshold must be in [0, 1], got {threshold}")
@@ -117,6 +128,7 @@ class ContradictionDetector:
         self._batch_size = min(batch_size, MAX_BATCH_SIZE)
         self._max_chars = max_chars
         self._max_pairs = max_pairs_per_cluster
+        self._cache_version = cache_version
 
     def detect(self, statements: Sequence[GapStatement]) -> list[ContradictionPair]:
         """Contradicting cross-paper pairs, strongest first."""
@@ -153,6 +165,21 @@ class ContradictionDetector:
         return found
 
     def _score(self, inputs: list[tuple[str, str]]) -> list[float]:
+        run = current_run()
+        if run and self._cache_version:
+            keys = [fingerprint([self._cache_version, pair]) for pair in inputs]
+            stored = {key: run.session.get(NliPairScore, key) for key in set(keys)}
+            missing = dict((key, pair) for key, pair in zip(keys, inputs, strict=True) if stored[key] is None)
+            scores = self._score_uncached(list(missing.values()))
+            for key, score in zip(missing, scores, strict=True):
+                row = NliPairScore(key=key, score=score)
+                run.session.add(row)
+                stored[key] = row
+            run.session.flush()
+            return [stored[key].score for key in keys]
+        return self._score_uncached(inputs)
+
+    def _score_uncached(self, inputs):
         scores: list[float] = []
         for start in range(0, len(inputs), self._batch_size):
             batch = inputs[start : start + self._batch_size]
@@ -240,4 +267,5 @@ def get_detector() -> ContradictionDetector:
         batch_size=settings.nli_batch_size,
         max_chars=settings.nli_max_chars,
         max_pairs_per_cluster=settings.nli_max_pairs_per_cluster,
+        cache_version=fingerprint(settings_fingerprint(settings, ('nli_',))),
     )

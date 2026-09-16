@@ -59,7 +59,7 @@ def _sections() -> list[dict]:
 
 def test_extract_document_preserves_exact_evidence_and_coordinates() -> None:
     semantic = Mock()
-    semantic.classify.return_value = SemanticMatch(FactType.LIMITATION, 0.72)
+    semantic.classify_many.return_value = [SemanticMatch(FactType.LIMITATION, 0.72)]
     statements = service.extract_sections(_sections(), semantic)
 
     first_sentence = [
@@ -86,8 +86,8 @@ def test_extract_document_preserves_exact_evidence_and_coordinates() -> None:
     assert semantic_statement.text == "Cross-domain behavior remains challenging."
     assert semantic_statement.paragraph_index == 1
     assert semantic_statement.confidence == pytest.approx(0.72)
-    semantic.classify.assert_called_once_with(
-        "Cross-domain behavior remains challenging."
+    semantic.classify_many.assert_called_once_with(
+        ["Cross-domain behavior remains challenging."]
     )
 
 
@@ -117,7 +117,7 @@ def test_extract_and_store_reads_phase2_document(session: Session) -> None:
     paper = _paper(session)
     upsert_parsed_document(session, paper.id, _sections(), "grobid")
     semantic = Mock()
-    semantic.classify.return_value = None
+    semantic.classify_many.return_value = [None]
 
     stored = service.extract_and_store(session, paper.id, semantic)
 

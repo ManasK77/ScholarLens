@@ -38,58 +38,75 @@ def ensure_graph_schema(session) -> None:
     )
 
 
-def write_paper_graph(session, paper: Paper, result: JointExtractionResult) -> str:
-    """Idempotently merge a paper, its entities, and typed relationships."""
+def write_paper_graph(session, paper: Paper, result: JointExtractionResult, input_hash: str | None = None) -> str:
+    """Replace one paper's projection atomically, preserving shared entities."""
+    return session.execute_write(lambda tx: _replace_paper(tx, paper, result, input_hash))
+
+
+def _replace_paper(session, paper, result, input_hash):
     paper_row = session.run(
         "MERGE (p:Paper {id: $id}) "
-        "SET p.title=$title, p.year=$year, p.venue=$venue, p.doi=$doi "
+        "SET p.title=$title, p.year=$year, p.venue=$venue, p.doi=$doi, "
+        "p.nerre_input_hash=$input_hash, p.nerre_version='1' "
         "RETURN elementId(p) AS node_id",
         id=paper.id,
         title=paper.title,
         year=paper.year,
         venue=paper.venue,
         doi=paper.doi,
+        input_hash=input_hash,
     ).single()
     paper_node_id = paper_row["node_id"]
 
-    type_by_name: dict[str, str] = {}
-    for entity in result.entities:
-        normalized = " ".join(entity.text.casefold().split())
-        type_by_name[entity.text.casefold()] = entity.entity_type
+    session.run(
+        "MATCH (p:Paper {id: $paper_id})-[r:MENTIONS|SUPPORTS]->() DELETE r",
+        paper_id=paper.id,
+    ).consume()
+    session.run(
+        "MATCH ()-[r]->() WHERE r.paper_id=$paper_id DELETE r", paper_id=paper.id,
+    ).consume()
+    if result.entities:
         session.run(
+            "UNWIND $rows AS row "
             "MATCH (p:Paper {id: $paper_id}) "
-            "MERGE (e:Entity {normalized_name: $normalized, entity_type: $type}) "
-            "ON CREATE SET e.name=$name "
+            "MERGE (e:Entity {normalized_name: row.normalized, entity_type: row.type}) "
+            "ON CREATE SET e.name=row.name "
             "MERGE (p)-[m:MENTIONS]->(e) "
-            "SET m.confidence=$confidence",
+            "SET m.confidence=row.confidence",
             paper_id=paper.id,
-            normalized=normalized,
-            type=entity.entity_type,
-            name=entity.text,
-            confidence=entity.confidence,
-        )
+            rows=[dict(normalized=' '.join(e.text.casefold().split()), type=e.entity_type, name=e.text, confidence=e.confidence) for e in result.entities],
+        ).consume()
 
+    grouped = {}
     for relation in result.relations:
-        relationship = RELATION_LABELS[relation.relation_type]
-        head_type, tail_type = RELATION_ENDPOINTS[relation.relation_type]
+        # Validate against the closed relation vocabulary before interpolation.
+        RELATION_LABELS[relation.relation_type]
+        grouped.setdefault(relation.relation_type, []).append(dict(head=' '.join(relation.head.casefold().split()), tail=' '.join(relation.tail.casefold().split()), confidence=relation.confidence))
+    for kind, rows in grouped.items():
+        relationship = RELATION_LABELS[kind]
+        head_type, tail_type = RELATION_ENDPOINTS[kind]
         query = (
+            "UNWIND $rows AS row "
             "MATCH (p:Paper {id: $paper_id}) "
-            "MATCH (h:Entity {normalized_name: $head, entity_type: $head_type}) "
-            "MATCH (t:Entity {normalized_name: $tail, entity_type: $tail_type}) "
+            "MATCH (h:Entity {normalized_name: row.head, entity_type: $head_type}) "
+            "MATCH (t:Entity {normalized_name: row.tail, entity_type: $tail_type}) "
             f"MERGE (h)-[r:{relationship} {{paper_id: $paper_id}}]->(t) "
-            "SET r.confidence=$confidence "
+            "SET r.confidence=row.confidence "
             "MERGE (p)-[:SUPPORTS]->(h) MERGE (p)-[:SUPPORTS]->(t)"
         )
         session.run(
             query,
             paper_id=paper.id,
-            head=" ".join(relation.head.casefold().split()),
-            tail=" ".join(relation.tail.casefold().split()),
+            rows=rows,
             head_type=head_type,
             tail_type=tail_type,
-            confidence=relation.confidence,
-        )
+        ).consume()
     return paper_node_id
+
+
+def paper_graph_current(session, paper_id, input_hash):
+    row = session.run('MATCH (p:Paper {id: $id}) RETURN properties(p)["nerre_input_hash"] AS input_hash', id=paper_id).single()
+    return row is not None and row['input_hash'] == input_hash
 
 
 def get_paper_node_id(session, paper_id: int) -> str | None:

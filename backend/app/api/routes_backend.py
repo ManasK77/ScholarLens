@@ -8,13 +8,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.security import require_api_key
+from app.api.write_guard import exclusive_write
+from app.core.pipeline import pipeline_run, PipelineBusy, settings_fingerprint, fingerprint, PaperStageState
+from app.core.maintenance import resume_deletions
+from app.core.pipeline import require_complete_projections
+from app.extraction.storage import ExtractedFact
 from app.clustering import service as clustering_service
 from app.clustering.storage import list_clusters, members_for_cluster
 from app.core.config import get_settings
 from app.embeddings.indexer import EvidenceIndex, index_all
 from app.explanation import service as report_service
 from app.explanation.llm import LLMError, LLMUnavailableError
-from app.explanation.storage import list_reports
+from app.explanation.storage import list_reports, report_snapshot
 from app.extraction.service import extract_all_parsed
 from app.ingestion import corpus
 from app.ingestion.corpus import Paper
@@ -23,7 +28,7 @@ from app.ner_re import service as graph_service
 from app.ner_re.graph import graph_session, graph_snapshot
 from app.parsing.service import parse_all_pending
 from app.ranking import service as ranking_service
-from app.ranking.storage import list_rankings
+from app.ranking.storage import list_rankings, ClusterRanking
 from app.trends import service as trend_service
 from app.trends.storage import list_trends
 
@@ -47,6 +52,28 @@ class QueryRequest(BaseModel):
 
 class PipelineRequest(BaseModel):
     generate_reports: bool = True
+
+
+@router.post('/parse')
+def parse_papers(session: Session = Depends(corpus.get_session)):  # noqa: B008
+    settings = get_settings()
+    try:
+        with pipeline_run(session, {'operation': 'parse'}) as run, run.stage('s2'):
+            result = parse_all_pending(session, settings.grobid_url, settings.unpaywall_email, settings.pdf_storage_path)
+            session.commit()
+            return {'processed': result.processed, 'missing_pdfs': result.missing_pdfs, 'run_id': run.id}
+    except PipelineBusy as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.post('/extract')
+def extract_papers(session: Session = Depends(corpus.get_session)):  # noqa: B008
+    try:
+        with pipeline_run(session, {'operation': 'extract'}) as run, run.stage('s3'):
+            ids = extract_all_parsed(session)
+            return {'processed': ids, 'count': len(ids), 'run_id': run.id}
+    except PipelineBusy as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 def _paper_dict(paper: Paper) -> dict:
@@ -89,7 +116,7 @@ def get_graph(limit: int = Query(500, ge=1, le=2000)):
         return graph_snapshot(neo4j, limit)
 
 
-@router.post("/graph")
+@router.post("/graph", dependencies=[Depends(exclusive_write)])
 def build_graph(session: Session = Depends(corpus.get_session)):  # noqa: B008
     with graph_session() as neo4j:
         ids = graph_service.extract_all(session, neo4j)
@@ -97,7 +124,7 @@ def build_graph(session: Session = Depends(corpus.get_session)):  # noqa: B008
     return {"processed": ids, "count": len(ids)}
 
 
-@router.post("/index")
+@router.post("/index", dependencies=[Depends(exclusive_write)])
 def build_index(session: Session = Depends(corpus.get_session)):  # noqa: B008
     with graph_session() as neo4j:
         count = index_all(session, neo4j)
@@ -127,7 +154,7 @@ def clusters(session: Session = Depends(corpus.get_session)):  # noqa: B008
     ]
 
 
-@router.post("/clusters")
+@router.post("/clusters", dependencies=[Depends(exclusive_write)])
 def rebuild_clusters(session: Session = Depends(corpus.get_session)):  # noqa: B008
     ids = clustering_service.rebuild_clusters(session)
     session.commit()
@@ -146,7 +173,7 @@ def trends(session: Session = Depends(corpus.get_session)):  # noqa: B008
     ]
 
 
-@router.post("/trends")
+@router.post("/trends", dependencies=[Depends(exclusive_write)])
 def rebuild_trends(session: Session = Depends(corpus.get_session)):  # noqa: B008
     ids = trend_service.rebuild_trends(session)
     session.commit()
@@ -174,7 +201,7 @@ def gaps(
     ]
 
 
-@router.post("/gaps")
+@router.post("/gaps", dependencies=[Depends(exclusive_write)])
 def rebuild_gaps(session: Session = Depends(corpus.get_session)):  # noqa: B008
     ids = ranking_service.rebuild_rankings(session)
     session.commit()
@@ -184,17 +211,11 @@ def rebuild_gaps(session: Session = Depends(corpus.get_session)):  # noqa: B008
 @router.get("/reports")
 def reports(session: Session = Depends(corpus.get_session)):  # noqa: B008
     return [
-        {
-            "cluster_id": row.cluster_id,
-            "gap": row.gap,
-            "evidence": row.evidence,
-            "confidence": row.confidence,
-            "suggested_directions": row.suggested_directions,
-            "provider": row.provider,
-            "model": row.model,
-        }
+        dict(cluster_id=row.cluster_id, gap=row.gap, evidence=row.evidence,
+             confidence=row.confidence, suggested_directions=row.suggested_directions,
+             provider=row.provider, model=row.model)
         for row in list_reports(session)
-    ]
+    ] or report_snapshot(session)
 
 
 def _llm_http_error(exc: LLMError, prefix: str = "") -> HTTPException:
@@ -208,7 +229,7 @@ def _llm_http_error(exc: LLMError, prefix: str = "") -> HTTPException:
     return HTTPException(status_code=status_code, detail=f"{prefix}{exc}")
 
 
-@router.post("/reports")
+@router.post("/reports", dependencies=[Depends(exclusive_write)])
 def generate_reports(session: Session = Depends(corpus.get_session)):  # noqa: B008
     try:
         ids = report_service.generate_top_reports(session)
@@ -253,36 +274,68 @@ def run_pipeline(
     session: Session = Depends(corpus.get_session),  # noqa: B008
 ):
     settings = get_settings()
-    parsing = parse_all_pending(
-        session,
-        settings.grobid_url,
-        settings.unpaywall_email,
-        settings.pdf_storage_path,
-    )
+    try:
+        with pipeline_run(session, settings_fingerprint(settings, ('nerre_', 'embedding_', 'clustering_', 'nli_', 'gap_', 'report_', 'groq_model'))) as run:
+            return _execute_pipeline(body, session, settings, run)
+    except PipelineBusy as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+def _derived_fingerprint(session, settings):
+    return fingerprint({
+        'version': 1,
+        'stages': [(s.paper_id, s.stage, s.input_hash, s.status) for s in session.scalars(select(PaperStageState).where(PaperStageState.stage.in_(['s3', 's4', 's5'])).order_by(PaperStageState.paper_id, PaperStageState.stage))],
+        'papers': [(p.id, p.title, p.year, p.venue, p.citation_count) for p in session.scalars(select(Paper).order_by(Paper.id))],
+        'contributions': [(f.paper_id, f.text) for f in session.scalars(select(ExtractedFact).where(ExtractedFact.fact_type == 'contribution').order_by(ExtractedFact.paper_id, ExtractedFact.id))],
+        'settings': settings_fingerprint(settings, ('clustering_', 'nli_', 'contradiction_', 'trend_', 'gap_', 'embedding_')),
+    })
+
+
+def _execute_pipeline(body, session, settings, run):
+    # A killed explicit deletion is completed before any stage can reindex it.
+    if session.scalar(select(PaperStageState).where(PaperStageState.stage == 'delete').limit(1)):
+        with graph_session(settings) as neo4j, run.stage('delete'):
+            resume_deletions(session, neo4j, EvidenceIndex(settings))
+    with run.stage('s2'):
+        parsing = parse_all_pending(session, settings.grobid_url, settings.unpaywall_email, settings.pdf_storage_path)
+        session.commit()
     parsed = parsing.processed
-    extracted = extract_all_parsed(session)
+    with run.stage('s3'):
+        extracted = extract_all_parsed(session)
+        session.commit()
     with graph_session(settings) as neo4j:
-        graphed = graph_service.extract_all(session, neo4j)
-        indexed = index_all(session, neo4j, EvidenceIndex(settings))
-    clusters = clustering_service.rebuild_clusters(session, settings=settings)
-    trends = trend_service.rebuild_trends(session)
-    gaps = ranking_service.rebuild_rankings(session, settings)
-    # Commit the evidence base before the one stage that needs the LLM. The
-    # Neo4j graph and Qdrant vectors are already written by now, so a missing
-    # Groq key or an outage must not roll back the Postgres rows that describe
-    # them: README §12 promises every non-LLM stage works without a key.
-    session.commit()
+        with run.stage('s4'):
+            graphed = graph_service.extract_all(session, neo4j)
+        with run.stage('s5'):
+            indexed = index_all(session, neo4j, EvidenceIndex(settings))
+    digest = _derived_fingerprint(session, settings)
+    with run.stage('s6-s8'):
+        if run.derived_current('s6-s8', digest):
+            clusters = [r.id for r in list_clusters(session)]
+            trends = [r.cluster_id for r in list_trends(session)]
+            gaps = list(session.scalars(select(ClusterRanking.cluster_id).order_by(ClusterRanking.score.desc())))
+        else:
+            clusters = clustering_service.rebuild_clusters(session, settings=settings)
+            trends = trend_service.rebuild_trends(session)
+            gaps = ranking_service.rebuild_rankings(session, settings)
+            run.mark_derived('s6-s8', digest)
+        session.commit()
     reports: list[int] = []
     if body.generate_reports:
-        try:
-            reports = report_service.generate_top_reports(session, settings)
-        except LLMError as exc:
-            session.rollback()
-            logger.warning("Pipeline report generation stopped: %s", exc)
-            raise _llm_http_error(
-                exc, "The evidence base was built, but reports were not generated: "
-            ) from exc
-        session.commit()
+        report_digest = fingerprint([digest, settings_fingerprint(settings, ('report_', 'groq_model',)), 'prompt-v1'])
+        with run.stage('s9'):
+            try:
+                if run.derived_current('s9', report_digest):
+                    reports = [r.cluster_id for r in list_reports(session)]
+                else:
+                    reports = report_service.generate_top_reports(session, settings)
+                    # A run that generated no valid reports should retry later.
+                    if reports or not gaps:
+                        run.mark_derived('s9', report_digest)
+            except LLMError as exc:
+                session.rollback()
+                raise _llm_http_error(exc, 'The evidence base was built, but reports were not generated: ') from exc
+            session.commit()
     return {
         "parsed": parsed,
         "missing_pdfs": parsing.missing_pdfs,
@@ -293,4 +346,6 @@ def run_pipeline(
         "trends": trends,
         "gaps": gaps,
         "reports": reports,
+        "run_id": run.id,
+        "checkpoints": run.counts,
     }

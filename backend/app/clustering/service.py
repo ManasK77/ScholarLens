@@ -23,6 +23,8 @@ Two properties this module owns:
 import logging
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select
+from app.core.pipeline import PaperStageState, current_run, require_complete_projections
 
 from app.clustering.cluster import cluster_statements
 from app.clustering.nli import get_detector
@@ -41,7 +43,11 @@ def load_gap_statements(index: EvidenceIndex) -> list[GapStatement]:
     not a bug — it must not abandon a corpus-wide rebuild (README §13.6).
     """
     statements: list[GapStatement] = []
+    run = current_run()
+    eligible = set(run.session.scalars(select(PaperStageState.paper_id).where(PaperStageState.stage == 's5', PaperStageState.status == 'done'))) if run else None
     for point in index.gap_points():
+        if eligible is not None and point.get('paper_id') not in eligible:
+            raise RuntimeError('Unreconciled vector evidence; run the read-only reconciliation tool')
         try:
             statements.append(GapStatement.from_point(point))
         except (TypeError, ValueError) as exc:
@@ -58,6 +64,8 @@ def _with_contradictions(
         try:
             contradictions = detector.detect(cluster.members)
         except Exception:
+            if current_run():
+                raise
             # The flag is one of five signals in Phase 8's gap score; losing it
             # for one cluster must not cost the whole Stage 6 result.
             logger.exception(
@@ -87,6 +95,7 @@ def rebuild_clusters(
     this flushes and never commits.
     """
     settings = settings or get_settings()
+    require_complete_projections(session)
     index = index or EvidenceIndex(settings)
 
     statements = load_gap_statements(index)

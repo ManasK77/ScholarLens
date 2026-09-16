@@ -69,7 +69,7 @@ def test_backfill_with_doi_reuses_unpaywall(tmp_path, monkeypatch) -> None:
     backfill_metadata(session, paper, "http://grobid", "a@b.test", str(tmp_path))
 
     assert enrich_paper.call_args.args[2]["doi"] == "10.1234/test"
-    enrich_oa.assert_called_once_with(session, "a@b.test", str(tmp_path))
+    enrich_oa.assert_called_once_with(session, "a@b.test", str(tmp_path), paper_id=8)
 
 
 def test_backfill_is_noop_when_header_parse_fails(tmp_path, monkeypatch) -> None:

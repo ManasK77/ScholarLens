@@ -9,6 +9,8 @@ Values are loaded from the process environment, falling back to a `.env`
 file (D-09 documents the full variable contract in `.env.example`).
 """
 
+from typing import Literal
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,6 +19,8 @@ class Settings(BaseSettings):
     """Application settings sourced from environment variables / `.env`."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    log_level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR'] = 'INFO'
 
     # --- Neo4j (graph store) ---
     neo4j_uri: str
@@ -101,6 +105,8 @@ class Settings(BaseSettings):
     # gt=0: a zero/negative cap would silently extract nothing corpus-wide.
     nerre_max_chars_per_chunk: int = Field(default=1200, gt=0)
     nerre_max_chunks_per_paper: int = Field(default=12, gt=0)
+    # Opt in only after the offline parity benchmark passes on your model/CPU.
+    nerre_batch_size: int = Field(default=1, ge=1, le=32)
 
     # --- Embeddings & vector indexing (Phase 5) ---
     # SPECTER2 = the `allenai/specter2_base` transformer plus the
@@ -120,6 +126,7 @@ class Settings(BaseSettings):
     # (README 13.6). Bounded on both ends: 0 would index nothing, and an
     # unbounded value would try to hold the whole corpus in one forward pass.
     embedding_batch_size: int = Field(default=16, gt=0, le=256)
+    embedding_sort_by_length: bool = False
     # SPECTER2 is a BERT-family encoder: 512 word-piece positions.
     embedding_max_tokens: int = Field(default=512, gt=0, le=512)
     # Cheap pre-tokenizer character guard against a pathological paragraph out

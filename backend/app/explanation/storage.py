@@ -32,6 +32,43 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.explanation.schema import GapReportRecord
 from app.ingestion.corpus import Base
+from app.core.pipeline import current_run, fingerprint, now
+
+
+class ReportSnapshot(Base):
+    """Historical report data has no FK to replaceable cluster identifiers."""
+    __tablename__ = 'report_snapshots'
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    reports: Mapped[list] = mapped_column(JSON)
+    run_id: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+
+
+def serialize_report(row):
+    return {key: getattr(row, key) for key in ('cluster_id', 'gap', 'evidence', 'confidence', 'suggested_directions', 'provider', 'model')}
+
+
+def archive_reports(session):
+    rows = [serialize_report(row) for row in list_reports(session)]
+    if rows:
+        digest = fingerprint(rows)
+        previous = session.get(ReportSnapshot, digest)
+        if previous is None:
+            run = current_run()
+            session.add(ReportSnapshot(id=digest, reports=rows, run_id=run.id if run else None))
+            session.flush()
+        else:
+            previous.created_at = now()
+
+
+def report_snapshot(session):
+    rows = list_reports(session)
+    if rows:
+        return [serialize_report(row) for row in rows]
+    previous = session.scalar(select(ReportSnapshot).order_by(ReportSnapshot.created_at.desc(), ReportSnapshot.id.desc()).limit(1))
+    if previous is None:
+        return []
+    return [{**row, 'stale': True, 'snapshot_id': previous.id, 'snapshot_created_at': previous.created_at.isoformat()} for row in previous.reports]
 
 
 class GapReport(Base):
@@ -84,6 +121,7 @@ def replace_reports(session: Session, reports: list[GapReportRecord]) -> list[in
     key's `ON DELETE CASCADE`, because SQLite — the documented local-dev store —
     does not enforce foreign keys by default.
     """
+    archive_reports(session)
     session.execute(delete(GapReport))
 
     session.add_all(

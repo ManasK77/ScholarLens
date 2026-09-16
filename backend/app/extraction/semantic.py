@@ -72,12 +72,33 @@ class SemanticStatementClassifier:
     def classify(self, sentence: str) -> SemanticMatch | None:
         """Return one high-margin semantic label, otherwise abstain."""
         scores, non_fact_score = self._scores_with_non_fact(sentence)
+        return self._classify_scores(scores, non_fact_score)
+
+    def _classify_scores(self, scores, non_fact_score):
         ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
         (best_type, best_score), (_, runner_up_score) = ranked[:2]
         margin = best_score - max(runner_up_score, non_fact_score)
         if best_score < self._min_similarity or margin < self._min_margin:
             return None
         return SemanticMatch(best_type, best_score)
+
+    def classify_many(self, sentences: list[str], batch_size: int = 32) -> list[SemanticMatch | None]:
+        if batch_size < 1:
+            raise ValueError('batch_size must be positive')
+        if not sentences:
+            return []
+        if self._reference_vectors is None:
+            self._reference_vectors = self._embed_fn([*(_EXEMPLARS[label] for label in SEMANTIC_LABELS), _NON_FACT_EXEMPLAR])
+        results = []
+        for start in range(0, len(sentences), batch_size):
+            batch = sentences[start:start + batch_size]
+            vectors = self._embed_fn(batch)
+            if len(vectors) != len(batch):
+                raise ValueError('Embedding result count mismatch')
+            for vector in vectors:
+                scores = {label: _cosine(vector, self._reference_vectors[i]) for i, label in enumerate(SEMANTIC_LABELS)}
+                results.append(self._classify_scores(scores, _cosine(vector, self._reference_vectors[-1])))
+        return results
 
 
 @lru_cache(maxsize=1)

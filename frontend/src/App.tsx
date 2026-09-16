@@ -125,18 +125,18 @@ function EmptyState({ title, children }: { title: string; children: string }) {
 }
 
 function ReportsView({ data }: { data: DashboardData }) {
-  const reportByCluster = useMemo(() => new Map(data.reports.map((report) => [report.cluster_id, report])), [data.reports])
+  const reportByCluster = useMemo(() => new Map(data.reports.filter((report) => !report.stale).map((report) => [report.cluster_id, report])), [data.reports])
   const ranked = data.gaps.map((gap) => ({ gap, report: reportByCluster.get(gap.cluster_id) }))
 
   if (!ranked.length && !data.reports.length) {
     return <EmptyState title="No ranked gaps yet">Run the backend pipeline after collecting papers. Evidence-backed reports will appear here automatically.</EmptyState>
   }
 
-  const items = ranked.length ? ranked : data.reports.map((report) => ({ report, gap: undefined }))
+  const items = ranked.length ? [...ranked, ...data.reports.filter((report) => report.stale).map((report) => ({ report, gap: undefined }))] : data.reports.map((report) => ({ report, gap: undefined }))
   return (
     <div className="report-list">
       {items.map(({ gap, report }, index) => (
-        <ReportCard key={report?.cluster_id ?? gap?.cluster_id} rank={index + 1} gap={gap} report={report} />
+        <ReportCard key={`${report?.snapshot_id ?? 'current'}:${report?.cluster_id ?? gap?.cluster_id}`} rank={index + 1} gap={gap} report={report} />
       ))}
     </div>
   )
@@ -150,6 +150,7 @@ function ReportCard({ report, gap, rank }: { report?: GapReport; gap?: GapRankin
       <div className="report-rank">{String(rank).padStart(2, '0')}</div>
       <div className="report-content">
         <div className="report-meta">
+          {report?.stale && <span className="contradiction-pill">Previous report — refresh pending</span>}
           {gap && <span className="score-pill">Gap score {formatScore(gap.score)}</span>}
           {report && <span className="confidence-pill"><CheckCircle2 size={13} /> {Math.round(report.confidence * 100)}% confidence</span>}
           {gap?.signals.contradiction_flag ? <span className="contradiction-pill">Conflicting evidence</span> : null}

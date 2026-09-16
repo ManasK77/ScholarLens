@@ -94,6 +94,19 @@ describe('ScholarLens dashboard', () => {
     await waitFor(() => expect(screen.getAllByText('A paper').length).toBeGreaterThan(0))
   })
 
+  it('keeps historical reports separate from a reused cluster id', async () => {
+    const original = fixtures['/api/reports']
+    fixtures['/api/reports'] = [{ ...(original as object[])[0], stale: true, snapshot_id: 'old-run' }]
+    try {
+      render(<App />)
+      expect(await screen.findByText('Previous report — refresh pending')).toBeInTheDocument()
+      expect(screen.getByText('Cluster 4: explanation pending')).toBeInTheDocument()
+      expect(screen.getByText('Multilingual prompt injection remains underexplored.')).toBeInTheDocument()
+    } finally {
+      fixtures['/api/reports'] = original
+    }
+  })
+
   it('preserves an in-flight query and its result while switching views', async () => {
     const user = userEvent.setup()
     const fallbackFetch = vi.mocked(fetch)

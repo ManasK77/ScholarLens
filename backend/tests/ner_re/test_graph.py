@@ -18,10 +18,18 @@ class FakeResult:
     def single(self):
         return self.row
 
+    def consume(self):
+        return None
+
 
 class FakeGraphSession:
     def __init__(self):
         self.calls = []
+        self.transactions = 0
+
+    def execute_write(self, operation):
+        self.transactions += 1
+        return operation(self)
 
     def run(self, query, **parameters):
         self.calls.append((query, parameters))
@@ -48,8 +56,21 @@ def test_write_paper_graph_uses_allowlisted_relationship_and_normalized_nodes():
     assert node_id == "neo4j-paper-4"
     relation_query, parameters = session.calls[-1]
     assert "[r:TRAINED_ON" in relation_query
-    assert parameters["head"] == "bert"
-    assert parameters["tail"] == "squad"
+    assert parameters["rows"][0]["head"] == "bert"
+    assert parameters["rows"][0]["tail"] == "squad"
+    assert session.transactions == 1
+    assert any('DELETE r' in query for query, _ in session.calls)
+    assert any('UNWIND $rows' in query for query, _ in session.calls)
+
+
+def test_empty_graph_replaces_previous_edges_without_deleting_shared_entities():
+    session = FakeGraphSession()
+    paper = SimpleNamespace(id=4, title=None, year=None, venue=None, doi=None)
+    write_paper_graph(session, paper, JointExtractionResult([], []), input_hash='hash')
+    assert session.transactions == 1
+    assert any('DELETE r' in q for q, _ in session.calls)
+    assert not any('DELETE e' in q for q, _ in session.calls)
+    assert session.calls[0][1]['input_hash'] == 'hash'
 
 
 class EmptyGraphSession:

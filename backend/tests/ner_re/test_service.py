@@ -56,10 +56,16 @@ class FakeNeo4jSession:
     def __init__(self):
         self.queries = []
 
+    def execute_write(self, operation):
+        return operation(self)
+
     def run(self, query, **parameters):
         self.queries.append((query, parameters))
 
         class _Result:
+            def consume(self_inner):
+                return None
+
             def single(self_inner):
                 return {"node_id": "neo4j-node-1"}
 

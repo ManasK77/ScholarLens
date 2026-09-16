@@ -17,6 +17,7 @@ repeated at each call site.
 """
 
 from dataclasses import dataclass
+from app.core.pipeline import fingerprint
 
 # The three kinds of text Stage 5 indexes. `paragraph` covers normalized
 # section paragraphs; the other two are Phase 3 statements and are the subset
@@ -35,6 +36,8 @@ PAYLOAD_FIELDS = (
     "venue",
     "section_type",
     "graph_node_id",
+    "text_sha256",
+    "embed_version",
 )
 
 
@@ -96,4 +99,6 @@ class IndexRecord:
             "venue": self.venue,
             "section_type": self.section_type,
             "graph_node_id": self.graph_node_id,
+            "text_sha256": fingerprint(self.text),
+            "embed_version": None,  # Filled by EvidenceIndex with model settings.
         }
