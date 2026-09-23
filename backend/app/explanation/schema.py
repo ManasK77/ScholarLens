@@ -18,8 +18,9 @@ carried through: they are retrieval detail, and the dashboard renders neither.
 """
 
 from dataclasses import dataclass, field
+from typing import ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # Per-evidence character cap. README §15 calls out context hygiene for this
 # phase specifically: `report_evidence_top_n` paragraphs go into one prompt, and
@@ -28,6 +29,54 @@ MAX_EVIDENCE_CHARS = 1200
 
 # The keys `evidence_from_point` emits, in the order `types.ts` declares them.
 EVIDENCE_FIELDS = ("id", "paper_id", "title", "text", "year", "source_type")
+
+
+class GroundedClaim(BaseModel):
+    """One of the three things a gap claim rests on, with its citations.
+
+    Stage 9 asks for three separately because they are three different
+    findings and the corpus can support one without the others:
+
+    * **(A)** the problem exists;
+    * **(B)** existing solutions are insufficient or incomplete;
+    * **(C)** a specific research gap remains.
+
+    The report that motivated this asserted all three -- "a lack of effective,
+    adaptive defenses and inconsistent findings across studies" -- from
+    evidence for (A) alone. "Prompt injection remains common" is not a reason
+    to believe "adaptive defenses are a research gap"; it is a reason to
+    believe prompt injection remains common.
+
+    `supported` is not taken at face value. A claim asserted with no citation
+    is downgraded here, before `service.py` sees it, so "the model said so" can
+    never become "the corpus says so" (D-09-05).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    supported: bool = False
+    statement: str = ""
+    evidence_ids: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _support_requires_citation(self) -> "GroundedClaim":
+        if self.supported and not self.evidence_ids:
+            object.__setattr__(self, "supported", False)
+        return self
+
+    def grounded(self, retrieved_ids: set[str]) -> "GroundedClaim":
+        """The same claim with invented citations removed.
+
+        A claim whose citations all turn out to be invented is not supported,
+        whatever it says about itself. This is the per-claim form of the check
+        `service._grounded_evidence` already runs over the report as a whole.
+        """
+        kept = [item for item in self.evidence_ids if item in retrieved_ids]
+        return GroundedClaim(
+            supported=self.supported and bool(kept),
+            statement=self.statement,
+            evidence_ids=kept,
+        )
 
 
 class ReportDraft(BaseModel):
@@ -51,6 +100,41 @@ class ReportDraft(BaseModel):
     suggested_directions: list[str] = Field(min_length=1, max_length=10)
     evidence_ids: list[str] = Field(min_length=1)
 
+    # The three-part justification (D-09-05). All four default to an
+    # unsupported claim: a provider that omits them, or an older stored
+    # response replayed through this model, must read as "not established"
+    # rather than as "all of it holds".
+    problem_evidence: GroundedClaim = Field(default_factory=GroundedClaim)
+    solution_insufficiency_evidence: GroundedClaim = Field(
+        default_factory=GroundedClaim
+    )
+    research_gap_evidence: GroundedClaim = Field(default_factory=GroundedClaim)
+    conflicting_evidence: GroundedClaim = Field(default_factory=GroundedClaim)
+
+    # ClassVar, not a field: it names the four claim fields for callers
+    # that iterate them, and pydantic would otherwise try to validate it.
+    CLAIM_FIELDS: ClassVar[tuple[str, ...]] = (
+        "problem_evidence",
+        "solution_insufficiency_evidence",
+        "research_gap_evidence",
+        "conflicting_evidence",
+    )
+
+    def justification(self, retrieved_ids: set[str] | None = None) -> dict:
+        """The four claims as a stored dict, optionally grounded first.
+
+        Stored alongside the prose rather than folded into it, so a reader --
+        and the dashboard -- can see which parts of a gap statement the corpus
+        actually carried and which the model asserted on its own.
+        """
+        stored = {}
+        for name in self.CLAIM_FIELDS:
+            claim: GroundedClaim = getattr(self, name)
+            if retrieved_ids is not None:
+                claim = claim.grounded(retrieved_ids)
+            stored[name] = claim.model_dump()
+        return stored
+
     @field_validator("gap")
     @classmethod
     def _reject_blank_gap(cls, value: str) -> str:
@@ -72,6 +156,16 @@ class ReportDraft(BaseModel):
 # stripped: `title` and `$defs` are documentation, not constraints, and a
 # provider's schema validator is stricter about what it accepts than JSON
 # Schema requires.
+_CLAIM_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "supported": {"type": "boolean"},
+        "statement": {"type": "string"},
+        "evidence_ids": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["supported", "statement", "evidence_ids"],
+}
+
 REPORT_SCHEMA: dict = {
     "type": "object",
     "properties": {
@@ -79,8 +173,21 @@ REPORT_SCHEMA: dict = {
         "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
         "suggested_directions": {"type": "array", "items": {"type": "string"}},
         "evidence_ids": {"type": "array", "items": {"type": "string"}},
+        "problem_evidence": _CLAIM_SCHEMA,
+        "solution_insufficiency_evidence": _CLAIM_SCHEMA,
+        "research_gap_evidence": _CLAIM_SCHEMA,
+        "conflicting_evidence": _CLAIM_SCHEMA,
     },
-    "required": ["gap", "confidence", "suggested_directions", "evidence_ids"],
+    "required": [
+        "gap",
+        "confidence",
+        "suggested_directions",
+        "evidence_ids",
+        "problem_evidence",
+        "solution_insufficiency_evidence",
+        "research_gap_evidence",
+        "conflicting_evidence",
+    ],
 }
 
 
@@ -128,6 +235,9 @@ class GapReportRecord:
     suggested_directions: list[str] = field(default_factory=list)
     provider: str = ""
     model: str = ""
+    # The grounded A/B/C justification (D-09-05). Empty for a report stored
+    # before this existed, which `GET /reports` serves as-is.
+    justification: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.gap or not self.gap.strip():

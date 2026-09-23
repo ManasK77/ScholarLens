@@ -45,6 +45,7 @@ import arxiv
 import requests
 
 from app.ingestion.rate_limit import CooldownActive, RateLimiter, send_with_retries
+from app.ingestion.topic import meaningful_terms
 
 logger = logging.getLogger(__name__)
 
@@ -82,19 +83,27 @@ def build_user_agent(contact: str | None) -> str:
 
 
 def _all_fields_query(topic: str) -> str:
-    """The topic as an explicit all-fields phrase query (D-QUERY-01).
+    """The topic as an all-fields AND of its terms (D-QUERY-02).
 
     Sent unprefixed, `search_query=prompt injection` leaves both the field and
-    the word grouping to arXiv's parser. ScholarLens searches broadly for the
-    topic the user typed, so it is wrapped as `all:"<topic>"` — every field,
-    the phrase as typed, no operator invented on the user's behalf. Embedded
-    double quotes are dropped: arXiv's grammar documents no escape for one
-    inside a quoted phrase, and left in they would close the phrase early and
-    change the query's meaning. This is a search-relevance fix; it has no
-    bearing on rate limiting.
+    the word grouping to arXiv's parser, so the topic is always prefixed
+    `all:` — every field, no operator invented on the user's behalf.
+
+    D-QUERY-01 wrapped the whole topic in one phrase, `all:"<topic>"`, which
+    requires those words adjacent and in order inside a single field. That is
+    narrower than a topic search: `all:"Multilingual prompt injection"` matched
+    nothing while Semantic Scholar, which tokenizes the query itself, returned
+    ten papers for the same topic. The topic is now split by
+    `app.ingestion.topic.meaningful_terms` and each term sent as its own
+    all-fields phrase, joined with AND. A paper must still carry *every*
+    meaningful term the user typed — this is not broadened to OR, which would
+    return papers about prompting in general — but the terms no longer have to
+    sit next to each other. A single-term topic produces exactly the query
+    D-QUERY-01 produced. This is a search-relevance fix; it has no bearing on
+    rate limiting.
     """
-    phrase = topic.replace('"', "").strip()
-    return f'all:"{phrase}"'
+    terms = meaningful_terms(topic) or [topic.replace('"', "").strip()]
+    return " AND ".join(f'all:"{term}"' for term in terms)
 
 
 def is_arxiv_url(url: str | None) -> bool:
@@ -235,7 +244,11 @@ def search_topic(
     # delay are off: PoliteSession owns both.
     client = arxiv.Client(page_size=max_results, delay_seconds=0.0, num_retries=0)
     client._session = session  # arxiv 4.x: the one Session every API request uses
-    search = arxiv.Search(query=_all_fields_query(topic), max_results=max_results)
+    query = _all_fields_query(topic)
+    # The query as sent, so a run that returns nothing can be told apart from a
+    # run that was never asked the right question (D-QUERY-02).
+    logger.info("arXiv search_query=%s max_results=%d", query, max_results)
+    search = arxiv.Search(query=query, max_results=max_results)
 
     candidates = []
     try:

@@ -15,6 +15,7 @@ def test_postgres_compatibility_updates_are_idempotent_additions() -> None:
         "ALTER TABLE cluster_trends ADD COLUMN IF NOT EXISTS id SERIAL",
         "ALTER TABLE cluster_trends ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT now()",
         "ALTER TABLE gap_reports ADD COLUMN IF NOT EXISTS id SERIAL",
+        "ALTER TABLE gap_reports ADD COLUMN IF NOT EXISTS justification JSON",
     ]
 
 

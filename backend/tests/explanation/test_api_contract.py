@@ -35,12 +35,15 @@ PROJECTED_FIELDS = {
     "suggested_directions",
     "provider",
     "model",
+    # The grounded A/B/C justification (D-09-05). Served as `{}` when the row
+    # predates the column, which is why the handler reads it through `or {}`.
+    "justification",
 }
 
 
 def _handler(name: str) -> ast.FunctionDef:
-    if name == 'run_pipeline':
-        name = '_execute_pipeline'
+    if name == "run_pipeline":
+        name = "_execute_pipeline"
     tree = ast.parse(ROUTES.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name == name:

@@ -123,6 +123,12 @@ class TestReportSchema:
             "confidence",
             "suggested_directions",
             "evidence_ids",
+            # The A/B/C justification (D-09-05), asked for explicitly so the
+            # provider judges the three claims rather than bundling them.
+            "problem_evidence",
+            "solution_insufficiency_evidence",
+            "research_gap_evidence",
+            "conflicting_evidence",
         }
 
 

@@ -15,9 +15,9 @@ from app.ranking.signals import (
     citation_impact,
     contradiction_signal,
     gap_score,
+    index_contributions,
     mention_frequency,
     solution_density,
-    tokenize_contributions,
     trend_slope_signal,
 )
 
@@ -25,12 +25,20 @@ from app.ranking.signals import (
 def _density(label, mentioning_papers, contributions_by_paper) -> float:
     """`solution_density` over raw contribution text.
 
-    The production caller tokenizes once for the whole corpus
-    (`tokenize_contributions`); these tests read better against the statements
-    themselves, so they go through the same function the service does.
+    The production caller prepares the corpus once (`index_contributions`);
+    these tests read better against the statements themselves, so they go
+    through the same function the service does.
+
+    `mentioning_papers` is an int here for readability. The signal takes the
+    cluster's actual paper ids (a paper that is a member is on-theme by
+    membership, D-08-11), so a count is expanded into ids that deliberately do
+    not collide with the contributing papers' ids -- these cases are about
+    label matching, and membership is covered in test_signals_v2.py.
     """
     return solution_density(
-        label, mentioning_papers, tokenize_contributions(contributions_by_paper)
+        label,
+        range(9000, 9000 + mentioning_papers),
+        index_contributions(contributions_by_paper),
     )
 
 
@@ -85,7 +93,7 @@ def test_solution_density_is_solvers_over_mentioning_papers() -> None:
         label="multilingual injection prompt",
         mentioning_papers=4,
         contributions_by_paper={
-            1: ["We propose a multilingual prompt injection benchmark."],
+            1: ["We propose a multilingual prompt injection defense."],
             2: ["We contribute a faster attention kernel."],
         },
     )
@@ -93,12 +101,32 @@ def test_solution_density_is_solvers_over_mentioning_papers() -> None:
     assert density == 0.25
 
 
-def test_a_contribution_must_carry_every_label_term() -> None:
-    """Any single shared term would match half the corpus of a focused survey."""
+def test_one_shared_label_term_is_not_enough() -> None:
+    """A single shared term would match half the corpus of a focused survey.
+
+    D-08-11 relaxed the old every-term rule to an overlap of two, which is what
+    keeps a shared word like "multilingual" from marking the field as solved
+    while still recognising a differently-worded defense.
+    """
     density = _density(
         label="multilingual injection prompt",
         mentioning_papers=1,
-        contributions_by_paper={1: ["We study multilingual evaluation."]},
+        contributions_by_paper={1: ["We propose multilingual defenses."]},
+    )
+
+    assert density == 0.0
+
+
+def test_a_contribution_that_names_the_theme_but_proposes_nothing_is_not_a_solver() -> (
+    None
+):
+    """Naming the problem is evidence *of* the gap, not evidence it is closed."""
+    density = _density(
+        label="multilingual injection prompt",
+        mentioning_papers=1,
+        contributions_by_paper={
+            1: ["We measure multilingual prompt injection success rates."]
+        },
     )
 
     assert density == 0.0
@@ -114,12 +142,31 @@ def test_label_terms_are_matched_case_insensitively() -> None:
     assert density == 1.0
 
 
+def test_label_terms_are_matched_after_stemming() -> None:
+    """D-08-11: "injections" and "injection" are the same term.
+
+    The old rule compared raw words, so a plural in the contribution and a
+    singular in the frequency-derived label never matched.
+    """
+    density = _density(
+        label="multilingual injection",
+        mentioning_papers=1,
+        contributions_by_paper={
+            1: ["Multilingual injections are mitigated by our filter."]
+        },
+    )
+
+    assert density == 1.0
+
+
 def test_label_terms_are_matched_on_word_boundaries() -> None:
     """ "injection" must not be found inside "injectionless"."""
     density = _density(
-        label="injection",
+        label="injection defense",
         mentioning_papers=1,
-        contributions_by_paper={1: ["An injectionless reinjectionary approach."]},
+        contributions_by_paper={
+            1: ["An injectionless reinjectionary defense approach."]
+        },
     )
 
     assert density == 0.0
@@ -127,10 +174,13 @@ def test_label_terms_are_matched_on_word_boundaries() -> None:
 
 def test_a_paper_with_several_matching_contributions_still_counts_once() -> None:
     density = _density(
-        label="hallucination",
+        label="hallucination mitigation",
         mentioning_papers=2,
         contributions_by_paper={
-            1: ["We reduce hallucination.", "We measure hallucination."]
+            1: [
+                "We mitigate hallucination.",
+                "We measure hallucination mitigation.",
+            ]
         },
     )
 
@@ -144,23 +194,30 @@ def test_solution_density_is_clamped_to_one() -> None:
     readable as a density (D-08-04).
     """
     density = _density(
-        label="hallucination",
+        label="hallucination mitigation",
         mentioning_papers=1,
         contributions_by_paper={
-            1: ["We reduce hallucination."],
-            2: ["We detect hallucination."],
-            3: ["We benchmark hallucination."],
+            1: ["Hallucination mitigation is improved by our defense."],
+            2: ["We detect hallucination with a mitigation filter."],
+            3: ["Our hallucination mitigation hardens the decoder."],
         },
     )
 
     assert density == 1.0
 
 
-def test_an_unlabelled_cluster_has_no_solution_density() -> None:
-    """`Cluster.label` is nullable by Phase 6 contract; there is no theme to match."""
+def test_an_unlabelled_cluster_matches_nothing_through_its_label() -> None:
+    """`Cluster.label` is nullable by Phase 6 contract.
+
+    With no label there is no theme to match a *non-member* paper against, so
+    the label route contributes nothing. Its own papers still count by
+    membership -- see test_signals_v2.py.
+    """
     assert (
         _density(
-            label=None, mentioning_papers=3, contributions_by_paper={1: ["Anything."]}
+            label=None,
+            mentioning_papers=3,
+            contributions_by_paper={1: ["Our defense mitigates the problem."]},
         )
         == 0.0
     )
@@ -169,7 +226,9 @@ def test_an_unlabelled_cluster_has_no_solution_density() -> None:
 def test_a_label_of_only_punctuation_has_no_solution_density() -> None:
     assert (
         _density(
-            label="  --  ", mentioning_papers=3, contributions_by_paper={1: ["--"]}
+            label="  --  ",
+            mentioning_papers=3,
+            contributions_by_paper={1: ["Our defense mitigates --."]},
         )
         == 0.0
     )
@@ -179,9 +238,9 @@ def test_solution_density_of_a_cluster_with_no_papers_is_zero() -> None:
     """Never a ZeroDivisionError: a cluster with no papers has no density."""
     assert (
         _density(
-            label="hallucination",
+            label="hallucination mitigation",
             mentioning_papers=0,
-            contributions_by_paper={1: ["We reduce hallucination."]},
+            contributions_by_paper={1: ["We mitigate hallucination."]},
         )
         == 0.0
     )
@@ -231,12 +290,14 @@ def test_a_negative_citation_count_is_floored_at_zero() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_contradiction_signal_is_one_when_flagged() -> None:
-    assert contradiction_signal(True) == 1.0
+def test_contradiction_signal_is_one_at_full_strength() -> None:
+    # D-08-10: graded on distinct disagreeing paper pairs, not a boolean. The
+    # grading itself is covered in test_signals_v2.py.
+    assert contradiction_signal(3, min_paper_pairs=2, full_strength=3) == 1.0
 
 
 def test_contradiction_signal_is_zero_when_not_flagged() -> None:
-    assert contradiction_signal(False) == 0.0
+    assert contradiction_signal(0, min_paper_pairs=2, full_strength=3) == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -333,15 +394,21 @@ def test_wrong_weight_count_is_refused() -> None:
         gap_score(_signals(), (1.0, 2.0))
 
 
-def test_tokenize_contributions_keeps_one_term_set_per_statement() -> None:
-    """Done once per corpus, not once per cluster — the tokenizer is the hot path."""
-    tokenized = tokenize_contributions(
-        {7: ["We propose a Multilingual benchmark.", "An unrelated kernel."]}
+def test_index_contributions_keeps_one_term_set_per_statement() -> None:
+    indexed = index_contributions(
+        {1: ["Our defense mitigates prompt injection.", "A faster kernel."]}
     )
 
-    assert tokenized[7][0] == frozenset({"propose", "multilingual", "benchmark"})
-    assert len(tokenized[7]) == 2
+    assert len(indexed[1].terms) == 2
+    assert "inject" in indexed[1].terms[0]
+    assert indexed[1].proposes_solution is True
 
 
-def test_tokenize_contributions_of_an_empty_corpus_is_empty() -> None:
-    assert tokenize_contributions({}) == {}
+def test_index_contributions_marks_a_paper_with_no_remedy() -> None:
+    indexed = index_contributions({1: ["We measure prompt injection success."]})
+
+    assert indexed[1].proposes_solution is False
+
+
+def test_index_contributions_of_an_empty_corpus_is_empty() -> None:
+    assert index_contributions({}) == {}

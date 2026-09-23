@@ -26,7 +26,12 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.clustering.storage import list_clusters, members_for_cluster
+from app.clustering.nli import disagreeing_paper_pairs
+from app.clustering.storage import (
+    contradictions_for_cluster,
+    list_clusters,
+    members_for_cluster,
+)
 from app.core.config import Settings, get_settings
 from app.extraction.schema import FactType
 from app.extraction.storage import ExtractedFact
@@ -36,9 +41,9 @@ from app.ranking.signals import (
     citation_impact,
     contradiction_signal,
     gap_score,
+    index_contributions,
     mention_frequency,
     solution_density,
-    tokenize_contributions,
     trend_slope_signal,
 )
 from app.ranking.storage import replace_rankings
@@ -101,9 +106,9 @@ def rebuild_rankings(session: Session, settings: Settings | None = None) -> list
     weights = settings.gap_weights()
     slopes = {row.cluster_id: row.slope for row in list_trends(session)}
     citations = _citation_counts(session)
-    # Tokenized once for the whole run: `solution_density` is called per
+    # Prepared once for the whole run: `solution_density` is called per
     # cluster against the same corpus-wide contributions.
-    contributions = tokenize_contributions(_contributions_by_paper(session))
+    contributions = index_contributions(_contributions_by_paper(session))
 
     computed = []
     for cluster in clusters:
@@ -113,17 +118,33 @@ def rebuild_rankings(session: Session, settings: Settings | None = None) -> list
             member.paper_id for member in members_for_cluster(session, cluster.id)
         ]
         mentions = mention_frequency(paper_ids)
+        # Stage 6 stores only the pairs it verified, so this counts corroborated
+        # disagreement rather than re-deciding it. `contradiction_signal`
+        # re-checks the corroboration floor anyway, so a ranking cannot inherit
+        # a flag raised by an older run under looser settings (D-08-10).
+        paper_pairs = disagreeing_paper_pairs(
+            contradictions_for_cluster(session, cluster.id)
+        )
         signals = GapSignals(
             mention_frequency=mentions,
             trend_slope=trend_slope_signal(slopes.get(cluster.id)),
-            solution_density=solution_density(cluster.label, mentions, contributions),
+            solution_density=solution_density(
+                cluster.label,
+                paper_ids,
+                contributions,
+                min_label_overlap=settings.gap_solution_min_label_overlap,
+            ),
             # `ClusterMember.paper_id` carries no foreign key by Phase 6's
-            # design — the vector store can lag the corpus — so a member whose
-            # paper is gone contributes an unknown count, not a KeyError.
+            # design, so a member whose paper is gone contributes an unknown
+            # count, not a KeyError.
             citation_impact=citation_impact(
                 citations.get(paper_id) for paper_id in set(paper_ids)
             ),
-            contradiction_flag=contradiction_signal(cluster.contradiction_flag),
+            contradiction_flag=contradiction_signal(
+                paper_pairs,
+                min_paper_pairs=settings.contradiction_min_paper_pairs,
+                full_strength=settings.contradiction_full_strength_paper_pairs,
+            ),
         )
         computed.append((cluster.id, gap_score(signals, weights), signals))
 

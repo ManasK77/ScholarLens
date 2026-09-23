@@ -1,5 +1,7 @@
 """Tests for backend/app/api/routes_ingestion.py — /collect and /upload (D-20, D-21)."""
 
+from typing import ClassVar
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -445,6 +447,7 @@ def test_collect_passes_the_configured_request_limits_to_each_source(
     monkeypatch.setenv("ARXIV_MAX_RESULTS", "7")
     monkeypatch.setenv("ARXIV_NUM_RETRIES", "0")
     monkeypatch.setenv("SEMANTIC_SCHOLAR_MAX_RESULTS", "9")
+    monkeypatch.setenv("SEMANTIC_SCHOLAR_REQUEST_LIMIT", "30")
     monkeypatch.setenv("SEMANTIC_SCHOLAR_MAX_RETRIES", "2")
     monkeypatch.setenv("SEMANTIC_SCHOLAR_BACKOFF_BASE_SECONDS", "0.5")
     monkeypatch.setenv("SEMANTIC_SCHOLAR_BACKOFF_MAX_SECONDS", "4")
@@ -486,6 +489,7 @@ def test_collect_passes_the_configured_request_limits_to_each_source(
     }
     assert seen["semantic_scholar"] == {
         "limit": 9,
+        "request_limit": 30,
         "max_retries": 2,
         "min_interval_seconds": 1.25,
         "backoff_base_seconds": 0.5,
@@ -865,3 +869,254 @@ def test_upload_is_not_subject_to_the_discovery_caps(client: TestClient) -> None
 
     assert response.status_code == 200
     assert len(response.json()["created"]) == 12
+
+
+# ---------------------------------------------------------------------------
+# Duplicate reporting (D-DUP-01)
+#
+# Dedup itself is unchanged (DOI -> arXiv ID -> ACL ID -> normalized
+# title+year, `app.ingestion.dedup`); what /collect now also reports is *what
+# the dedup did*, so "30 candidates found, 22 papers added" reads as eight
+# duplicates rather than eight papers silently lost. The three duplicate
+# categories are counted per distinct paper, not per encounter: one paper that
+# three sources all returned is one cross-source duplicate, never three.
+# ---------------------------------------------------------------------------
+
+
+def _candidate(n, **overrides):
+    return {
+        "title": f"Paper {n}",
+        "authors": ["A"],
+        "year": 2024,
+        "venue": None,
+        "doi": f"10.1/{n}",
+        "abstract": "abstract",
+    } | overrides
+
+
+def test_collect_reports_every_duplicate_category_separately(
+    client: TestClient, test_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One run covering all four cases at once: a cross-source duplicate, a
+    within-source duplicate, a paper already in the corpus, and a genuinely new
+    paper."""
+    test_session.add(
+        Paper(title="Already Here", year=2019, doi="10.1/existing", source="arxiv")
+    )
+    test_session.flush()
+
+    shared = _candidate("shared", arxiv_id="2401.00001")
+    _stub_sources(
+        monkeypatch,
+        # arXiv finds the shared paper first and inserts it.
+        arxiv_results=[shared],
+        # Semantic Scholar re-finds it (cross-source) and returns one new paper
+        # twice over (within-source).
+        s2_results=[_candidate("shared"), _candidate("new"), _candidate("new")],
+        # ACL re-finds the paper an earlier run already stored.
+        acl_results=[
+            _candidate("existing", doi="10.1/existing", acl_id="2019.acl-1.1")
+        ],
+    )
+
+    body = client.post("/collect", json={"topic": "anything"}).json()
+
+    assert body["added"] == 2  # the shared paper and the new one
+    assert body["duplicates"] == {
+        "total": 3,
+        "cross_source": 1,
+        "within_source": 1,
+        "already_in_corpus": 1,
+    }
+    # Three distinct papers touched, and the corpus holds exactly one row each.
+    assert body["count"] == 3
+    assert len(body["ids"]) == 3
+    assert test_session.query(Paper).count() == 3
+
+
+def test_a_paper_all_three_sources_return_is_one_row_and_one_duplicate(
+    client: TestClient, test_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Encountering the same paper three times must not read as three
+    duplicates, and must never read as three papers."""
+    _stub_sources(
+        monkeypatch,
+        arxiv_results=[_candidate("x", arxiv_id="2401.00002")],
+        s2_results=[_candidate("x")],
+        acl_results=[_candidate("x", acl_id="2024.acl-1.1")],
+    )
+
+    body = client.post("/collect", json={"topic": "anything"}).json()
+
+    assert body["count"] == 1
+    assert body["added"] == 1
+    assert body["duplicates"]["cross_source"] == 1
+    assert body["duplicates"]["total"] == 1
+    assert test_session.query(Paper).count() == 1
+
+
+def test_collect_reports_what_each_source_contributed_before_processing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run that stored nothing from arXiv must say whether arXiv returned no
+    candidates or returned candidates that all deduped away."""
+    _stub_sources(
+        monkeypatch,
+        arxiv_results=[],
+        s2_results=[_candidate(1), _candidate(2)],
+        acl_results=[_candidate(1, acl_id="2024.acl-1.1")],
+    )
+
+    body = client.post("/collect", json={"topic": "anything"}).json()
+
+    assert body["source_stats"]["arxiv"] == {
+        "candidates": 0,
+        "processed": 0,
+        "added": 0,
+        "duplicates": 0,
+    }
+    assert body["source_stats"]["semantic_scholar"] == {
+        "candidates": 2,
+        "processed": 2,
+        "added": 2,
+        "duplicates": 0,
+    }
+    assert body["source_stats"]["acl_anthology"] == {
+        "candidates": 1,
+        "processed": 1,
+        "added": 0,
+        "duplicates": 1,
+    }
+    # The status field keeps its existing contract untouched.
+    assert body["sources"]["arxiv"] == "ok"
+
+
+def test_a_failed_source_reports_no_statistics_for_the_rows_it_rolled_back(
+    client: TestClient, test_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Semantic Scholar's rows are discarded when it raises, so its candidate
+    and insert counts must not survive into the run's totals either."""
+    _stub_sources(
+        monkeypatch,
+        arxiv_results=[_candidate(1, arxiv_id="2401.1")],
+        s2_results=[],
+        acl_results=[],
+    )
+
+    def explode(topic, api_key=None, **kwargs):
+        raise RuntimeError("upstream is down")
+
+    monkeypatch.setattr(semantic_scholar, "search_topic", explode)
+
+    body = client.post("/collect", json={"topic": "anything"}).json()
+
+    assert body["sources"]["semantic_scholar"].startswith("failed:")
+    assert "semantic_scholar" not in body["source_stats"]
+    assert body["added"] == 1
+    assert body["duplicates"]["total"] == 0
+
+
+def test_each_discovery_source_keeps_its_own_cap_with_no_global_limit(
+    client: TestClient, test_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Three sources answering in full store 30 papers, not 10 — the caps are
+    per source and there is no run-wide cap."""
+    _stub_sources(
+        monkeypatch,
+        arxiv_results=[_candidate(f"a{n}", arxiv_id=f"2401.{n}") for n in range(12)],
+        s2_results=[_candidate(f"s{n}") for n in range(12)],
+        acl_results=[_candidate(f"c{n}", acl_id=f"2024.acl-1.{n}") for n in range(12)],
+    )
+
+    body = client.post("/collect", json={"topic": "anything"}).json()
+
+    assert body["count"] == 30
+    assert body["added"] == 30
+    assert test_session.query(Paper).count() == 30
+    assert [stats["added"] for stats in body["source_stats"].values()] == [10, 10, 10]
+    # Twelve offered, ten kept — the two apart are what tell an empty source
+    # from one whose surplus the cap turned away.
+    assert [stats["candidates"] for stats in body["source_stats"].values()] == [
+        12,
+        12,
+        12,
+    ]
+    assert [stats["processed"] for stats in body["source_stats"].values()] == [
+        10,
+        10,
+        10,
+    ]
+
+
+def test_collect_semantic_scholar_non_research_records_do_not_use_up_its_cap(
+    client: TestClient, test_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D-S2-TYPES-01, through the real collector: editorials and news items
+    among Semantic Scholar's first ten results are dropped, and the source still
+    stores ten research papers from the same single request."""
+    records = []
+    for i in range(14):
+        records.append(
+            {
+                "title": f"Research paper {i}",
+                "authors": [{"name": "Author"}],
+                "year": 2025,
+                "externalIds": {"DOI": f"10.1/research-{i}"},
+                "publicationTypes": ["JournalArticle"],
+            }
+        )
+        if i < 4:
+            records.append(
+                {
+                    "title": f"Editorial {i}",
+                    "authors": [{"name": "Editor"}],
+                    "year": 2025,
+                    "externalIds": {"DOI": f"10.1/editorial-{i}"},
+                    "publicationTypes": ["Editorial", "JournalArticle"],
+                }
+            )
+    requests: list[dict] = []
+
+    class _Response:
+        status_code = 200
+        headers: ClassVar[dict] = {}
+
+        def json(self):
+            return {"data": records}
+
+        def raise_for_status(self):
+            return None
+
+    class _Client:
+        def __init__(self, transport=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, params=None, headers=None, timeout=None):
+            requests.append(params)
+            return _Response()
+
+    monkeypatch.setattr(semantic_scholar.httpx, "Client", _Client)
+    monkeypatch.setattr(semantic_scholar, "LIMITER", semantic_scholar.RateLimiter(0.0))
+    monkeypatch.setattr(arxiv, "search_topic", lambda topic, **kwargs: [])
+    monkeypatch.setattr(
+        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+    )
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(
+        routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir, **kw: []
+    )
+
+    body = client.post("/collect", json={"topic": "anything"}).json()
+
+    stored = test_session.query(Paper).filter_by(source="semantic_scholar").all()
+    assert sorted(p.title for p in stored) == sorted(
+        f"Research paper {i}" for i in range(10)
+    )
+    assert body["source_stats"]["semantic_scholar"]["added"] == 10
+    assert len(requests) == 1

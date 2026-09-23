@@ -19,8 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.pipeline import current_run, fingerprint, settings_fingerprint
 from app.core.logging import ProgressLogger
+from app.core.pipeline import current_run, fingerprint, settings_fingerprint
 from app.embeddings.encoder import MAX_CHARS, Specter2Encoder, get_encoder
 from app.embeddings.schema import GAP_SOURCE_TYPES, PAYLOAD_FIELDS, IndexRecord
 from app.extraction.storage import ExtractedFact
@@ -251,7 +251,7 @@ class EvidenceIndex:
         """
         if not records:
             return 0
-        if getattr(self.settings, 'embedding_sort_by_length', False):
+        if getattr(self.settings, "embedding_sort_by_length", False):
             records = sorted(records, key=lambda record: len(record.text))
         self.ensure_collection()
         self.check_collection_dimension()
@@ -274,10 +274,16 @@ class EvidenceIndex:
         return len(records)
 
     def embedding_version(self):
-        return fingerprint({'schema': 1, **settings_fingerprint(self.settings, ('embedding_',))})
+        return fingerprint(
+            {"schema": 1, **settings_fingerprint(self.settings, ("embedding_",))}
+        )
 
     def record_payload(self, record):
-        return {**record.payload(), 'text_sha256': fingerprint(record.text), 'embed_version': self.embedding_version()}
+        return {
+            **record.payload(),
+            "text_sha256": fingerprint(record.text),
+            "embed_version": self.embedding_version(),
+        }
 
     def paper_payloads(self, paper_id):
         if not self.client.collection_exists(self.collection):
@@ -286,15 +292,26 @@ class EvidenceIndex:
         while True:
             page, offset = self.client.scroll(
                 collection_name=self.collection,
-                scroll_filter=models.Filter(must=[models.FieldCondition(key='paper_id', match=models.MatchValue(value=paper_id))]),
-                with_payload=True, with_vectors=False, limit=256, offset=offset,
+                scroll_filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="paper_id", match=models.MatchValue(value=paper_id)
+                        )
+                    ]
+                ),
+                with_payload=True,
+                with_vectors=False,
+                limit=256,
+                offset=offset,
             )
             points.update((str(p.id), dict(p.payload or {})) for p in page)
             if offset is None:
                 return points
 
     def paper_current(self, paper_id, records):
-        return self.paper_payloads(paper_id) == {r.record_id: self.record_payload(r) for r in records}
+        return self.paper_payloads(paper_id) == {
+            r.record_id: self.record_payload(r) for r in records
+        }
 
     def sync_paper(self, paper_id, records):
         """Reuse vectors only when text and model settings match exactly."""
@@ -303,10 +320,18 @@ class EvidenceIndex:
         for record in records:
             desired = self.record_payload(record)
             stored = existing.get(record.record_id, {})
-            if any(stored.get(key) != desired[key] for key in ('text_sha256', 'embed_version')):
+            if any(
+                stored.get(key) != desired[key]
+                for key in ("text_sha256", "embed_version")
+            ):
                 changed.append(record)
             elif stored != desired:
-                self.client.overwrite_payload(collection_name=self.collection, payload=desired, points=[record.record_id], wait=True)
+                self.client.overwrite_payload(
+                    collection_name=self.collection,
+                    payload=desired,
+                    points=[record.record_id],
+                    wait=True,
+                )
         written = self.upsert(changed)
         self.prune_paper(paper_id, [r.record_id for r in records])
         return written
@@ -379,20 +404,20 @@ class EvidenceIndex:
         if not self.client.collection_exists(self.collection):
             return
         self.client.delete(
-                collection_name=self.collection,
-                points_selector=models.FilterSelector(
-                    filter=models.Filter(
-                        must=[
-                            models.FieldCondition(
-                                key="paper_id", match=models.MatchValue(value=paper_id)
-                            )
-                        ],
-                        must_not=[models.HasIdCondition(has_id=list(keep_ids))]
-                        if keep_ids
-                        else [],
-                    )
-                ),
-                wait=True,
+            collection_name=self.collection,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="paper_id", match=models.MatchValue(value=paper_id)
+                        )
+                    ],
+                    must_not=[models.HasIdCondition(has_id=list(keep_ids))]
+                    if keep_ids
+                    else [],
+                )
+            ),
+            wait=True,
         )
 
     def gap_points(self) -> list[dict]:
@@ -439,22 +464,34 @@ def _index_paper(
     neo4j_session,
     index: EvidenceIndex,
     paper: Paper,
+    stats: dict[str, int] | None = None,
 ) -> int:
     """Index one paper. Returns 0 when it is not ready for Stage 5 yet."""
+    counts = stats if stats is not None else {}
     document = session.scalar(
         select(ParsedDocument).where(ParsedDocument.paper_id == paper.id)
     )
     if document is None:
+        # Silent until O2: the stage summary now names why a paper was skipped.
+        counts["skipped_no_document"] = counts.get("skipped_no_document", 0) + 1
         if current_run():
-            current_run().paper(paper.id, 's5', fingerprint('no-document'), lambda: index.prune_paper(paper.id, []), verify=lambda: not index.paper_payloads(paper.id))
+            current_run().paper(
+                paper.id,
+                "s5",
+                fingerprint("no-document"),
+                lambda: index.prune_paper(paper.id, []),
+                verify=lambda: not index.paper_payloads(paper.id),
+            )
         return 0
     # EMBED-03: without a Neo4j node there is nothing to link the vector back
     # to, so the paper waits for Phase 4 rather than being indexed unlinked.
     graph_node_id = get_paper_node_id(neo4j_session, paper.id)
     if graph_node_id is None:
+        counts["skipped_no_graph_node"] = counts.get("skipped_no_graph_node", 0) + 1
         if current_run():
-            raise RuntimeError(f'Paper {paper.id} has no graph projection')
+            raise RuntimeError(f"Paper {paper.id} has no graph projection")
         return 0
+    counts["papers_ready"] = counts.get("papers_ready", 0) + 1
     facts = list(
         session.scalars(select(ExtractedFact).where(ExtractedFact.paper_id == paper.id))
     )
@@ -463,10 +500,18 @@ def _index_paper(
     if run:
         digest = fingerprint([(r.record_id, index.record_payload(r)) for r in records])
         written = 0
+
         def sync():
             nonlocal written
             written = index.sync_paper(paper.id, records)
-        run.paper(paper.id, 's5', digest, sync, verify=lambda: index.paper_current(paper.id, records))
+
+        run.paper(
+            paper.id,
+            "s5",
+            digest,
+            sync,
+            verify=lambda: index.paper_current(paper.id, records),
+        )
         return written
     written = index.upsert(records)
     # After the upsert, so a paper is never left with neither its old nor its
@@ -483,18 +528,31 @@ def index_all(
     index = index or EvidenceIndex()
     total = 0
     papers = list(session.scalars(select(Paper).order_by(Paper.id)))
-    progress = ProgressLogger(logger, 's5', len(papers))
+    logger.info("s5 start papers=%d", len(papers))
+    stats: dict[str, int] = {}
+    failed = 0
+    progress = ProgressLogger(logger, "s5", len(papers))
     for position, paper in enumerate(papers, 1):
         # One unparseable paper must not abandon a corpus-wide batch run
         # (README 13.6), the same contract app/ner_re/service.py holds.
         try:
-            total += _index_paper(session, neo4j_session, index, paper)
+            total += _index_paper(session, neo4j_session, index, paper, stats)
         except Exception:
             if current_run():
                 raise
+            failed += 1
             logger.exception("Indexing failed for paper %s; skipping", paper.id)
         finally:
             progress.update(position)
+    logger.info(
+        "s5 complete points=%d papers_ready=%d skipped_no_document=%d "
+        "skipped_no_graph_node=%d failed=%d",
+        total,
+        stats.get("papers_ready", 0),
+        stats.get("skipped_no_document", 0),
+        stats.get("skipped_no_graph_node", 0),
+        failed,
+    )
     if total:
         # After the writes, not before: an empty corpus must not create a
         # collection, and creating one needs the encoder's dimension — which

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    log_level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR'] = 'INFO'
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     # --- Neo4j (graph store) ---
     neo4j_uri: str
@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     arxiv_contact: str | None = None
     # Sent as Semantic Scholar's search `limit`, which otherwise defaults to 100.
     semantic_scholar_max_results: int = Field(default=10, gt=0, le=10)
+    # Results requested in the one Semantic Scholar search call. A little more
+    # than the cap, so records dropped as non-research by `publicationTypes`
+    # do not use up a slot (D-S2-TYPES-01). Never below the cap; 100 is the
+    # API's own maximum.
+    semantic_scholar_request_limit: int = Field(default=20, gt=0, le=100)
     # ACL Anthology is searched in the local export, which can match hundreds
     # of records; only the first this-many distinct papers (and their PDFs)
     # are collected, in export order.
@@ -158,6 +163,14 @@ class Settings(BaseSettings):
     # `min_cluster_size` is the smallest group that counts as a theme — 2 is
     # HDBSCAN's floor, and a "theme" one paper mentions twice is not a gap.
     clustering_min_cluster_size: int = Field(default=3, ge=2, le=1000)
+    # Shortest statement Stage 6 will cluster. Below this a "limitation" out
+    # of a PDF is a heading, a caption or a citation fragment ("2023.",
+    # "DISCUSSION AND LIMITATIONS", "(Ghosal et al., CVPR 2025)"). Lower than
+    # `contradiction_min_claim_words` on purpose: clustering needs enough words
+    # to carry a theme, contradiction needs a full assertable claim. Carries
+    # the `clustering_` prefix so the pipeline's derived-state fingerprint
+    # invalidates S6 when it changes (D-06-13).
+    clustering_min_statement_words: int = Field(default=6, gt=0, le=100)
     # How conservative HDBSCAN is about calling a point noise. `None` makes it
     # follow `min_cluster_size`, which is the documented default.
     clustering_min_samples: int | None = Field(default=None, ge=1, le=1000)
@@ -185,6 +198,44 @@ class Settings(BaseSettings):
     nli_max_pairs_per_cluster: int = Field(default=50, gt=0, le=2000)
     # Minimum P(contradiction) before a pair is flagged as gap evidence.
     contradiction_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+
+    # --- What has to hold before a pair counts as a disagreement -------------
+    #
+    # Detection used to be "the NLI head said contradiction", which on the
+    # 20-paper LLM-security corpus flagged four pairs above P=0.999 whose
+    # right-hand side was an ethics disclaimer ("no attack tooling is
+    # released") and whose left-hand sides were a recommendation bullet, a
+    # related-work description, a future-work proposal and an unrelated
+    # limitation. None was a disagreement. These four settings are the gates
+    # that make README S8's sentence -- "one paper claims a method works where
+    # another says it fails under the same setup" -- something the pipeline
+    # actually tests. See app/clustering/claims.py for the calibration.
+    #
+    # Shorter than this a statement is a heading, a caption or a fragment.
+    contradiction_min_claim_words: int = Field(default=8, gt=0, le=100)
+    # Shared stemmed content terms before two statements are "about the same
+    # setup". At 3 (with the ratio below) this admits 3.8% of the corpus's
+    # cross-paper pairs and none of the four false positives, which shared 0-1.
+    contradiction_min_shared_terms: int = Field(default=3, gt=0, le=100)
+    # ...and that overlap must also be a real share of what either says. Both
+    # bounds are needed: long sentences from one field clear the count on
+    # shared jargon, and two fragments clear the ratio on a single word.
+    contradiction_min_topic_jaccard: float = Field(default=0.12, ge=0.0, le=1.0)
+    # NLI is asymmetric. With this on, a pair counts only when *both*
+    # directions clear `contradiction_threshold`, which is what separates a
+    # disagreement from an ordering artefact. The stored score is still the
+    # stronger direction (D-06-05 is unchanged for scoring).
+    contradiction_require_both_directions: bool = True
+    # Distinct *paper* pairs -- not statement pairs -- that must disagree
+    # before a cluster is flagged at all. Cluster 1's four "pairs" were four
+    # statements against one, from two papers. Set to 1 to flag a single
+    # well-corroborated two-paper disagreement, at the cost of that being the
+    # commonest shape a false positive takes.
+    contradiction_min_paper_pairs: int = Field(default=2, gt=0, le=100)
+    # Distinct paper pairs at which the Stage 8 contradiction signal reaches
+    # its full weight. Below this it is graded pro rata, so one borderline
+    # disagreement can no longer contribute the whole of `w5` (D-08-10).
+    contradiction_full_strength_paper_pairs: int = Field(default=3, gt=0, le=100)
 
     # --- Trend analysis (Phase 7) ---
     # Sanity window on publication years. Broken metadata reaches Stage 7 as
@@ -216,6 +267,12 @@ class Settings(BaseSettings):
     gap_weight_mention_frequency: float = Field(default=1.0, ge=0.0)
     # A theme growing by one paper per year is worth three mentioning papers.
     gap_weight_trend_slope: float = Field(default=3.0, ge=0.0)
+    # How many of a cluster label's stemmed terms a paper's contribution must
+    # share before that paper counts as working on this theme. Two rather than
+    # all of them: requiring every term made the signal 0.00 for every cluster
+    # in the corpus, because a label like "prompt attacks injection" appears
+    # verbatim in no contribution sentence anywhere (D-08-11).
+    gap_solution_min_label_overlap: int = Field(default=2, gt=0, le=20)
     # Large on purpose: solution density is a ratio in [0, 1] while mention
     # frequency is an unbounded count, so a small weight would make the one
     # signal that says "this is already being addressed" decorative. A fully
@@ -236,6 +293,17 @@ class Settings(BaseSettings):
     # nothing to ground on, too many and the passages crowd each other out of
     # the context window (README §15 flags context hygiene for this phase).
     report_evidence_top_n: int = Field(default=8, gt=0, le=100)
+    # How many passages one paper may contribute to a single report. Stage 9
+    # used to take whatever Qdrant ranked highest, which for the corpus's top
+    # gap meant 7 of 8 passages from one paper -- a report resting on one
+    # study's experiments while five of the six mentioning papers went unquoted
+    # (D-09-04).
+    report_evidence_per_paper_cap: int = Field(default=3, gt=0, le=100)
+    # How much wider than `report_evidence_top_n` the retrieval reaches before
+    # the per-paper cap and the cluster-paper preference select from it. With
+    # no headroom a cap can only ever *remove* evidence; with it, a crowded-out
+    # paper has something to be promoted from.
+    report_evidence_oversample: int = Field(default=4, ge=1, le=20)
 
     # --- LLM ---
     # Groq is the only provider `app/explanation/llm.py` builds a client for.
@@ -256,6 +324,38 @@ class Settings(BaseSettings):
     groq_api_key: str | None = None
     groq_model: str = "openai/gpt-oss-20b"
     groq_api_url: str = "https://api.groq.com/openai/v1"
+
+    # --- Groq rate limiting ---
+    # Groq meters *tokens* per minute as well as requests per day, and Stage 9
+    # sends `report_top_k` generations back to back. A 429 mid-run is therefore
+    # routine rather than an outage, and these five knobs are what let a run
+    # ride one out instead of failing. They feed `app.ingestion.rate_limit`,
+    # the same bounded retry loop the discovery sources use.
+    #
+    # Retries of a 429/5xx answer, on top of the first attempt. Four covers a
+    # per-minute ceiling comfortably; more only lengthens a request that is
+    # already going to fail on a daily quota.
+    groq_max_retries: int = Field(default=4, ge=0, le=10)
+    # First backoff step; each subsequent retry doubles it. Overridden upward
+    # whenever Groq sends a longer Retry-After.
+    groq_backoff_base_seconds: float = Field(default=2.0, gt=0.0, le=60.0)
+    # The longest wait a single request will absorb. Above 60 on purpose: a
+    # tokens-per-minute ceiling clears within the minute, so a lower cap would
+    # abandon the one refusal most worth waiting out. A daily quota asks for
+    # hours, exceeds this, and is reported instead of slept on.
+    groq_backoff_max_seconds: float = Field(default=90.0, gt=0.0, le=600.0)
+    # Proactive spacing between Groq requests, process-wide. 0 means "send as
+    # fast as the work arrives and rely on retries", which is right for a paid
+    # tier. On a free tier whose TPM a burst of `report_top_k` reports exceeds,
+    # setting this to roughly 60 / (TPM ÷ tokens-per-report) turns 429s into
+    # waiting rather than into retries.
+    groq_min_interval_seconds: float = Field(default=0.0, ge=0.0, le=300.0)
+    # Ceiling on the tokens one generation may produce. The default model
+    # reasons before it answers and those hidden tokens are metered too, so
+    # uncapped, a single report's spend against the per-minute ceiling is
+    # unbounded. A Stage 9 report needs a few hundred; the default leaves ample
+    # room for reasoning on top. `None` sends no cap.
+    groq_max_completion_tokens: int | None = Field(default=2048, gt=0, le=32768)
 
     # --- Backend API authentication (Phase 11) ---
     # The shared secret callers present as `X-API-Key`. Distinct from

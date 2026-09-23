@@ -17,6 +17,7 @@ repeated at each call site.
 """
 
 from dataclasses import dataclass
+
 from app.core.pipeline import fingerprint
 
 # The three kinds of text Stage 5 indexes. `paragraph` covers normalized

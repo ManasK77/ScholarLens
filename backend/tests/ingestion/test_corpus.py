@@ -200,3 +200,128 @@ def test_papers_carry_a_nullable_citation_count():
 
     assert column.nullable is True
     assert isinstance(column.type, Integer)
+
+
+# A 200 answer is not proof of a PDF. Unpaywall's `best_oa_location.url` is
+# often a publisher landing page; the stored corpus once held a Scientific
+# Reports "JavaScript is disabled in your browser" HTML page as `14.pdf`,
+# flagged has_full_text=True, which Stage 2's fallback parser then turned into
+# a one-sentence "document" and which Unpaywall never retried.
+
+
+def _streaming(chunks, monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx
+
+    class FakeResponse:
+        status_code = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def iter_bytes(self):
+            yield from chunks
+
+    monkeypatch.setattr(
+        httpx,
+        "stream",
+        lambda method, url, timeout=30.0, follow_redirects=True: FakeResponse(),
+    )
+
+
+def test_download_pdf_rejects_an_html_page_served_with_200(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _streaming(
+        [b"<!DOCTYPE html><html><body>JavaScript is disabled in your browser."],
+        monkeypatch,
+    )
+
+    dest = tmp_path / "out.pdf"
+    result = download_pdf("https://www.nature.com/articles/x", str(dest))
+
+    assert result is False
+    assert not dest.exists()
+
+
+def test_download_pdf_rejects_an_empty_200_body(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _streaming([], monkeypatch)
+
+    dest = tmp_path / "out.pdf"
+
+    assert download_pdf("https://example.org/paper.pdf", str(dest)) is False
+    assert not dest.exists()
+
+
+def test_download_pdf_accepts_a_pdf_header_split_across_chunks(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _streaming([b"%P", b"DF-1.7\n", b"body"], monkeypatch)
+
+    dest = tmp_path / "out.pdf"
+
+    assert download_pdf("https://example.org/paper.pdf", str(dest)) is True
+    assert dest.read_bytes() == b"%PDF-1.7\nbody"
+
+
+def test_download_pdf_accepts_bytes_before_the_pdf_header(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Readers accept `%PDF-` anywhere in the first 1024 bytes; so does this."""
+    _streaming([b"\xef\xbb\xbf\r\n%PDF-1.4 content"], monkeypatch)
+
+    dest = tmp_path / "out.pdf"
+
+    assert download_pdf("https://example.org/paper.pdf", str(dest)) is True
+
+
+def test_download_pdf_non_pdf_leaves_no_file_behind(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rejecting a body must not leave a half-written or HTML file behind."""
+    _streaming([b"<html>landing page</html>"], monkeypatch)
+
+    dest = tmp_path / "out.pdf"
+    result = download_pdf("https://example.org/paper", str(dest))
+
+    assert result is False
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_download_pdf_rejected_body_keeps_an_existing_good_file(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """/collect fetches a candidate's PDF before dedup, so re-collecting an
+    ACL paper downloads onto the path its stored PDF already occupies. A bad
+    second answer must leave the first, valid file in place."""
+    dest = tmp_path / "2025.acl-long.1.pdf"
+    dest.write_bytes(b"%PDF-1.7 the good copy")
+    _streaming([b"<html>maintenance page</html>"], monkeypatch)
+
+    assert (
+        download_pdf("https://aclanthology.org/2025.acl-long.1.pdf", str(dest)) is False
+    )
+    assert dest.read_bytes() == b"%PDF-1.7 the good copy"
+    assert list(tmp_path.iterdir()) == [dest]
+
+
+def test_download_pdf_interrupted_stream_keeps_an_existing_good_file(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import httpx
+
+    def chunks():
+        yield b"%PDF-1.7 partial"
+        raise httpx.ReadError("connection reset")
+
+    dest = tmp_path / "paper.pdf"
+    dest.write_bytes(b"%PDF-1.7 the good copy")
+    _streaming(chunks(), monkeypatch)
+
+    assert download_pdf("https://example.org/paper.pdf", str(dest)) is False
+    assert dest.read_bytes() == b"%PDF-1.7 the good copy"
+    assert list(tmp_path.iterdir()) == [dest]

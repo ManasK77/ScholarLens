@@ -15,11 +15,12 @@ import {
   Search,
   Send,
   Sparkles,
+  Trash2,
   TrendingUp,
   X,
 } from 'lucide-react'
 import { ApiError, ScholarLensApi } from './api'
-import type { Cluster, DashboardData, Evidence, GapReport, GapRanking, QueryResult } from './types'
+import type { Cluster, CollectDuplicates, DashboardData, Evidence, GapReport, GapRanking, QueryResult } from './types'
 import './App.css'
 
 const TrendChart = lazy(() => import('./components/TrendChart'))
@@ -280,37 +281,95 @@ function GraphView({ data }: { data: DashboardData }) {
   )
 }
 
+/** The duplicate breakdown in words, or null when the API reported none.
+ *
+ *  Without it a search that found 30 candidates and stored 22 looks like eight
+ *  papers went missing. Each category is counted per paper, so the parts always
+ *  add up to the total the backend reports. */
+function duplicateSummary(duplicates?: CollectDuplicates) {
+  if (!duplicates?.total) return null
+  const parts = [
+    duplicates.cross_source ? `${duplicates.cross_source} across sources` : '',
+    duplicates.already_in_corpus ? `${duplicates.already_in_corpus} already in the corpus` : '',
+    duplicates.within_source ? `${duplicates.within_source} repeated by one source` : '',
+  ].filter(Boolean)
+  return `${duplicates.total} ${duplicates.total === 1 ? 'duplicate' : 'duplicates'}${parts.length ? ` (${parts.join(', ')})` : ''}`
+}
+
 function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: DashboardData | null; onRefresh: () => Promise<void> }) {
   const [topic, setTopic] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [collecting, setCollecting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [building, setBuilding] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [generateReports, setGenerateReports] = useState(true)
   const [collectStatus, setCollectStatus] = useState<string | null>(null)
+  const [collectDetail, setCollectDetail] = useState<string | null>(null)
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const [pipelineStatus, setPipelineStatus] = useState<string | null>(null)
   const [pipelineWarning, setPipelineWarning] = useState<string | null>(null)
+  const [deleteStatus, setDeleteStatus] = useState<string | null>(null)
   const [operationError, setOperationError] = useState<string | null>(null)
+  // The ids the last collection/upload touched. `null` means no operation has
+  // run in this session yet, and the library falls back to showing the corpus.
+  const [lastOperationIds, setLastOperationIds] = useState<number[] | null>(null)
 
   async function collect(event: FormEvent) {
     event.preventDefault()
     if (topic.trim().length < 2) return
     setCollecting(true)
     setCollectStatus(null)
+    setCollectDetail(null)
     setOperationError(null)
     try {
       const result = await api.collect(topic.trim())
       const unreachable = Object.entries(result.sources ?? {}).filter(([, status]) => status !== 'ok').map(([name]) => name)
+      // `added` counts rows created; everything else in `count` is a paper the
+      // corpus already had and this run refreshed. An API that reports no
+      // `added` keeps the original combined wording.
+      const updated = result.added === undefined ? 0 : result.count - result.added
       setCollectStatus(
-        `${result.count} ${result.count === 1 ? 'paper' : 'papers'} added or updated` +
+        (result.added === undefined
+          ? `${result.count} ${result.count === 1 ? 'paper' : 'papers'} added or updated`
+          : `${result.added} ${result.added === 1 ? 'paper' : 'papers'} added` +
+            (updated > 0 ? ` · ${updated} existing ${updated === 1 ? 'paper' : 'papers'} updated` : '')) +
           (unreachable.length ? ` · ${unreachable.join(', ')} unreachable this run` : ''),
       )
+      setCollectDetail(duplicateSummary(result.duplicates))
+      setDeleteStatus(null)
+      setLastOperationIds(result.ids ?? [])
       await onRefresh()
     } catch (reason) {
       setOperationError(reason instanceof Error ? reason.message : 'Paper discovery failed.')
     } finally {
       setCollecting(false)
+    }
+  }
+
+  async function deleteCorpus() {
+    setDeleting(true)
+    setOperationError(null)
+    try {
+      await api.deleteCorpus()
+      // Only after the backend confirms: the UI must never show an empty
+      // corpus the server still holds.
+      setConfirmingDelete(false)
+      setLastOperationIds(null)
+      setCollectStatus(null)
+      setCollectDetail(null)
+      setUploadStatus(null)
+      setPipelineStatus(null)
+      setPipelineWarning(null)
+      setDeleteStatus('Corpus deleted successfully.')
+      await onRefresh()
+    } catch (reason) {
+      setConfirmingDelete(false)
+      setDeleteStatus(null)
+      setOperationError(reason instanceof Error ? reason.message : 'The corpus could not be deleted.')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -324,10 +383,12 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
     if (!files.length) return
     setUploading(true)
     setUploadStatus(null)
+    setDeleteStatus(null)
     setOperationError(null)
     try {
       const result = await api.upload(files)
       setUploadStatus(`${result.created.length} ${result.created.length === 1 ? 'PDF' : 'PDFs'} uploaded`)
+      setLastOperationIds(result.created)
       setFiles([])
       await onRefresh()
     } catch (reason) {
@@ -357,7 +418,18 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
     }
   }
 
-  const recentPapers = [...(data?.papers ?? [])].reverse().slice(0, 6)
+  // The papers of the *current* operation, in full — never a preview slice. A
+  // duplicate several sources returned appears once, because the API reports
+  // one id per distinct paper. With no operation yet, the section falls back to
+  // the loaded corpus, newest first. The list scrolls rather than truncating.
+  const papersById = useMemo(() => new Map((data?.papers ?? []).map((paper) => [paper.id, paper])), [data])
+  const recentPapers = lastOperationIds
+    ? [...lastOperationIds].sort((a, b) => a - b).map((id) => papersById.get(id)).filter((paper) => paper !== undefined)
+    : [...(data?.papers ?? [])].reverse()
+  // `/papers` returns a bounded window of the corpus, so a very large corpus can
+  // leave one of this run's papers outside it. Say so rather than quietly
+  // showing fewer papers than the search reported.
+  const outsideWindow = (lastOperationIds?.length ?? 0) - recentPapers.length
 
   return (
     <div className="library-workspace">
@@ -377,7 +449,12 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
             <label htmlFor="research-topic">Research topic</label>
             <div className="inline-action"><input id="research-topic" value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="e.g. multilingual prompt injection" /><button className="primary-button" type="submit" disabled={collecting || topic.trim().length < 2}>{collecting ? <RefreshCw className="spin" size={17} /> : <Search size={17} />}{collecting ? 'Finding papers…' : 'Find papers'}</button></div>
           </form>
+          <button className="danger-button full-button" type="button" onClick={() => setConfirmingDelete(true)} disabled={deleting}>
+            {deleting ? <RefreshCw className="spin" size={17} /> : <Trash2 size={17} />}{deleting ? 'Deleting corpus…' : 'Delete corpus'}
+          </button>
           {collectStatus && <p className="success-message"><CheckCircle2 size={16} />{collectStatus}</p>}
+          {collectDetail && <p className="subtle">{collectDetail}</p>}
+          {deleteStatus && <p className="success-message"><CheckCircle2 size={16} />{deleteStatus}</p>}
         </article>
 
         <article className="ingestion-card">
@@ -399,9 +476,61 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
       </article>
 
       <section className="corpus-list" aria-labelledby="corpus-list-title">
-        <div><p className="eyebrow">Local library</p><h3 id="corpus-list-title">Recently added papers</h3></div>
-        {recentPapers.length ? recentPapers.map((paper) => <article key={paper.id}><span className="paper-source">{paper.source.replaceAll('_', ' ')}</span><div><strong>{paper.title || `Uploaded paper #${paper.id}`}</strong><small>{[paper.authors?.join(', '), paper.venue, paper.year].filter(Boolean).join(' · ') || 'Metadata will be extracted during processing'}</small></div><span className={paper.has_full_text ? 'full-text' : 'metadata-only'}>{paper.has_full_text ? 'Full text' : 'Metadata only'}</span></article>) : <EmptyState title="Your corpus is empty">Search a topic above or upload PDFs to begin.</EmptyState>}
+        <div className="corpus-list-heading"><div><p className="eyebrow">Local library</p><h3 id="corpus-list-title">Recently added papers</h3></div>{recentPapers.length > 0 && <span className="quiet-pill">{recentPapers.length} {recentPapers.length === 1 ? 'paper' : 'papers'}{lastOperationIds ? ' from this search' : ' in corpus'}</span>}</div>
+        {recentPapers.length ? (
+          <div className="corpus-scroll">
+            {recentPapers.map((paper) => <article key={paper.id}><span className="paper-source">{paper.source.replaceAll('_', ' ')}</span><div><strong>{paper.title || `Uploaded paper #${paper.id}`}</strong><small>{[paper.authors?.join(', '), paper.venue, paper.year].filter(Boolean).join(' · ') || 'Metadata will be extracted during processing'}</small></div><span className={paper.has_full_text ? 'full-text' : 'metadata-only'}>{paper.has_full_text ? 'Full text' : 'Metadata only'}</span></article>)}
+          </div>
+        ) : <EmptyState title="Your corpus is empty">Search a topic above or upload PDFs to begin.</EmptyState>}
+        {outsideWindow > 0 && <p className="subtle">{outsideWindow} more {outsideWindow === 1 ? 'paper is' : 'papers are'} stored but outside the loaded corpus window.</p>}
       </section>
+      {confirmingDelete && (
+        <ConfirmDeleteDialog
+          busy={deleting}
+          onCancel={() => setConfirmingDelete(false)}
+          onConfirm={() => void deleteCorpus()}
+        />
+      )}
+    </div>
+  )
+}
+
+/** The mandatory confirmation for an irreversible, whole-corpus deletion.
+ *
+ *  A real dialog rather than `window.confirm`, matching `ConnectionPanel`: it
+ *  takes focus on open, Escape and No dismiss it without calling the backend,
+ *  and focus returns to the button that opened it. "No" is focused first so a
+ *  stray Enter cannot delete the corpus. */
+function ConfirmDeleteDialog({ busy, onCancel, onConfirm }: { busy: boolean; onCancel: () => void; onConfirm: () => void }) {
+  const declineRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null
+    declineRef.current?.focus()
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onCancel()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      opener?.focus?.()
+    }
+  }, [onCancel])
+
+  return (
+    <div className="connection-panel" role="dialog" aria-modal="true" aria-labelledby="delete-corpus-title">
+      <div className="connection-card">
+        <span className="panel-icon danger-icon"><AlertCircle size={22} /></span>
+        <p className="eyebrow">Destructive action</p>
+        <h2 id="delete-corpus-title">Are you sure you want to delete the corpus?</h2>
+        <p className="muted-copy">This will remove all the stored papers.</p>
+        <div className="dialog-actions">
+          <button ref={declineRef} className="secondary-button" type="button" onClick={onCancel} disabled={busy}>No</button>
+          <button className="danger-button" type="button" onClick={onConfirm} disabled={busy}>
+            {busy ? <RefreshCw className="spin" size={17} /> : null}{busy ? 'Deleting…' : 'Yes'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

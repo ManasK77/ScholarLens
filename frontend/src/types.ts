@@ -19,6 +19,24 @@ export interface Evidence {
   source_type?: string
 }
 
+/**
+ * One verified cross-paper disagreement inside a cluster.
+ *
+ * The backend stores only pairs that passed Stage 6's claim, topic, direction
+ * and corroboration gates, so every entry here is something the "Conflicting
+ * evidence" pill can be made to explain rather than merely assert. Optional on
+ * `Cluster` so an older API response still type-checks.
+ */
+export interface ContradictionPair {
+  left_point_id: string
+  left_paper_id: number
+  left_text: string | null
+  right_point_id: string
+  right_paper_id: number
+  right_text: string | null
+  score: number
+}
+
 export interface Cluster {
   id: number
   label: string | null
@@ -26,6 +44,7 @@ export interface Cluster {
   contradiction_flag: boolean
   contradiction_score: number
   members: Evidence[]
+  contradictions?: ContradictionPair[]
 }
 
 export interface Trend {
@@ -46,6 +65,36 @@ export interface GapRanking {
   }
 }
 
+/**
+ * One of the three claims a gap statement rests on, with the evidence behind
+ * it: (A) the problem exists, (B) existing solutions fall short, (C) a
+ * specific research gap remains. `supported` is false unless a retrieved
+ * passage actually carried that claim.
+ */
+export interface GroundedClaim {
+  supported: boolean
+  statement: string
+  evidence_ids: string[]
+}
+
+export interface ReportJustification {
+  problem_evidence?: GroundedClaim
+  solution_insufficiency_evidence?: GroundedClaim
+  research_gap_evidence?: GroundedClaim
+  conflicting_evidence?: GroundedClaim
+}
+
+/**
+ * How much evidence a report rests on, and from how many papers. Eight
+ * passages from one study and eight from eight studies are not equally
+ * supported, and only `unique_paper_count` tells them apart.
+ */
+export interface EvidenceSummary {
+  passage_count: number
+  unique_paper_count: number
+  max_passages_from_one_paper: number
+}
+
 export interface GapReport {
   stale?: boolean
   snapshot_id?: string
@@ -53,10 +102,18 @@ export interface GapReport {
   cluster_id: number
   gap: string
   evidence: Evidence[]
+  /**
+   * LLM-generated and NOT statistically calibrated: it is the model's own
+   * estimate, prompted to fall when the evidence is thin, dominated by one
+   * paper, or missing support for (B) or (C). Treat it as a hint, not a
+   * probability.
+   */
   confidence: number
   suggested_directions: string[]
   provider: string
   model: string
+  justification?: ReportJustification
+  evidence_summary?: EvidenceSummary
 }
 
 export interface GraphNode {
@@ -87,11 +144,35 @@ export interface QueryResult {
   model: string
 }
 
+/** Distinct papers a collection recognised rather than re-created. Categories
+ *  are mutually exclusive and counted per paper, so one paper three sources all
+ *  returned is a single cross-source duplicate — see `RunLedger` in
+ *  `routes_ingestion.py` for the priority between them. */
+export interface CollectDuplicates {
+  total: number
+  cross_source: number
+  within_source: number
+  already_in_corpus: number
+}
+
 export interface CollectResult {
+  /** Distinct corpus rows this run touched — inserted, merged, or enriched. */
   count: number
   ids: number[]
+  /** Rows actually created. `count - added` were already in the corpus. */
+  added?: number
+  duplicates?: CollectDuplicates
   /** Per-source outcome: 'ok', or 'failed: <reason>' when that source was unreachable. */
   sources?: Record<string, string>
+  /** What each source contributed before dedup, so a source that stored
+   *  nothing can be told from a source that returned nothing. */
+  source_stats?: Record<string, { candidates: number; added: number; duplicates: number }>
+}
+
+export interface CorpusResetResult {
+  deleted: boolean
+  papers: number
+  pdfs: number
 }
 
 export interface UploadResult {

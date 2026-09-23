@@ -271,3 +271,52 @@ def test_search_topic_prefilter_sees_through_wrapped_field_values(tmp_path):
     out = acl_anthology.search_topic(str(bib), "cross lingual transfer")
 
     assert [c["acl_id"] for c in out] == ["2024.acl-long.1"]
+
+
+# ---------------------------------------------------------------------------
+# Topic-term matching (D-QUERY-02)
+#
+# `search_topic` used to require the user's entire topic as one literal
+# case-insensitive substring of a title or abstract, so "multilingual prompt
+# injection" matched an Anthology paper only if those three words appeared
+# adjacent and in that order. The topic is now split by
+# `app.ingestion.topic.meaningful_terms` and *every* term must appear — still a
+# plain case-insensitive substring test per term, so single-word topics behave
+# exactly as before, but the terms no longer have to be adjacent.
+# ---------------------------------------------------------------------------
+
+
+def test_a_multi_word_topic_matches_a_paper_holding_all_its_terms_apart():
+    out = acl_anthology.search_topic(
+        FIXTURE_PATH, "multilingual semantic role labeling"
+    )
+
+    assert [c["acl_id"] for c in out] == ["2023.acl-long.310"]
+    # The literal topic string appears nowhere in the matched record — under the
+    # old whole-phrase rule this paper was simply invisible to the topic.
+    matched = out[0]
+    haystack = f"{matched['title']} {matched['abstract']}".lower()
+    assert "multilingual semantic role labeling" not in haystack
+
+
+def test_term_order_and_function_words_do_not_decide_a_match():
+    out = acl_anthology.search_topic(
+        FIXTURE_PATH, "semantic labeling in multilingual systems"
+    )
+
+    assert [c["acl_id"] for c in out] == ["2023.acl-long.310"]
+
+
+def test_every_term_is_still_required_so_the_search_does_not_broaden():
+    """`multilingual` alone matches six fixture records; adding a second term
+    the corpus does not carry must return none of them, not all of them."""
+    out = acl_anthology.search_topic(FIXTURE_PATH, "multilingual summarization")
+
+    assert out == []
+
+
+def test_a_single_word_topic_still_matches_as_a_plain_substring():
+    """Unchanged behaviour: one term is one substring test, negations included."""
+    out = acl_anthology.search_topic(FIXTURE_PATH, "multilingual")
+
+    assert len(out) == 6

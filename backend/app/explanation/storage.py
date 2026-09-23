@@ -30,14 +30,15 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
+from app.core.pipeline import current_run, fingerprint, now
 from app.explanation.schema import GapReportRecord
 from app.ingestion.corpus import Base
-from app.core.pipeline import current_run, fingerprint, now
 
 
 class ReportSnapshot(Base):
     """Historical report data has no FK to replaceable cluster identifiers."""
-    __tablename__ = 'report_snapshots'
+
+    __tablename__ = "report_snapshots"
     id: Mapped[str] = mapped_column(String, primary_key=True)
     reports: Mapped[list] = mapped_column(JSON)
     run_id: Mapped[str | None] = mapped_column(String)
@@ -45,7 +46,19 @@ class ReportSnapshot(Base):
 
 
 def serialize_report(row):
-    return {key: getattr(row, key) for key in ('cluster_id', 'gap', 'evidence', 'confidence', 'suggested_directions', 'provider', 'model')}
+    return {
+        key: getattr(row, key)
+        for key in (
+            "cluster_id",
+            "gap",
+            "evidence",
+            "confidence",
+            "suggested_directions",
+            "provider",
+            "model",
+            "justification",
+        )
+    }
 
 
 def archive_reports(session):
@@ -55,7 +68,9 @@ def archive_reports(session):
         previous = session.get(ReportSnapshot, digest)
         if previous is None:
             run = current_run()
-            session.add(ReportSnapshot(id=digest, reports=rows, run_id=run.id if run else None))
+            session.add(
+                ReportSnapshot(id=digest, reports=rows, run_id=run.id if run else None)
+            )
             session.flush()
         else:
             previous.created_at = now()
@@ -65,10 +80,22 @@ def report_snapshot(session):
     rows = list_reports(session)
     if rows:
         return [serialize_report(row) for row in rows]
-    previous = session.scalar(select(ReportSnapshot).order_by(ReportSnapshot.created_at.desc(), ReportSnapshot.id.desc()).limit(1))
+    previous = session.scalar(
+        select(ReportSnapshot)
+        .order_by(ReportSnapshot.created_at.desc(), ReportSnapshot.id.desc())
+        .limit(1)
+    )
     if previous is None:
         return []
-    return [{**row, 'stale': True, 'snapshot_id': previous.id, 'snapshot_created_at': previous.created_at.isoformat()} for row in previous.reports]
+    return [
+        {
+            **row,
+            "stale": True,
+            "snapshot_id": previous.id,
+            "snapshot_created_at": previous.created_at.isoformat(),
+        }
+        for row in previous.reports
+    ]
 
 
 class GapReport(Base):
@@ -102,6 +129,12 @@ class GapReport(Base):
     # `Math.round(confidence * 100)`.
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     suggested_directions: Mapped[list] = mapped_column(JSON, nullable=False)
+    # The grounded A/B/C justification (D-09-05): which of "the problem
+    # exists", "existing solutions fall short" and "a specific gap remains"
+    # the retrieved evidence actually carried, each with the ids behind it.
+    # Nullable so a database written before this column can still be read; the
+    # API serves `{}` for those rows.
+    justification: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Which model produced this text, so a stored report can be attributed.
     provider: Mapped[str] = mapped_column(String, nullable=False)
     model: Mapped[str] = mapped_column(String, nullable=False)
@@ -133,6 +166,7 @@ def replace_reports(session: Session, reports: list[GapReportRecord]) -> list[in
             suggested_directions=list(report.suggested_directions),
             provider=report.provider,
             model=report.model,
+            justification=dict(report.justification),
         )
         for report in reports
     )

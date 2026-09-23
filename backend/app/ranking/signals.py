@@ -26,6 +26,8 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from app.clustering.claims import content_terms
+
 # Six decimals: below any weight's significance, above the two the dashboard
 # renders, and enough to keep a re-run byte-identical (D-08-08, mirroring
 # Stage 7's SLOPE_DECIMALS).
@@ -84,54 +86,135 @@ def _terms(text: str | None) -> list[str]:
     return _TERM.findall(text.lower()) if text else []
 
 
-def tokenize_contributions(
+# What makes a contribution a *solution* rather than a finding (D-08-11).
+#
+# Deliberately narrow, and deliberately not "propose", "present", "introduce",
+# "framework", "method" or "benchmark": measured on the 20-paper corpus, a cue
+# list including those marked a solver in 26 of 27 clusters and drove density
+# to 1.00 almost everywhere, which would make the -w3 term a constant. These
+# terms name a remedy specifically, and they produced a real spread (0.00 to
+# 1.00, most clusters between) on the same corpus.
+_SOLUTION_CUE = re.compile(
+    r"defen[cs]"  # defense / defence / defend
+    r"|mitigat"  # mitigate / mitigation
+    r"|safeguard"
+    r"|countermeasur"
+    r"|harden"
+    r"|protect"
+    r"|prevent"
+    r"|neutraliz"
+    r"|sanitiz"
+    r"|remediat"
+    r"|robust"
+    r"|resilien"
+    r"|\bguard"
+    r"|detector|detection"
+    r"|filter"
+    r"|firewall"
+    r"|shield"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PaperContributions:
+    """One paper's Phase 3 contributions, prepared for `solution_density`.
+
+    `terms` is one stemmed term set per statement, used to decide whether the
+    paper works on a given theme. `proposes_solution` is fixed per paper rather
+    than per statement because the question the signal asks is about the paper
+    ("did anyone address this?"), and Phase 3's extraction is sentence-level
+    and noisy enough that requiring the remedy and the topic in one sentence is
+    what made the old rule unsatisfiable.
+    """
+
+    terms: tuple[frozenset[str], ...]
+    proposes_solution: bool
+
+
+def index_contributions(
     contributions_by_paper: dict[int, list[str]],
-) -> dict[int, list[frozenset[str]]]:
-    """`paper_id -> one term set per contribution statement`.
+) -> dict[int, PaperContributions]:
+    """`paper_id -> PaperContributions`, prepared once for the whole run.
 
     Done once per corpus rather than once per cluster: `solution_density` is
     called for every cluster against the *same* corpus-wide contributions, so
     tokenizing inside it would re-scan every statement C times for C clusters.
+
+    Terms are stemmed through `app.clustering.claims.content_terms`, the same
+    function Stage 6's topic gate uses, so "injections" and "injection" agree
+    and the two stages cannot drift apart on what a word is.
     """
-    return {
-        paper_id: [frozenset(_terms(statement)) for statement in statements]
-        for paper_id, statements in contributions_by_paper.items()
-    }
+    prepared: dict[int, PaperContributions] = {}
+    for paper_id, statements in contributions_by_paper.items():
+        prepared[paper_id] = PaperContributions(
+            terms=tuple(frozenset(content_terms(text)) for text in statements),
+            proposes_solution=any(
+                _SOLUTION_CUE.search((text or "").lower()) for text in statements
+            ),
+        )
+    return prepared
 
 
 def solution_density(
     label: str | None,
-    mentioning_papers: int,
-    contribution_terms: dict[int, list[frozenset[str]]],
+    mentioning_paper_ids: Iterable[int],
+    contributions: dict[int, PaperContributions],
+    *,
+    min_label_overlap: int = 2,
 ) -> float:
-    """Papers proposing solutions over papers mentioning the problem (D-08-04).
+    """Papers proposing a solution over papers mentioning the problem.
 
-    A paper proposes a solution to this theme when one of its Phase 3
-    `contribution` statements uses **every** term of the cluster's label —
-    Phase 6's own deterministic description of what the theme is about
-    (D-06-06). Requiring every term rather than any one keeps a single shared
-    word ("multilingual") from marking half a focused corpus as solvers.
+    A paper counts as a solver when **both** hold:
 
-    `contribution_terms` (from `tokenize_contributions`) is corpus-wide, not
-    restricted to the cluster's own papers: a paper that actually solved a
-    problem rarely lists it as its own limitation, so it is not in the cluster,
-    and restricting the numerator would leave this signal at zero for every
-    theme. The ratio is clamped to `[0, 1]` so the `- w3 * density` term stays
-    bounded and the value still reads as a density.
+    * it **works on this theme** — it is one of the cluster's own papers, or
+      one of its contributions shares at least `min_label_overlap` stemmed
+      terms with the cluster's label; and
+    * it **proposes a remedy** — one of its contributions uses a solution cue
+      (`_SOLUTION_CUE`), not merely a word from the label.
 
-    Returns `0.0` — never raises — for a cluster with no label (nullable by
-    Phase 6 contract), a label with no usable terms, or no mentioning papers.
+    **Why this replaced the all-label-terms rule (D-08-11).** The old rule asked
+    for a contribution containing *every* term of the label. Measured on the
+    20-paper LLM-security corpus it scored `0.00` for all 27 clusters: the top
+    gap's label is "prompt attacks injection" and not one of the corpus's 92
+    contribution sentences contains all three words. Worse, it was blind to the
+    thing it exists to find — Sentra-Guard is a prompt injection *defense* whose
+    contributions say "neutralized more than 98.7% of adversarial attempts" and
+    share no word with that label at all. A signal that is always zero is not a
+    signal; the `- w3 * density` term was decorative.
+
+    Splitting the two questions is what fixes it. Lexical overlap is a poor
+    test of "did you solve it" but an adequate test of "are you working on
+    this", and cluster membership answers the second question outright for the
+    papers the pipeline already grouped. The remedy cue answers the first.
+
+    `contributions` stays corpus-wide rather than restricted to the cluster
+    (D-08-04): a paper that actually solved a problem rarely lists it as its own
+    limitation, so it is not a member, and restricting the numerator would put
+    this signal back at zero for every theme.
+
+    The ratio is clamped to `[0, 1]` so the `- w3 * density` term stays bounded
+    and the value still reads as a density. Returns `0.0` — never raises — for
+    a cluster with no mentioning papers.
     """
-    terms = frozenset(_terms(label))
-    if not terms or mentioning_papers <= 0:
+    members = set(mentioning_paper_ids)
+    if not members:
         return 0.0
 
-    solvers = sum(
-        1
-        for statements in contribution_terms.values()
-        if any(terms <= statement for statement in statements)
-    )
-    return min(solvers / mentioning_papers, 1.0)
+    label_terms = frozenset(content_terms(label))
+    solvers = 0
+    for paper_id, contribution in contributions.items():
+        if not contribution.proposes_solution:
+            continue
+        on_theme = paper_id in members or (
+            bool(label_terms)
+            and any(
+                len(label_terms & statement) >= min_label_overlap
+                for statement in contribution.terms
+            )
+        )
+        if on_theme:
+            solvers += 1
+    return min(solvers / len(members), 1.0)
 
 
 def citation_impact(citation_counts: Iterable[int | None]) -> float:
@@ -152,15 +235,38 @@ def citation_impact(citation_counts: Iterable[int | None]) -> float:
     return sum(max(float(count or 0), 0.0) for count in counts) / len(counts)
 
 
-def contradiction_signal(flagged: bool) -> float:
-    """Phase 6's cross-paper disagreement flag as `1.0` / `0.0` (D-08-06).
+def contradiction_signal(
+    disagreeing_paper_pairs: int,
+    *,
+    min_paper_pairs: int = 2,
+    full_strength: int = 3,
+) -> float:
+    """How broadly the cluster's papers disagree, in `[0, 1]` (D-08-10).
 
-    README names a *flag*, and `frontend/src/types.ts` types it `number`.
-    `Cluster.contradiction_score` is deliberately not substituted: a 0.71 and a
-    0.99 both mean "these papers disagree", and swapping it in would re-weight
-    `w5` by the NLI model's confidence without anyone asking for that.
+    Graded on the number of distinct *paper* pairs Stage 6 verified, not on a
+    boolean and not on the NLI score:
+
+    * below `min_paper_pairs` the cluster scores a clean `0.0` — Stage 6
+      already declined to flag it, and this re-checks the same rule so a
+      ranking cannot inherit a flag from an older run under looser settings;
+    * at or above it the signal is `pairs / full_strength`, clamped to `1.0`.
+
+    **Why breadth rather than the NLI probability.** D-08-06's reasoning is
+    unchanged: a 0.71 and a 0.99 both mean "these two papers disagree", and
+    substituting the model's confidence would re-weight `w5` by how sure a
+    transformer felt. What *does* distinguish a strong disagreement from a weak
+    one is how much of the literature takes part, and that is a count the
+    pipeline can defend.
+
+    **Why not a boolean.** On the 20-paper corpus a single uncorroborated pair
+    contributed the full `w5` — 5.0 of an 11.01 gap score, enough to carry the
+    cluster to rank 1 — on evidence that turned out to be an ethics disclaimer
+    scored against a recommendation bullet. One pair should never have been
+    able to buy the whole weight.
     """
-    return 1.0 if flagged else 0.0
+    if disagreeing_paper_pairs < max(min_paper_pairs, 1):
+        return 0.0
+    return min(disagreeing_paper_pairs / full_strength, 1.0)
 
 
 def gap_score(

@@ -20,9 +20,10 @@ of that may reach Neo4j or take a batch run down.
 
 import logging
 import math
-from dataclasses import replace
 from collections.abc import Iterable, Sequence
+from dataclasses import replace
 from functools import lru_cache
+from time import perf_counter
 from typing import Any, Protocol
 
 from app.core.config import Settings, get_settings
@@ -45,7 +46,9 @@ class JointIEModel(Protocol):
 
     def extract(self, text: str, schema: Any, config: Any = None) -> Any: ...
 
-    def batch_extract(self, texts: list[str], schema: Any, config: Any = None) -> Any: ...
+    def batch_extract(
+        self, texts: list[str], schema: Any, config: Any = None
+    ) -> Any: ...
 
 
 def build_joint_schema(model: JointIEModel) -> Any:
@@ -91,7 +94,7 @@ class JointEntityRelationExtractor:
         self._relation_threshold = relation_threshold
         self._config = config
         if not 1 <= batch_size <= 32:
-            raise ValueError('batch_size must be between 1 and 32')
+            raise ValueError("batch_size must be between 1 and 32")
         self._batch_size = batch_size
         self._schema: Any = None
 
@@ -119,20 +122,32 @@ class JointEntityRelationExtractor:
         for raw in self._extract_results(chunks):
             self._merge(raw, entities, relations)
 
-        return JointExtractionResult(entities=list(entities.values()), relations=list(relations.values()))
+        return JointExtractionResult(
+            entities=list(entities.values()), relations=list(relations.values())
+        )
 
     def _extract_results(self, chunks):
         for start in range(0, len(chunks), self._batch_size):
-            batch = chunks[start:start + self._batch_size]
+            batch = chunks[start : start + self._batch_size]
             if self._batch_size > 1:
                 try:
                     from gliner2.joint_ie import JointIEConfig
-                    config = replace(self._config or JointIEConfig(), batch_size=self._batch_size)
-                    results = list(self._model.batch_extract(batch, self._joint_schema(), config=config))
+
+                    config = replace(
+                        self._config or JointIEConfig(), batch_size=self._batch_size
+                    )
+                    results = list(
+                        self._model.batch_extract(
+                            batch, self._joint_schema(), config=config
+                        )
+                    )
                     if len(results) != len(batch):
-                        raise ValueError('JointIE batch result count mismatch')
-                except Exception:
-                    logger.warning('JointIE batch failed; retrying %d chunks individually', len(batch))
+                        raise ValueError("JointIE batch result count mismatch")
+                except Exception:  # noqa: BLE001 — any batch failure falls back to per-chunk
+                    logger.warning(
+                        "JointIE batch failed; retrying %d chunks individually",
+                        len(batch),
+                    )
                 else:
                     yield from results
                     continue
@@ -140,17 +155,16 @@ class JointEntityRelationExtractor:
                 yield from self._extract_one(chunk)
 
     def _extract_one(self, chunk):
-            try:
-                raw = self._model.extract(
-                    chunk, self._joint_schema(), config=self._config
-                )
-            except Exception:
-                from app.core.pipeline import current_run
-                if current_run():
-                    raise
-                logger.exception("Joint extraction failed for one chunk; skipping it")
-                return
-            yield raw
+        try:
+            raw = self._model.extract(chunk, self._joint_schema(), config=self._config)
+        except Exception:
+            from app.core.pipeline import current_run
+
+            if current_run():
+                raise
+            logger.exception("Joint extraction failed for one chunk; skipping it")
+            return
+        yield raw
 
     def _merge(
         self,
@@ -161,16 +175,18 @@ class JointEntityRelationExtractor:
         payload = self._payload(raw)
         if payload is None:
             from app.core.pipeline import current_run
+
             if current_run():
-                raise ValueError('JointIE returned an unreadable result')
+                raise ValueError("JointIE returned an unreadable result")
             return
 
         # `feasible is False` means the decoder could not satisfy the declared
         # constraints and fell back to an empty assignment — not "nothing found".
         if getattr(raw, "feasible", True) is False:
             from app.core.pipeline import current_run
+
             if current_run():
-                raise ValueError('JointIE could not decode a feasible result')
+                raise ValueError("JointIE could not decode a feasible result")
             logger.debug("JointIE reported an infeasible graph; dropping the chunk")
             return
 
@@ -266,7 +282,15 @@ def load_joint_model(settings: Settings) -> JointIEModel:
     """
     from gliner2.joint_ie import JointIE
 
-    return JointIE.from_pretrained(settings.nerre_model)
+    started = perf_counter()
+    model = JointIE.from_pretrained(settings.nerre_model)
+    logger.info(
+        "Loaded GLiNER2 %s in %.1fs (batch_size=%d)",
+        settings.nerre_model,
+        perf_counter() - started,
+        settings.nerre_batch_size,
+    )
+    return model
 
 
 @lru_cache(maxsize=1)

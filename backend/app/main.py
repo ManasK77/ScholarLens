@@ -6,10 +6,10 @@ from app.api import routes_backend, routes_health, routes_ingestion
 from app.clustering import (
     storage as clustering_storage,  # noqa: F401 -- registers Cluster/ClusterMember
 )
-from app.core.schema import ensure_schema_compatibility
-from app.core.logging import configure_logging
-from app.core.config import get_settings
 from app.core import pipeline as pipeline_storage  # noqa: F401
+from app.core.config import get_settings
+from app.core.logging import configure_logging
+from app.core.schema import ensure_schema_compatibility
 from app.explanation import (
     storage as explanation_storage,  # noqa: F401 -- registers GapReport
 )

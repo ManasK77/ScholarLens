@@ -351,17 +351,21 @@ def test_the_request_asks_arxiv_for_exactly_the_configured_result_limit():
 
     query = parse_qs(urlparse(adapter.sent[0].url).query)
     assert query["max_results"] == ["10"]
-    assert query["search_query"] == ['all:"prompt injection"']
+    assert query["search_query"] == ['all:"prompt" AND all:"injection"']
 
 
 # ---------------------------------------------------------------------------
-# Query construction (D-QUERY-01)
+# Query construction (D-QUERY-02, superseding D-QUERY-01)
 #
-# An unprefixed `search_query=prompt injection` leaves the field and the
-# word-grouping to arXiv's parser. ScholarLens searches *broadly for the topic
-# the user typed*, so the topic is sent as an explicit all-fields phrase:
-# `all:"prompt injection"`. This is a search-relevance fix and has nothing to
-# do with rate limiting.
+# D-QUERY-01 sent the topic as one all-fields *phrase* — `all:"prompt
+# injection"` — which requires those words adjacent, in that order, in one
+# field. That is far narrower than a researcher means by a topic: "multilingual
+# prompt injection" returned nothing from arXiv while Semantic Scholar, which
+# tokenizes the query itself, returned ten papers. The topic is now split by
+# `app.ingestion.topic.meaningful_terms` and sent as an AND of its terms, each
+# still an all-fields phrase of its own. A paper must contain every meaningful
+# term somewhere — so the search is still constrained by everything the user
+# typed — but the terms no longer have to sit next to each other.
 # ---------------------------------------------------------------------------
 
 
@@ -369,20 +373,41 @@ def _sent_query(adapter) -> str:
     return parse_qs(urlparse(adapter.sent[0].url).query)["search_query"][0]
 
 
-def test_the_topic_is_sent_as_an_explicit_all_fields_phrase():
+def test_a_multi_word_topic_is_sent_as_an_and_of_its_terms():
     adapter = FakeAdapter([ok()])
 
-    _search(adapter)
+    _search(adapter, topic="Multilingual prompt injection")
 
-    assert _sent_query(adapter) == 'all:"prompt injection"'
+    assert _sent_query(adapter) == (
+        'all:"Multilingual" AND all:"prompt" AND all:"injection"'
+    )
 
 
-def test_a_single_word_topic_is_also_sent_as_an_all_fields_query():
+def test_a_single_word_topic_is_still_a_single_all_fields_query():
     adapter = FakeAdapter([ok()])
 
     _search(adapter, topic="transformers")
 
     assert _sent_query(adapter) == 'all:"transformers"'
+
+
+def test_the_query_is_not_broadened_into_an_or_of_its_terms():
+    """Every term is still required. Dropping to OR would return papers about
+    prompting in general, which is the noisy search this change must not make."""
+    adapter = FakeAdapter([ok()])
+
+    _search(adapter)
+
+    assert " OR " not in _sent_query(adapter)
+    assert _sent_query(adapter).count("AND") == 1
+
+
+def test_function_words_do_not_constrain_the_query():
+    adapter = FakeAdapter([ok()])
+
+    _search(adapter, topic="the alignment tax")
+
+    assert _sent_query(adapter) == 'all:"alignment" AND all:"tax"'
 
 
 def test_the_url_is_encoded_rather_than_carrying_raw_spaces_or_quotes():
@@ -396,34 +421,41 @@ def test_the_url_is_encoded_rather_than_carrying_raw_spaces_or_quotes():
 
 
 @pytest.mark.parametrize(
-    "topic",
+    ("topic", "expected"),
     [
-        "retrieval-augmented generation",
-        "GPT-4 (vision)",
-        "hate speech: a survey",
-        "back-translation & paraphrase",
-        "Müller's method",
+        (
+            "retrieval-augmented generation",
+            'all:"retrieval-augmented" AND all:"generation"',
+        ),
+        ("GPT-4 (vision)", 'all:"GPT-4" AND all:"vision"'),
+        ("hate speech: a survey", 'all:"hate" AND all:"speech" AND all:"survey"'),
+        (
+            "back-translation & paraphrase",
+            'all:"back-translation" AND all:"paraphrase"',
+        ),
+        ("Müller's method", 'all:"Müller\'s" AND all:"method"'),
     ],
 )
-def test_punctuation_in_a_topic_survives_the_round_trip(topic):
-    """Spaces, hyphens, parentheses, colons, ampersands and non-ASCII are all
-    carried through as the user typed them — no operator is invented."""
+def test_punctuation_in_a_topic_survives_the_round_trip(topic, expected):
+    """Hyphens, apostrophes and non-ASCII stay inside a term as the user typed
+    them; only the separators arXiv's own grammar would read — parentheses,
+    colons, ampersands — are dropped."""
     adapter = FakeAdapter([ok()])
 
     _search(adapter, topic=topic)
 
-    assert _sent_query(adapter) == f'all:"{topic}"'
+    assert _sent_query(adapter) == expected
 
 
 def test_double_quotes_inside_a_topic_cannot_break_out_of_the_phrase():
     """arXiv's grammar has no documented escape for a quote inside a quoted
     phrase, so embedded quotes are dropped rather than sent as-is, where they
-    would terminate the phrase early and change the query's meaning."""
+    would terminate a term's phrase early and change the query's meaning."""
     adapter = FakeAdapter([ok()])
 
     _search(adapter, topic='the "alignment tax"')
 
-    assert _sent_query(adapter) == 'all:"the alignment tax"'
+    assert _sent_query(adapter) == 'all:"alignment" AND all:"tax"'
 
 
 def test_relevance_sorting_and_descending_order_are_unchanged():

@@ -783,3 +783,107 @@ def test_llm_timeout_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+GROQ_RATE_LIMIT_VARIABLES = (
+    "GROQ_MAX_RETRIES",
+    "GROQ_BACKOFF_BASE_SECONDS",
+    "GROQ_BACKOFF_MAX_SECONDS",
+    "GROQ_MIN_INTERVAL_SECONDS",
+    "GROQ_MAX_COMPLETION_TOKENS",
+)
+
+
+def test_groq_rate_limit_settings_have_sane_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`app/explanation/llm.py` reads every one of these off `Settings`."""
+    _set_all_required(monkeypatch)
+
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.groq_max_retries == 4
+    assert settings.groq_backoff_base_seconds == 2.0
+    # Above a minute on purpose: a tokens-per-minute ceiling clears within the
+    # minute, so a lower cap would abandon the one refusal worth waiting out.
+    assert settings.groq_backoff_max_seconds > 60.0
+    # No proactive spacing by default — retries carry a paid tier just fine.
+    assert settings.groq_min_interval_seconds == 0.0
+    assert settings.groq_max_completion_tokens == 2048
+
+
+def test_groq_rate_limit_settings_load_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv("GROQ_MAX_RETRIES", "6")
+    monkeypatch.setenv("GROQ_BACKOFF_BASE_SECONDS", "5")
+    monkeypatch.setenv("GROQ_BACKOFF_MAX_SECONDS", "120")
+    monkeypatch.setenv("GROQ_MIN_INTERVAL_SECONDS", "20")
+    monkeypatch.setenv("GROQ_MAX_COMPLETION_TOKENS", "1024")
+
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.groq_max_retries == 6
+    assert settings.groq_backoff_base_seconds == 5.0
+    assert settings.groq_backoff_max_seconds == 120.0
+    assert settings.groq_min_interval_seconds == 20.0
+    assert settings.groq_max_completion_tokens == 1024
+
+
+def test_retrying_forever_cannot_be_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A retry budget is a budget: an unbounded one holds a request open."""
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv("GROQ_MAX_RETRIES", "500")
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_zero_retries_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unlike the caps, 0 is meaningful here: fail fast on the first refusal."""
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv("GROQ_MAX_RETRIES", "0")
+
+    from app.core.config import Settings
+
+    assert Settings(_env_file=None).groq_max_retries == 0
+
+
+@pytest.mark.parametrize(
+    "variable",
+    [
+        "GROQ_BACKOFF_BASE_SECONDS",
+        "GROQ_BACKOFF_MAX_SECONDS",
+        "GROQ_MAX_COMPLETION_TOKENS",
+    ],
+)
+def test_groq_rate_limit_settings_reject_non_positive_values(
+    monkeypatch: pytest.MonkeyPatch, variable: str
+) -> None:
+    """Zero backoff is a retry storm; a zero token budget generates nothing."""
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv(variable, "0")
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_report_top_k_is_configurable_through_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The knob that turns corpus size into LLM calls: one call per ranked gap."""
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv("REPORT_TOP_K", "3")
+
+    from app.core.config import Settings
+
+    assert Settings(_env_file=None).report_top_k == 3

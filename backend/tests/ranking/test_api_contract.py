@@ -42,8 +42,8 @@ PROJECTED_FIELDS = {"cluster_id", "score"} | SIGNAL_FIELDS
 
 
 def _handler(name: str) -> ast.FunctionDef:
-    if name == 'run_pipeline':
-        name = '_execute_pipeline'
+    if name == "run_pipeline":
+        name = "_execute_pipeline"
     tree = ast.parse(ROUTES.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name == name:
@@ -167,7 +167,12 @@ class TestProjectedPayload:
         replace_trends(session, [(ids[0], TrendSeries({"2021": 1, "2023": 2}, 0.5, 0))])
         rebuild_rankings(
             session,
-            SimpleNamespace(gap_weights=lambda: (1.0, 3.0, 25.0, 0.02, 5.0)),
+            SimpleNamespace(
+                gap_weights=lambda: (1.0, 3.0, 25.0, 0.02, 5.0),
+                gap_solution_min_label_overlap=2,
+                contradiction_min_paper_pairs=2,
+                contradiction_full_strength_paper_pairs=3,
+            ),
         )
 
         payload = [

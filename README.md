@@ -415,8 +415,10 @@ Open `http://127.0.0.1:5173`, choose **Connect API**, and enter the same `API_KE
 
 The dashboard's **Add papers** workspace exposes the complete corpus setup
 flow: search scholarly sources by topic, upload one or more local PDFs, inspect
-recently added papers, and run the evidence-building pipeline. The API examples
-below provide the equivalent command-line workflow.
+every paper the latest search added, run the evidence-building pipeline, and —
+behind a confirmation dialog — delete the stored corpus via `DELETE
+/admin/corpus`. The API examples below provide the equivalent command-line
+workflow.
 
 Downloaded and uploaded PDFs are stored in the Docker volume `pdf_data`, the
 cached ACL Anthology bibliographic export in `corpus_cache`, and the Hugging

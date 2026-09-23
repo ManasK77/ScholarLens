@@ -10,6 +10,7 @@ Two properties this phase lives or dies by:
   discarded; a report whose citations are all invented is not stored at all.
 """
 
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -18,14 +19,23 @@ from sqlalchemy.orm import Session
 
 from app.clustering.schema import GapStatement, StatementCluster
 from app.clustering.storage import Cluster, ClusterMember, replace_clusters
-from app.explanation.llm import LLMError, LLMUnavailableError
+from app.explanation.llm import LLMError, LLMRateLimitError, LLMUnavailableError
 from app.explanation.service import generate_top_reports
 from app.explanation.storage import list_reports
 from app.ingestion import corpus
 from app.ranking.signals import GapSignals
 from app.ranking.storage import replace_rankings
 
-SETTINGS = SimpleNamespace(report_top_k=5, report_evidence_top_n=4)
+# `report_evidence_oversample=1` keeps these tests' retrieval limit equal to
+# `report_evidence_top_n`, so the assertions about *what is retrieved* stay
+# about retrieval. The oversample-and-select behaviour is covered in
+# test_selection.py and in TestEvidenceDiversity below.
+SETTINGS = SimpleNamespace(
+    report_top_k=5,
+    report_evidence_top_n=4,
+    report_evidence_oversample=1,
+    report_evidence_per_paper_cap=4,
+)
 
 
 class FakeIndex:
@@ -259,7 +269,12 @@ class TestRetrieval:
     def test_top_k_bounds_how_many_clusters_are_explained(self, session):
         ids = _seed(session, labels=("a", "b", "c"), scores=[9.0, 5.0, 1.0])
         index = FakeIndex(points=[_point("p1", 101, "English prompts only.")])
-        settings = SimpleNamespace(report_top_k=2, report_evidence_top_n=4)
+        settings = SimpleNamespace(
+            report_top_k=2,
+            report_evidence_top_n=4,
+            report_evidence_oversample=1,
+            report_evidence_per_paper_cap=4,
+        )
 
         stored = generate_top_reports(
             session, settings, index, FakeLLM([_draft(["p1"])])
@@ -357,6 +372,47 @@ class TestFailureHandling:
 
         [row] = list_reports(session)
         assert row.cluster_id == cluster_id
+
+    def test_a_metered_run_is_resumable_against_the_same_evidence_base(self, session):
+        """The Stage 9 recovery path, end to end.
+
+        A rate limit stops generation; nothing upstream is touched; a later
+        call against the *same* stored clusters and rankings succeeds. This is
+        what makes `POST /reports` a real retry rather than a reason to rebuild
+        the corpus from PDFs.
+        """
+        [cluster_id] = _seed(session)
+        index = FakeIndex(points=[_point("p1", 101, "English prompts only.")])
+        metered = LLMRateLimitError("Groq rate limit reached.", retry_after=60.0)
+
+        with pytest.raises(LLMRateLimitError):
+            generate_top_reports(session, SETTINGS, index, FakeLLM([metered]))
+
+        assert list_reports(session) == []
+        # Nothing upstream was consumed: the same rankings are still there to
+        # explain, and no re-parse, re-embed or re-cluster is needed.
+        assert generate_top_reports(
+            session, SETTINGS, index, FakeLLM([_draft(["p1"])])
+        ) == [cluster_id]
+
+    def test_a_rate_limit_mid_run_says_how_far_the_run_got(self, session, caplog):
+        """Two of five done still costs five calls on retry, so the operator is
+        told the size of what is being repeated rather than left to guess."""
+        ids = _seed(session, labels=("a", "b", "c"), scores=[9.0, 5.0, 1.0])
+        index = FakeIndex(points=[_point("p1", 101, "English prompts only.")])
+        llm = FakeLLM(
+            [
+                _draft(["p1"]),
+                LLMRateLimitError("Groq rate limit reached."),
+            ]
+        )
+
+        with caplog.at_level(logging.WARNING), pytest.raises(LLMRateLimitError):
+            generate_top_reports(session, SETTINGS, index, llm)
+
+        logged = " ".join(record.getMessage() for record in caplog.records)
+        assert "1 of 3" in logged
+        assert len(ids) == 3
 
     def test_no_rankings_clears_the_stored_reports(self, session):
         _seed(session)

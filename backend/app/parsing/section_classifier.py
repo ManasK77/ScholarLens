@@ -1,9 +1,13 @@
 """Normalize heterogeneous scientific section headings to seven roles."""
 
+import logging
 import math
 import re
 from collections.abc import Callable, Sequence
 from functools import lru_cache
+from time import perf_counter
+
+logger = logging.getLogger(__name__)
 
 Vector = Sequence[float]
 EmbedFn = Callable[[list[str]], Sequence[Vector]]
@@ -71,6 +75,7 @@ def _cosine_similarity(left: Vector, right: Vector) -> float:
 @lru_cache(maxsize=1)
 def get_embedder() -> EmbedFn:
     """Lazily construct one mean-pooled SciBERT embedder per process."""
+    started = perf_counter()
     from sentence_transformers import SentenceTransformer
 
     # sentence-transformers moved these in 6.x. Phase 4 pinned the library back
@@ -87,6 +92,11 @@ def get_embedder() -> EmbedFn:
     transformer = Transformer("allenai/scibert_scivocab_uncased")
     pooling = Pooling(transformer.get_embedding_dimension(), pooling_mode="mean")
     model = SentenceTransformer(modules=[transformer, pooling])
+    logger.info(
+        "Loaded SciBERT allenai/scibert_scivocab_uncased (%d-d) in %.1fs",
+        transformer.get_embedding_dimension(),
+        perf_counter() - started,
+    )
 
     def embed(texts: list[str]):
         return model.encode(texts, convert_to_numpy=True)
@@ -121,23 +131,34 @@ class HeadingClassifier:
     def __init__(self, embed_fn=None):
         self.embed_fn = embed_fn
         self.references = None
+        # O2 telemetry: how many headings each path decided, process-wide. A
+        # caller reads the delta across a stage; nothing here holds text.
+        self.keyword_count = 0
+        self.semantic_count = 0
 
     def classify_many(self, headings, batch_size=32):
         if batch_size < 1:
-            raise ValueError('batch_size must be positive')
-        labels = ['Introduction' if not h or not h.strip() else _keyword_match(h) for h in headings]
+            raise ValueError("batch_size must be positive")
+        labels = [
+            "Introduction" if not h or not h.strip() else _keyword_match(h)
+            for h in headings
+        ]
         pending = [i for i, label in enumerate(labels) if label is None]
+        self.keyword_count += len(labels) - len(pending)
+        self.semantic_count += len(pending)
         if not pending:
             return labels
         embed = self.embed_fn or get_embedder()
         if self.references is None:
             self.references = embed(_EXEMPLARS)
         for start in range(0, len(pending), batch_size):
-            positions = pending[start:start + batch_size]
+            positions = pending[start : start + batch_size]
             vectors = embed([headings[i] for i in positions])
             for i, vector in zip(positions, vectors, strict=True):
                 scores = [_cosine_similarity(vector, ref) for ref in self.references]
-                labels[i] = CANONICAL_LABELS[max(range(len(scores)), key=scores.__getitem__)]
+                labels[i] = CANONICAL_LABELS[
+                    max(range(len(scores)), key=scores.__getitem__)
+                ]
         return labels
 
 

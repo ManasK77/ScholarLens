@@ -34,12 +34,18 @@ def session():
 def settings():
     return SimpleNamespace(
         clustering_min_cluster_size=3,
+        clustering_min_statement_words=6,
         clustering_min_samples=None,
         clustering_max_statements=1000,
         nli_batch_size=8,
         nli_max_chars=1000,
         nli_max_pairs_per_cluster=50,
         contradiction_threshold=0.5,
+        contradiction_min_claim_words=8,
+        contradiction_min_shared_terms=3,
+        contradiction_min_topic_jaccard=0.12,
+        contradiction_require_both_directions=True,
+        contradiction_min_paper_pairs=2,
     )
 
 
@@ -62,32 +68,54 @@ def _text(point_id: str) -> str:
 
 
 class FakeDetector:
-    """Contradicts exactly the hand-labelled pair, in one direction."""
+    """Contradicts exactly the hand-labelled pair, in both directions.
+
+    Both directions because D-06-12 now requires them to agree: a real
+    disagreement contradicts whichever statement is taken as the premise, while
+    a score in one order only is an NLI ordering artefact. `frozenset` is what
+    makes the stand-in order-insensitive the way a real disagreement is.
+    """
 
     def __init__(self):
         self.seen = 0
 
     def __call__(self, pairs):
         self.seen += len(pairs)
-        target = (_text(CONTRADICTION_PAIR[0]), _text(CONTRADICTION_PAIR[1]))
+        target = frozenset((_text(CONTRADICTION_PAIR[0]), _text(CONTRADICTION_PAIR[1])))
         return [
             {CONTRADICTION: 0.91, NEUTRAL: 0.06, ENTAILMENT: 0.03}
-            if pair == target
+            if frozenset(pair) == target
             else {CONTRADICTION: 0.02, NEUTRAL: 0.9, ENTAILMENT: 0.08}
             for pair in pairs
         ]
 
 
-def _detector(settings):
+def _detector(settings, **overrides):
+    """The production detector wiring, with the hand-labelled set's one caveat.
+
+    `min_paper_pairs` defaults to 1 here rather than to the production 2. The
+    labelled fixture contains exactly one disagreeing paper pair (D-06-12
+    counts *papers*, and p-ml-3/p-ml-4 are the only two that disagree), so the
+    production default would leave the set with nothing to flag and these tests
+    would assert on an empty result either way. That the default suppresses a
+    lone pair is asserted directly in
+    test_the_hand_labelled_contradiction_needs_corroboration.
+    """
     from app.clustering.nli import ContradictionDetector
 
-    return ContradictionDetector(
-        FakeDetector(),
-        threshold=settings.contradiction_threshold,
-        batch_size=settings.nli_batch_size,
-        max_chars=settings.nli_max_chars,
-        max_pairs_per_cluster=settings.nli_max_pairs_per_cluster,
-    )
+    kwargs = {
+        "threshold": settings.contradiction_threshold,
+        "batch_size": settings.nli_batch_size,
+        "max_chars": settings.nli_max_chars,
+        "max_pairs_per_cluster": settings.nli_max_pairs_per_cluster,
+        "min_claim_words": settings.contradiction_min_claim_words,
+        "min_shared_terms": settings.contradiction_min_shared_terms,
+        "min_topic_jaccard": settings.contradiction_min_topic_jaccard,
+        "require_both_directions": settings.contradiction_require_both_directions,
+        "min_paper_pairs": 1,
+    }
+    kwargs.update(overrides)
+    return ContradictionDetector(FakeDetector(), **kwargs)
 
 
 class TestRebuildClusters:
@@ -129,6 +157,30 @@ class TestRebuildClusters:
         assert flagged[0].contradiction_score == pytest.approx(0.91)
         [pair] = contradictions_for_cluster(session, flagged[0].id)
         assert {pair.left_point_id, pair.right_point_id} == set(CONTRADICTION_PAIR)
+
+    def test_the_hand_labelled_contradiction_needs_corroboration(
+        self, session, settings
+    ):
+        # D-06-12: one disagreeing paper pair is not a cluster-level
+        # disagreement. The labelled set has exactly one, so at the production
+        # default of two nothing is flagged and nothing is stored -- there is
+        # no conflicting evidence for the dashboard to explain.
+        service.rebuild_clusters(
+            session,
+            settings=settings,
+            index=FakeIndex(synthetic_gap_points()),
+            detector=_detector(
+                settings,
+                min_paper_pairs=settings.contradiction_min_paper_pairs,
+            ),
+        )
+
+        assert settings.contradiction_min_paper_pairs == 2
+        assert [row for row in list_clusters(session) if row.contradiction_flag] == []
+        assert all(
+            contradictions_for_cluster(session, row.id) == []
+            for row in list_clusters(session)
+        )
 
     def test_clusters_without_disagreement_are_not_flagged(self, session, settings):
         service.rebuild_clusters(

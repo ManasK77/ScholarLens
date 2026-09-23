@@ -4,7 +4,18 @@
 through dedup.py, then Unpaywall enrichment, returning the count/ids of
 papers touched (new inserts + enriched rows) for the run. Each discovery source
 contributes at most its configured cap of distinct papers (10 by default and at
-most); manual uploads are uncapped.
+most); manual uploads are uncapped. The caps are per source and independent —
+three sources answering in full store 30 papers; there is no run-wide cap.
+
+The response also reports what the run actually did with what it found
+(D-DUP-01): `added` rows created, a `duplicates` breakdown by category, and
+`source_stats` per source (candidates returned, how many of them were processed
+under that source's cap, rows created, duplicate candidates). So "30 candidates
+found, 22 papers added" reads as eight recognised duplicates rather than eight
+papers silently lost, and a source that stored nothing says whether it returned
+nothing or returned only papers the corpus already had. `RunLedger` documents how the
+categories are counted; the identity rules themselves are dedup.py's and are
+unchanged.
 
 Each source runs in isolation: a third-party outage degrades the run to the
 sources that answered instead of aborting it. Semantic Scholar answers
@@ -16,7 +27,8 @@ rows pointed at stayed on disk.
 """
 
 import logging
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass, field
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -87,37 +99,151 @@ def _read_bounded(file: UploadFile, max_bytes: int) -> bytes:
     return b"".join(chunks)
 
 
-def _process_one(session: Session, paper_dict: dict) -> int:
+def _process_one(session: Session, paper_dict: dict) -> tuple[int, bool]:
+    """Store one candidate, returning its corpus id and whether it was new.
+
+    The identity rules are `dedup.find_existing`'s and are not re-stated here;
+    this only reports which of the two branches ran, so the run can tell a
+    newly inserted paper from a duplicate that merged onto an existing row.
+    """
     existing = dedup.find_existing(session, paper_dict)
     if existing:
         updates = dedup.merge(existing, paper_dict)
         corpus.enrich_paper(session, existing.id, updates)
-        return existing.id
+        return existing.id, False
     paper = corpus.insert_paper(session, paper_dict)
-    return paper.id
+    return paper.id, True
+
+
+@dataclass
+class SourceOutcome:
+    """What one discovery source produced, before the run merges it in.
+
+    Held separately per source rather than written straight into the run's
+    totals because a source that raises has its rows rolled back to its own
+    savepoint — its counts must be discarded with them (see `_run`).
+    """
+
+    # Everything the source returned, before the cap and before dedup.
+    candidates: int = 0
+    # How many of those were actually written — fewer when the cap stopped the
+    # run early. The two apart are what tell "returned nothing" from "returned
+    # plenty, kept ten".
+    processed: int = 0
+    kept: set[int] = field(default_factory=set)
+    inserted: set[int] = field(default_factory=set)
+    # One entry per duplicate *encounter*: a candidate that merged onto a row
+    # that already existed, whether from this run or an earlier one.
+    duplicates: list[int] = field(default_factory=list)
 
 
 def _process_capped(
     session: Session,
-    candidates: Iterable[dict],
+    candidates: Sequence[dict],
     source: str,
     limit: int,
     fetch_pdf: Callable[[dict], str | None] | None = None,
-) -> set[int]:
+) -> SourceOutcome:
     """Write `source`'s candidates until `limit` distinct corpus rows are touched.
 
     The cap counts papers, not candidates: a candidate that dedups onto a row
     this source already touched is merged as usual but does not use up a slot.
     A source with fewer matches simply returns fewer. The check runs before a
     candidate's PDF is fetched, so nothing past the cap is downloaded.
+
+    The cap is this source's alone — each source gets its own `SourceOutcome`
+    and its own limit, so three sources answering in full store three sources'
+    worth of papers. There is no run-wide cap anywhere.
     """
-    kept: set[int] = set()
+    outcome = SourceOutcome(candidates=len(candidates))
     for candidate in candidates:
-        if len(kept) >= limit:
+        if len(outcome.kept) >= limit:
             break
+        outcome.processed += 1
         pdf_path = fetch_pdf(candidate) if fetch_pdf is not None else None
-        kept.add(_process_one(session, _to_paper_dict(candidate, source, pdf_path)))
-    return kept
+        paper_id, inserted = _process_one(
+            session, _to_paper_dict(candidate, source, pdf_path)
+        )
+        outcome.kept.add(paper_id)
+        if inserted:
+            outcome.inserted.add(paper_id)
+        else:
+            outcome.duplicates.append(paper_id)
+    return outcome
+
+
+class RunLedger:
+    """Per-run bookkeeping behind /collect's `added`/`duplicates` reporting (D-DUP-01).
+
+    Duplicate *categories* are counted per distinct paper, never per encounter:
+    one paper that arXiv, Semantic Scholar and ACL all returned is a single
+    cross-source duplicate, not three. Each duplicated paper falls in exactly
+    one category, in this priority:
+
+    1. `already_in_corpus` — an earlier run had already stored it. This wins
+       over the others because it is the fact the user is actually asking about
+       when a search "finds" papers that do not appear as new.
+    2. `cross_source` — this run inserted it, and more than one source
+       returned it.
+    3. `within_source` — a single source returned the same paper twice.
+
+    A paper can be both newly inserted and duplicated (source A inserts it,
+    source B re-finds it): `added` counts rows created, `duplicates` counts
+    papers that were recognised rather than re-created.
+    """
+
+    def __init__(self) -> None:
+        self.touched: set[int] = set()
+        self.inserted: set[int] = set()
+        self.duplicated: set[int] = set()
+        self.sources_by_paper: dict[int, set[str]] = {}
+        self.stats: dict[str, dict[str, int]] = {}
+
+    def record(self, source: str, outcome: SourceOutcome) -> None:
+        self.touched |= outcome.kept
+        self.inserted |= outcome.inserted
+        self.duplicated.update(outcome.duplicates)
+        for paper_id in outcome.kept:
+            self.sources_by_paper.setdefault(paper_id, set()).add(source)
+        self.stats[source] = {
+            "candidates": outcome.candidates,
+            "processed": outcome.processed,
+            "added": len(outcome.inserted),
+            "duplicates": len(outcome.duplicates),
+        }
+        # One line per source per run, so a run that stored nothing from a
+        # source says whether the source returned nothing or returned only
+        # papers the corpus already had — the two look identical in a bare
+        # `"status": "ok"`.
+        logger.info(
+            "Collection source=%s candidates=%d processed=%d added=%d "
+            "duplicate_candidates=%d",
+            source,
+            outcome.candidates,
+            outcome.processed,
+            len(outcome.inserted),
+            len(outcome.duplicates),
+        )
+
+    def enriched(self, paper_ids: Iterable[int]) -> None:
+        """Unpaywall touches rows discovery already wrote; it creates none."""
+        self.touched |= set(paper_ids)
+
+    def duplicate_summary(self) -> dict[str, int]:
+        cross_source = within_source = already_in_corpus = 0
+        for paper_id in self.duplicated:
+            if paper_id not in self.inserted:
+                already_in_corpus += 1
+            elif len(self.sources_by_paper.get(paper_id, ())) > 1:
+                cross_source += 1
+            else:
+                within_source += 1
+        return {
+            "total": len(self.duplicated),
+            "cross_source": cross_source,
+            "within_source": within_source,
+            "already_in_corpus": already_in_corpus,
+        }
 
 
 DISCOVERY_SOURCES = ("arxiv", "semantic_scholar", "acl_anthology")
@@ -135,7 +261,7 @@ def collect(
     session: Session = Depends(corpus.get_session),  # noqa: B008 — required FastAPI DI pattern
 ):
     settings = get_settings()
-    touched: set[int] = set()
+    ledger = RunLedger()
     statuses: dict[str, str] = {}
 
     def _download_arxiv_pdf(url: str, dest_path: str) -> bool:
@@ -183,7 +309,8 @@ def collect(
             backoff_max_seconds=settings.arxiv_backoff_max_seconds,
             contact=settings.arxiv_contact,
         )
-        touched.update(
+        ledger.record(
+            "arxiv",
             _process_capped(
                 session,
                 candidates,
@@ -192,7 +319,7 @@ def collect(
                 lambda c: arxiv.fetch_pdf(
                     c, settings.pdf_storage_path, download=_download_arxiv_pdf
                 ),
-            )
+            ),
         )
 
     def _semantic_scholar() -> None:
@@ -200,18 +327,20 @@ def collect(
             body.topic,
             settings.semantic_scholar_api_key,
             limit=settings.semantic_scholar_max_results,
+            request_limit=settings.semantic_scholar_request_limit,
             max_retries=settings.semantic_scholar_max_retries,
             min_interval_seconds=settings.semantic_scholar_min_interval_seconds,
             backoff_base_seconds=settings.semantic_scholar_backoff_base_seconds,
             backoff_max_seconds=settings.semantic_scholar_backoff_max_seconds,
         )
-        touched.update(
+        ledger.record(
+            "semantic_scholar",
             _process_capped(
                 session,
                 candidates,
                 "semantic_scholar",
                 settings.semantic_scholar_max_results,
-            )
+            ),
         )
 
     def _acl_anthology() -> None:
@@ -219,25 +348,26 @@ def collect(
         candidates = acl_anthology.search_topic(
             settings.acl_anthology_bib_path, body.topic
         )
-        touched.update(
+        ledger.record(
+            "acl_anthology",
             _process_capped(
                 session,
                 candidates,
                 "acl_anthology",
                 settings.acl_anthology_max_results,
                 lambda c: acl_anthology.fetch_pdf(c, settings.pdf_storage_path),
-            )
+            ),
         )
 
     def _unpaywall() -> None:
-        touched.update(
-            unpaywall.enrich(
-                session,
-                settings.unpaywall_email,
-                settings.pdf_storage_path,
-                download_arxiv_pdf=_download_arxiv_pdf,
-            )
+        enriched = unpaywall.enrich(
+            session,
+            settings.unpaywall_email,
+            settings.pdf_storage_path,
+            download_arxiv_pdf=_download_arxiv_pdf,
         )
+        ledger.enriched(enriched)
+        logger.info("Collection source=unpaywall enriched=%d", len(enriched))
 
     _run("arxiv", _arxiv)
     _run("semantic_scholar", _semantic_scholar)
@@ -254,7 +384,22 @@ def collect(
 
     session.commit()
 
-    return {"count": len(touched), "ids": list(touched), "sources": statuses}
+    duplicates = ledger.duplicate_summary()
+    logger.info(
+        "Collection complete topic=%r papers=%d added=%d duplicates=%s",
+        body.topic,
+        len(ledger.touched),
+        len(ledger.inserted),
+        duplicates,
+    )
+    return {
+        "count": len(ledger.touched),
+        "ids": list(ledger.touched),
+        "added": len(ledger.inserted),
+        "duplicates": duplicates,
+        "sources": statuses,
+        "source_stats": ledger.stats,
+    }
 
 
 @router.post("/upload")

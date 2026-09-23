@@ -1,4 +1,4 @@
-import type { CollectResult, DashboardData, PipelineResult, QueryResult, UploadResult } from './types'
+import type { CollectResult, CorpusResetResult, DashboardData, PipelineResult, QueryResult, UploadResult } from './types'
 
 const DEFAULT_BASE_URL = '/api'
 
@@ -101,6 +101,15 @@ export class ScholarLensApi {
     const body = new FormData()
     files.forEach((file) => body.append('files', file))
     return this.request<UploadResult>('/upload', { method: 'POST', body })
+  }
+
+  /** Wipe the stored corpus via the backend's existing admin endpoint.
+   *
+   *  Destructive and irreversible: `DELETE /admin/corpus` removes every paper
+   *  and everything derived from it (see `app.core.corpus_reset`). The UI must
+   *  confirm with the user before calling this. */
+  deleteCorpus(): Promise<CorpusResetResult> {
+    return this.request<CorpusResetResult>('/admin/corpus', { method: 'DELETE' })
   }
 
   runPipeline(generateReports: boolean): Promise<PipelineResult> {

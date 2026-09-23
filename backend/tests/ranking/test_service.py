@@ -31,11 +31,24 @@ WEIGHTS = {
 }
 
 
+# Stage 8 also reads the corroboration and label-overlap knobs, at their
+# production defaults unless a test overrides them.
+SIGNAL_SETTINGS = {
+    "gap_solution_min_label_overlap": 2,
+    "contradiction_min_paper_pairs": 2,
+    "contradiction_full_strength_paper_pairs": 3,
+}
+
+
 class FakeSettings:
-    """Only `gap_weights()` is read; a real Settings needs the whole environment."""
+    """`gap_weights()` plus the signal knobs; a real Settings needs the whole
+    environment."""
 
     def __init__(self, **overrides) -> None:
         self._weights = {**WEIGHTS, **overrides}
+        for key, value in {**SIGNAL_SETTINGS, **overrides}.items():
+            if key in SIGNAL_SETTINGS:
+                setattr(self, key, value)
 
     def gap_weights(self):
         return (
@@ -190,7 +203,7 @@ def test_solution_density_finds_solvers_outside_the_cluster(session, settings) -
     """A paper that solved the problem rarely lists it as its own limitation."""
     for paper_id in (1, 2, 3):
         _paper(session, paper_id)
-    _contribution(session, 3, "We release a multilingual injection prompt benchmark.")
+    _contribution(session, 3, "We release a multilingual prompt injection defense.")
     ids = replace_clusters(
         session,
         [
@@ -302,33 +315,72 @@ def test_a_member_whose_paper_left_the_corpus_counts_as_uncited(
     assert row.citation_impact == 5.0
 
 
-def test_the_contradiction_flag_comes_from_phase_6(session, settings) -> None:
+def _pair(members, left, right, score=0.95):
+    return ContradictionPair(
+        left_point_id=members[left].point_id,
+        left_paper_id=members[left].paper_id,
+        right_point_id=members[right].point_id,
+        right_paper_id=members[right].paper_id,
+        score=score,
+    )
+
+
+def _flagged_cluster(session, settings, pairs_between):
+    """Store one cluster whose papers disagree across `pairs_between` papers."""
+    members = []
+    for paper_id in range(1, pairs_between + 2):
+        _paper(session, paper_id)
+        members.append(_statement(paper_id, f"Defences claim {paper_id}."))
+    pairs = [_pair(members, 0, index) for index in range(1, pairs_between + 1)]
+    ids = replace_clusters(session, [_cluster("defences", members, pairs)])
+    replace_trends(session, [(ids[0], TrendSeries())])
+    rebuild_rankings(session, settings)
+    return list_rankings(session, 10)[0]
+
+
+def test_a_single_disagreeing_paper_pair_is_not_corroborated(session, settings) -> None:
+    # D-08-10: one pair used to contribute the whole of w5. On the 20-paper
+    # corpus that was 5.0 of an 11.01 score, on a pair that was an ethics
+    # disclaimer scored against a recommendation bullet.
+    assert (
+        _flagged_cluster(session, settings, pairs_between=1).contradiction_flag == 0.0
+    )
+
+
+def test_two_disagreeing_paper_pairs_score_a_graded_signal(session, settings) -> None:
+    row = _flagged_cluster(session, settings, pairs_between=2)
+
+    assert row.contradiction_flag == pytest.approx(2 / 3)
+
+
+def test_the_contradiction_signal_reaches_full_strength_at_three_pairs(
+    session, settings
+) -> None:
+    assert (
+        _flagged_cluster(session, settings, pairs_between=3).contradiction_flag == 1.0
+    )
+
+
+def test_many_statements_between_two_papers_are_still_one_paper_pair(
+    session, settings
+) -> None:
+    # The cluster 1 shape: several statements all disagreeing with one, from
+    # only two papers. Counting statements is what made it look corroborated.
     _paper(session, 1)
     _paper(session, 2)
-    members = [_statement(1, "Defences work."), _statement(2, "Defences fail.")]
-    ids = replace_clusters(
-        session,
-        [
-            _cluster(
-                "defences",
-                members,
-                [
-                    ContradictionPair(
-                        left_point_id=members[0].point_id,
-                        left_paper_id=1,
-                        right_point_id=members[1].point_id,
-                        right_paper_id=2,
-                        score=0.95,
-                    )
-                ],
-            )
-        ],
-    )
+    members = [
+        _statement(1, "Defences work."),
+        _statement(1, "Defences hold up."),
+        _statement(1, "Defences generalize."),
+        _statement(2, "Defences fail."),
+    ]
+    pairs = [_pair(members, index, 3) for index in range(3)]
+    ids = replace_clusters(session, [_cluster("defences", members, pairs)])
     replace_trends(session, [(ids[0], TrendSeries())])
 
     rebuild_rankings(session, settings)
 
-    assert list_rankings(session, 10)[0].contradiction_flag == 1.0
+    assert list_rankings(session, 10)[0].contradiction_flag == 0.0
 
 
 def test_the_score_is_the_weighted_sum_of_the_stored_signals(session, settings) -> None:

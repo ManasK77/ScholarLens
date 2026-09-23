@@ -145,7 +145,10 @@ def test_extract_all_parsed_processes_every_parsed_paper(
     processed = service.extract_all_parsed(session, semantic)
 
     assert processed == [first.id, second.id]
-    assert [call.args for call in extract.call_args_list] == [
+    # The trailing argument is the O2 telemetry sink the stage accumulates
+    # sentence/rule/semantic counts into; the same dict is shared by every call.
+    assert [call.args[:3] for call in extract.call_args_list] == [
         (session, first.id, semantic),
         (session, second.id, semantic),
     ]
+    assert all(isinstance(call.args[3], dict) for call in extract.call_args_list)

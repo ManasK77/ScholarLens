@@ -26,6 +26,7 @@ Nothing here branches on a paper's `source` (CLAUDE.md hard constraint 5).
 """
 
 import logging
+from time import perf_counter
 
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -41,6 +42,7 @@ from app.explanation.schema import (
     ReportDraft,
     evidence_from_point,
 )
+from app.explanation.selection import evidence_summary, select_evidence
 from app.explanation.storage import replace_reports
 from app.ingestion.corpus import Paper
 from app.ranking.storage import list_rankings
@@ -153,8 +155,22 @@ def generate_top_reports(
             )
             continue
 
-        points = index.retrieve(query, settings.report_evidence_top_n)
-        evidence = _evidence_for(session, points)
+        started = perf_counter()
+        # Retrieved wider than the report needs, then narrowed by
+        # `select_evidence`. Without the headroom the per-paper cap could only
+        # ever remove passages, never let a crowded-out paper be promoted
+        # (D-09-04).
+        points = index.retrieve(
+            query,
+            settings.report_evidence_top_n * settings.report_evidence_oversample,
+        )
+        retrieval_elapsed = perf_counter() - started
+        evidence = select_evidence(
+            _evidence_for(session, points),
+            {member.paper_id for member in members},
+            settings.report_evidence_top_n,
+            settings.report_evidence_per_paper_cap,
+        )
         if not evidence:
             # No retrieved text means nothing to ground a report in, so there is
             # nothing worth spending a generation call on.
@@ -165,15 +181,28 @@ def generate_top_reports(
             continue
 
         prompt = build_prompt(labels.get(cluster_id), ranking, evidence)
+        started = perf_counter()
         try:
             draft = ReportDraft.model_validate(llm.generate_json(prompt, REPORT_SCHEMA))
-        except LLMUnavailableError:
-            # A provider outage is not a per-cluster problem: every remaining
+        except LLMUnavailableError as exc:
+            # A provider outage — or an exhausted quota the client already
+            # retried through — is not a per-cluster problem: every remaining
             # call would fail the same way, and burning K timeouts to store
             # nothing is the resource failure README §13.6 warns about. Raising
             # here also means `replace_reports` never runs, so the previous
             # run's reports survive.
-            logger.warning("Stage 9: LLM provider unavailable; aborting the run")
+            #
+            # How far the run got is logged because it is the cost of the
+            # retry: the drafts already generated are discarded with the rest,
+            # so re-running spends those calls again. Nothing upstream is
+            # touched, so `POST /reports` alone resumes from here.
+            logger.warning(
+                "Stage 9: provider stopped the run after %d of %d ranked gap(s) "
+                "(%s); the evidence base is untouched, retry with POST /reports",
+                len(reports),
+                len(rankings),
+                exc,
+            )
             raise
         except (LLMError, ValidationError) as exc:
             logger.warning(
@@ -181,6 +210,17 @@ def generate_top_reports(
             )
             continue
 
+        summary = evidence_summary(evidence)
+        logger.debug(
+            "Stage 9: cluster %d retrieval=%.3fs llm=%.3fs evidence=%d "
+            "papers=%d max_per_paper=%d",
+            cluster_id,
+            retrieval_elapsed,
+            perf_counter() - started,
+            len(evidence),
+            summary["unique_paper_count"],
+            summary["max_passages_from_one_paper"],
+        )
         grounded = _grounded_evidence(evidence, draft.evidence_ids)
         if not grounded:
             logger.warning(
@@ -188,6 +228,22 @@ def generate_top_reports(
                 cluster_id,
             )
             continue
+
+        # Each of the four claims is grounded against what was actually
+        # retrieved, not against what the model says it cited. A claim whose
+        # citations were all invented is downgraded to unsupported, which is
+        # what stops "inconsistent findings across studies" being stored with
+        # nothing behind it (D-09-05).
+        justification = draft.justification({item["id"] for item in evidence})
+        if (
+            draft.conflicting_evidence.supported
+            and not justification["conflicting_evidence"]["supported"]
+        ):
+            logger.info(
+                "Stage 9: cluster %d claimed conflicting evidence with no "
+                "retrieved passage behind it; recorded as unsupported",
+                cluster_id,
+            )
 
         reports.append(
             GapReportRecord(
@@ -198,6 +254,7 @@ def generate_top_reports(
                 suggested_directions=draft.suggested_directions,
                 provider=getattr(llm, "provider", ""),
                 model=getattr(llm, "model", ""),
+                justification=justification,
             )
         )
 

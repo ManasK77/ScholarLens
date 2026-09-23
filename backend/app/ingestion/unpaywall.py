@@ -7,6 +7,7 @@ Distinguishes "no OA copy" (200, best_oa_location=null) from "DOI not found"
 the status_code guard runs before any .json() call.
 """
 
+import logging
 from collections.abc import Callable
 
 import httpx
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.ingestion import corpus
 from app.ingestion.sources import arxiv
+
+logger = logging.getLogger(__name__)
 
 
 def resolve_oa_pdf(doi: str, email: str) -> str | None:
@@ -77,4 +80,6 @@ def enrich(
             session, row.id, {"has_full_text": True, "pdf_path": dest_path}
         )
         enriched_ids.append(row.id)
+    if enriched_ids:
+        logger.info("Unpaywall attached %d open-access PDF(s)", len(enriched_ids))
     return enriched_ids

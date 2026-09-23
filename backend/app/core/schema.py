@@ -7,6 +7,9 @@ _POSTGRES_COMPATIBILITY_DDL = (
     "ALTER TABLE cluster_trends ADD COLUMN IF NOT EXISTS id SERIAL",
     "ALTER TABLE cluster_trends ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT now()",
     "ALTER TABLE gap_reports ADD COLUMN IF NOT EXISTS id SERIAL",
+    # The A/B/C justification (D-09-05). Nullable: rows written before it
+    # existed have no justification, and `GET /reports` serves `{}` there.
+    "ALTER TABLE gap_reports ADD COLUMN IF NOT EXISTS justification JSON",
 )
 
 

@@ -38,9 +38,13 @@ def ensure_graph_schema(session) -> None:
     )
 
 
-def write_paper_graph(session, paper: Paper, result: JointExtractionResult, input_hash: str | None = None) -> str:
+def write_paper_graph(
+    session, paper: Paper, result: JointExtractionResult, input_hash: str | None = None
+) -> str:
     """Replace one paper's projection atomically, preserving shared entities."""
-    return session.execute_write(lambda tx: _replace_paper(tx, paper, result, input_hash))
+    return session.execute_write(
+        lambda tx: _replace_paper(tx, paper, result, input_hash)
+    )
 
 
 def _replace_paper(session, paper, result, input_hash):
@@ -63,7 +67,8 @@ def _replace_paper(session, paper, result, input_hash):
         paper_id=paper.id,
     ).consume()
     session.run(
-        "MATCH ()-[r]->() WHERE r.paper_id=$paper_id DELETE r", paper_id=paper.id,
+        "MATCH ()-[r]->() WHERE r.paper_id=$paper_id DELETE r",
+        paper_id=paper.id,
     ).consume()
     if result.entities:
         session.run(
@@ -74,14 +79,28 @@ def _replace_paper(session, paper, result, input_hash):
             "MERGE (p)-[m:MENTIONS]->(e) "
             "SET m.confidence=row.confidence",
             paper_id=paper.id,
-            rows=[dict(normalized=' '.join(e.text.casefold().split()), type=e.entity_type, name=e.text, confidence=e.confidence) for e in result.entities],
+            rows=[
+                {
+                    "normalized": " ".join(e.text.casefold().split()),
+                    "type": e.entity_type,
+                    "name": e.text,
+                    "confidence": e.confidence,
+                }
+                for e in result.entities
+            ],
         ).consume()
 
     grouped = {}
     for relation in result.relations:
         # Validate against the closed relation vocabulary before interpolation.
         RELATION_LABELS[relation.relation_type]
-        grouped.setdefault(relation.relation_type, []).append(dict(head=' '.join(relation.head.casefold().split()), tail=' '.join(relation.tail.casefold().split()), confidence=relation.confidence))
+        grouped.setdefault(relation.relation_type, []).append(
+            {
+                "head": " ".join(relation.head.casefold().split()),
+                "tail": " ".join(relation.tail.casefold().split()),
+                "confidence": relation.confidence,
+            }
+        )
     for kind, rows in grouped.items():
         relationship = RELATION_LABELS[kind]
         head_type, tail_type = RELATION_ENDPOINTS[kind]
@@ -105,8 +124,11 @@ def _replace_paper(session, paper, result, input_hash):
 
 
 def paper_graph_current(session, paper_id, input_hash):
-    row = session.run('MATCH (p:Paper {id: $id}) RETURN properties(p)["nerre_input_hash"] AS input_hash', id=paper_id).single()
-    return row is not None and row['input_hash'] == input_hash
+    row = session.run(
+        'MATCH (p:Paper {id: $id}) RETURN properties(p)["nerre_input_hash"] AS input_hash',
+        id=paper_id,
+    ).single()
+    return row is not None and row["input_hash"] == input_hash
 
 
 def get_paper_node_id(session, paper_id: int) -> str | None:

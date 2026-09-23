@@ -29,7 +29,13 @@ from app.api import routes_backend
 from app.api.security import API_KEY_HEADER_NAME, require_api_key
 from app.clustering.schema import GapStatement, StatementCluster
 from app.clustering.storage import replace_clusters
-from app.explanation.llm import LLMError, LLMUnavailableError
+from app.explanation.llm import (
+    LLMAuthError,
+    LLMConfigurationError,
+    LLMError,
+    LLMRateLimitError,
+    LLMUnavailableError,
+)
 from app.explanation.schema import GapReportRecord
 from app.explanation.storage import replace_reports
 from app.ingestion import corpus
@@ -60,35 +66,70 @@ REQUIRED_ENV = {
 def test_pipeline_rerun_skips_unchanged_derived_work(client, monkeypatch):
     events = []
     _stub_evidence_stages(monkeypatch, events)
-    assert client.post('/pipeline/run', json={'generate_reports': False}).status_code == 200
-    assert client.post('/pipeline/run', json={'generate_reports': False}).status_code == 200
-    assert events == ['rankings']
+    assert (
+        client.post("/pipeline/run", json={"generate_reports": False}).status_code
+        == 200
+    )
+    assert (
+        client.post("/pipeline/run", json={"generate_reports": False}).status_code
+        == 200
+    )
+    assert events == ["rankings"]
 
 
 def test_all_writers_reject_lock_contention(client, db_session):
     from app.core.pipeline import writer_lock
+
     with writer_lock(db_session):
-        for path in ['/pipeline/run', '/graph', '/index', '/clusters', '/trends', '/gaps', '/reports']:
+        for path in [
+            "/pipeline/run",
+            "/graph",
+            "/index",
+            "/clusters",
+            "/trends",
+            "/gaps",
+            "/reports",
+        ]:
             assert client.post(path, json={}).status_code == 409
 
 
-def test_failed_clustering_preserves_old_reports_and_no_completion_marker(client, db_session, monkeypatch):
+def test_failed_clustering_preserves_old_reports_and_no_completion_marker(
+    client, db_session, monkeypatch
+):
+    from sqlalchemy import select
+
     from app.core.pipeline import DerivedState, PipelineRun
     from app.explanation.storage import list_reports
-    from sqlalchemy import select
+
     cluster_id = _seed_cluster(db_session)
-    replace_reports(db_session, [GapReportRecord(cluster_id=cluster_id, gap='Stored gap', evidence=[{'id': 'e1'}], confidence=.8, suggested_directions=['Investigate'], provider='groq', model='test')])
+    replace_reports(
+        db_session,
+        [
+            GapReportRecord(
+                cluster_id=cluster_id,
+                gap="Stored gap",
+                evidence=[{"id": "e1"}],
+                confidence=0.8,
+                suggested_directions=["Investigate"],
+                provider="groq",
+                model="test",
+            )
+        ],
+    )
     db_session.commit()
     _stub_evidence_stages(monkeypatch, [])
+
     def fail(session, settings=None):
         replace_clusters(session, [])
-        raise RuntimeError('injected failure')
-    monkeypatch.setattr(routes_backend.clustering_service, 'rebuild_clusters', fail)
+        raise RuntimeError("injected failure")
+
+    monkeypatch.setattr(routes_backend.clustering_service, "rebuild_clusters", fail)
     with pytest.raises(RuntimeError):
-        client.post('/pipeline/run', json={'generate_reports': False})
+        client.post("/pipeline/run", json={"generate_reports": False})
     assert list_reports(db_session)
-    assert db_session.get(DerivedState, 's6-s8') is None
-    assert db_session.scalar(select(PipelineRun)).status == 'failed'
+    assert db_session.get(DerivedState, "s6-s8") is None
+    assert db_session.scalar(select(PipelineRun)).status == "failed"
+
 
 PROTECTED_GET_ROUTES = [
     "/papers",
@@ -99,8 +140,8 @@ PROTECTED_GET_ROUTES = [
     "/reports",
 ]
 PROTECTED_POST_ROUTES = [
-    '/parse',
-    '/extract',
+    "/parse",
+    "/extract",
     "/graph",
     "/index",
     "/clusters",
@@ -464,6 +505,87 @@ def test_post_reports_returns_502_and_never_leaks_the_exception_on_failure(
 
 
 # --------------------------------------------------------------------------
+# Stage 9 provider failures: each class of failure needs its own answer, since
+# "retry later" and "fix your key" are different instructions to an operator.
+# --------------------------------------------------------------------------
+
+
+def _reports_raising(monkeypatch: pytest.MonkeyPatch, exc: Exception) -> None:
+    def _raise(session, *args, **kwargs):
+        raise exc
+
+    monkeypatch.setattr(routes_backend.report_service, "generate_top_reports", _raise)
+
+
+def test_post_reports_answers_429_with_retry_after_when_groq_meters_us(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The evidence base is intact and only generation was refused, so the
+    caller is told to come back — with the provider's own wait, not a guess."""
+    _reports_raising(
+        monkeypatch,
+        LLMRateLimitError(
+            "Groq rate limit reached (TPM): Limit 8000.", retry_after=42.0
+        ),
+    )
+
+    response = client.post("/reports")
+
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "42"
+    assert "TPM" in response.json()["detail"]
+
+
+def test_a_rate_limit_without_a_named_wait_still_answers_429(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _reports_raising(monkeypatch, LLMRateLimitError("Groq rate limit reached."))
+
+    response = client.post("/reports")
+
+    assert response.status_code == 429
+    assert "Retry-After" not in response.headers
+
+
+def test_post_reports_answers_502_for_a_rejected_key(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Not 503: waiting will not fix a credential, and 503 invites a retry."""
+    _reports_raising(
+        monkeypatch, LLMAuthError("Groq rejected the configured GROQ_API_KEY.")
+    )
+
+    response = client.post("/reports")
+
+    assert response.status_code == 502
+    assert "GROQ_API_KEY" in response.json()["detail"]
+
+
+def test_post_reports_answers_502_for_an_unusable_model(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _reports_raising(
+        monkeypatch,
+        LLMConfigurationError("Groq rejected the request — check GROQ_MODEL."),
+    )
+
+    response = client.post("/reports")
+
+    assert response.status_code == 502
+    assert "GROQ_MODEL" in response.json()["detail"]
+
+
+def test_post_reports_answers_503_for_a_genuine_outage(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _reports_raising(monkeypatch, LLMUnavailableError("Groq is unavailable."))
+
+    response = client.post("/reports")
+
+    assert response.status_code == 503
+
+
+# --------------------------------------------------------------------------
 # /graph, /index
 # --------------------------------------------------------------------------
 
@@ -587,6 +709,31 @@ def test_pipeline_run_calls_every_stage_and_commits(
     assert body["extracted"] == 2
     assert body["indexed"] == 3
     assert body["reports"] == [1]
+
+
+def test_a_rate_limited_pipeline_run_keeps_the_evidence_base_and_says_so(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S2-S8 succeeded and only S9 was metered.
+
+    The answer has to say the evidence base survived and name the S9-only
+    retry, or the operator's next move is to rebuild a corpus that was never
+    broken. 429 rather than 503: nothing is wrong with the deployment.
+    """
+    _stub_evidence_stages(monkeypatch, [])
+
+    def _metered(session, settings=None):
+        raise LLMRateLimitError("Groq rate limit reached (TPM).", retry_after=30.0)
+
+    monkeypatch.setattr(routes_backend.report_service, "generate_top_reports", _metered)
+
+    response = client.post("/pipeline/run", json={"generate_reports": True})
+
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "30"
+    detail = response.json()["detail"]
+    assert "evidence base was built" in detail
+    assert "POST /reports" in detail
 
 
 def test_pipeline_run_skips_report_generation_when_disabled(
@@ -754,7 +901,7 @@ def test_pipeline_run_keeps_the_evidence_base_when_report_generation_fails(
 
     assert response.status_code == status_code
     assert str(error) in response.json()["detail"]
-    assert 'commit' in events[events.index('rankings') + 1:events.index('reports')]
+    assert "commit" in events[events.index("rankings") + 1 : events.index("reports")]
 
 
 @pytest.mark.parametrize(
@@ -781,3 +928,83 @@ def test_post_reports_names_the_llm_failure_instead_of_a_generic_error(
 
     assert response.status_code == status_code
     assert response.json() == {"detail": str(error)}
+
+
+# --------------------------------------------------------------------------
+# DELETE /admin/corpus
+# --------------------------------------------------------------------------
+
+
+def test_admin_corpus_reset_rejects_requests_without_api_key(
+    unauthenticated_client: TestClient,
+) -> None:
+    response = unauthenticated_client.delete("/admin/corpus")
+
+    assert response.status_code == 401
+
+
+def test_admin_corpus_reset_calls_shared_reset_and_returns_its_result(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        routes_backend, "graph_session", lambda *a, **k: _NullContext(object())
+    )
+    monkeypatch.setattr(routes_backend, "EvidenceIndex", lambda settings: object())
+    captured = {}
+
+    def _fake_reset(session, neo4j, index, pdf_storage_path=None):
+        captured["called"] = True
+        return {
+            "deleted": True,
+            "papers": 3,
+            "pdfs": 2,
+            "postgres_records": {"papers": 3},
+            "neo4j_nodes": 5,
+            "neo4j_relationships": 4,
+            "qdrant_points": 7,
+        }
+
+    monkeypatch.setattr(routes_backend, "reset_corpus", _fake_reset)
+
+    response = client.delete("/admin/corpus")
+
+    assert response.status_code == 200
+    assert captured["called"] is True
+    body = response.json()
+    assert body["deleted"] is True
+    assert body["papers"] == 3
+    assert body["pdfs"] == 2
+    assert body["neo4j_nodes"] == 5
+    assert body["qdrant_points"] == 7
+    assert "run_id" in body
+
+
+def test_admin_corpus_reset_surfaces_failure_instead_of_success(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        routes_backend, "graph_session", lambda *a, **k: _NullContext(object())
+    )
+    monkeypatch.setattr(routes_backend, "EvidenceIndex", lambda settings: object())
+
+    def _fail(session, neo4j, index, pdf_storage_path=None):
+        raise RuntimeError("neo4j://admin:hunter2@internal-host offline")
+
+    monkeypatch.setattr(routes_backend, "reset_corpus", _fail)
+
+    response = client.delete("/admin/corpus")
+
+    assert response.status_code == 502
+    assert "hunter2" not in response.text
+    assert response.json() == {"detail": "Corpus reset failed"}
+
+
+def test_admin_corpus_reset_rejects_lock_contention(
+    client: TestClient, db_session: SASession
+) -> None:
+    from app.core.pipeline import writer_lock
+
+    with writer_lock(db_session):
+        response = client.delete("/admin/corpus")
+
+    assert response.status_code == 409

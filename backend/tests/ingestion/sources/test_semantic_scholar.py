@@ -188,7 +188,12 @@ def test_search_topic_requests_the_citation_count_field(monkeypatch):
 
 
 def test_search_topic_sends_an_explicit_limit(monkeypatch):
-    """Without `limit` the search endpoint returns up to 100 papers per call."""
+    """Without `limit` the search endpoint returns up to 100 papers per call.
+
+    The page is sized to `request_limit` (20 by default), a little more than
+    the 10 kept, so non-research records dropped by publication type do not
+    use up the source's cap (D-S2-TYPES-01).
+    """
     captured = {}
     monkeypatch.setattr(httpx, "Client", _make_fake_client(captured))
 
@@ -196,7 +201,7 @@ def test_search_topic_sends_an_explicit_limit(monkeypatch):
     assert captured["params"]["limit"] == 25
 
     semantic_scholar.search_topic("graph neural networks")
-    assert captured["params"]["limit"] == 10
+    assert captured["params"]["limit"] == 20
 
 
 # ---------------------------------------------------------------------------

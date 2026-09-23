@@ -5,6 +5,195 @@ holds the per-phase GSD artifacts; this file is the cross-session summary.
 
 ---
 
+## 2026-09-21 — Discovery breadth, duplicate reporting, id reset, library UI (owner-requested)
+
+Five owner-requested changes, outside the README §15 phase list. No phase was
+started or advanced.
+
+### D-QUERY-02 — arXiv and ACL stopped demanding the topic as one exact phrase
+
+Root cause of "`/collect` for *Multilingual prompt injection* stored ten papers,
+all `semantic_scholar`": both of the other sources required the user's whole
+topic as a single literal phrase.
+
+* arXiv (D-QUERY-01) sent `all:"Multilingual prompt injection"` — words
+  adjacent, in order, in one field. Probed against the live API while making
+  this change: that query returns **0** results; the replacement returns **41**.
+* ACL matched the topic as one case-insensitive substring of a title/abstract,
+  with the same adjacency requirement.
+* Semantic Scholar tokenizes the query server-side, which is exactly why it —
+  and only it — answered.
+
+`app/ingestion/topic.py` (`meaningful_terms`) is now the single place a topic is
+split, so the two sources cannot drift apart again: quotes dropped, surrounding
+punctuation stripped (hyphens/apostrophes kept inside a word), a short
+function-word list dropped, duplicates collapsed, and a topic of nothing but
+function words returned whole rather than emptied out.
+
+arXiv now sends `all:"<term>" AND …`; ACL requires every term as a substring of
+the title/abstract. Deliberately **AND, not OR** — every term the user typed
+still constrains the search, so this widens the match without turning a topic
+search into a keyword dragnet. ACL's raw-text prefilter (the thing that keeps
+the 180MB export from being parsed in full) now tests the single longest term,
+which is still a strict superset of "all terms present", so it cannot change
+which papers come back.
+
+### D-DUP-01 — /collect now reports what dedup did
+
+The dedup rules themselves are untouched (`dedup.find_existing`: DOI → arXiv ID
+→ ACL ID → normalized title+year). What changed is that the outcome is visible:
+`added`, a `duplicates` breakdown, and `source_stats` per source (`candidates`
+returned / `processed` under that source's cap / `added` / `duplicates`), so a
+source that stored nothing says whether it returned nothing or returned only
+papers the corpus already had — a bare `"status": "ok"` cannot.
+
+Duplicate *categories* count distinct papers, never encounters: a paper all
+three sources return is **one** cross-source duplicate, one row, one id. Each
+duplicated paper lands in exactly one category, in priority order
+`already_in_corpus` → `cross_source` → `within_source` (`RunLedger` carries the
+reasoning). Per-source counts stay encounter-based, where the distinction does
+not arise. A source that raises has its rows rolled back to its savepoint, so
+its counts are discarded with them — merged into the run only after the step
+returns.
+
+### D-RESET-02 — a full corpus reset rewinds the id sequences
+
+Deleting every row left PostgreSQL's sequence where it was, so the first paper
+after a reset came back as id 21. `reset_corpus` now rewinds the identity of
+each table it emptied, **in the same transaction as those deletes** and only for
+tables emptied there — an id is never reissued while a row still holds it, and
+ordinary collections keep appending as before. PostgreSQL: the sequence is
+resolved server-side via `pg_get_serial_sequence` (covers `SERIAL` and
+`GENERATED … AS IDENTITY` alike) and rewound with `setval(seq, 1, false)`, the
+name bound as a value rather than interpolated into SQL. SQLite reuses rowid 1
+on its own once a table is empty, so only an `AUTOINCREMENT` high-water mark in
+`sqlite_sequence` needs clearing. `pipeline_runs` — which holds the row for the
+reset itself — is never passed in. No second reset implementation was created:
+`DELETE /admin/corpus` still calls this one function.
+
+### Frontend — the whole collection, and a guarded delete
+
+*Recently added papers* showed `.slice(0, 6)` of the corpus. It now renders every
+paper of the **current** operation, resolved from the ids `/collect` (or
+`/upload`) returned, so cross-source duplicates appear once and a paper the
+corpus merely happens to hold is not presented as part of the search. It scrolls
+instead of truncating; with no operation yet it falls back to the loaded corpus,
+newest first. `/papers` returns a bounded window, so on a corpus larger than
+that window a run's paper could fall outside it — the card says so rather than
+quietly showing fewer papers than the search reported.
+
+*Delete corpus* sits directly under *Find papers*, styled as destructive, and
+goes through a real modal (`ConfirmDeleteDialog`, modelled on `ConnectionPanel`:
+focus on open, Escape to dismiss, focus returned to the opener) with **No**
+focused first so a stray Enter cannot wipe the corpus. No `window.confirm`. It
+calls the existing `DELETE /admin/corpus` through the same authenticated client
+every other request uses; frontend state is cleared only after the backend
+confirms, and a failure leaves the corpus visible with the button re-enabled.
+
+### Files
+
+`app/ingestion/topic.py` (new), `sources/arxiv.py`, `sources/acl_anthology.py`,
+`api/routes_ingestion.py`, `core/corpus_reset.py`; `frontend/src/{App.tsx,
+App.css,api.ts,types.ts}`. Tests: `tests/ingestion/test_topic.py` (new),
+`tests/ingestion/sources/test_{arxiv,acl_anthology}.py`,
+`tests/api/test_routes_ingestion.py`, `tests/core/test_corpus_reset.py`,
+`frontend/src/App.test.tsx`.
+
+Verified: backend 1008 passed / 10 deselected (integration), `ruff check app
+tests` clean, evaluation 4 passed, frontend 19 passed + `tsc -b` + `vite build`
++ `oxlint` clean, and the live arXiv probe above. The ACL change is covered by
+the offline fixture only — the live 180MB export was not downloaded.
+
+## 2026-09-20 — `priority_fix.md` completed: O2 stage telemetry, benchmark harness, lint gate restored
+
+Audit of the working tree against `priority_fix.md` after pulling a teammate's
+hardening commit (`066a437`, 2026-09-16), then implementation of what that
+commit left open. `HARDENING_PLAN.md` records the authorization.
+
+### Already implemented by the teammate (verified, not rebuilt)
+
+| ID | Where it landed |
+|---|---|
+| O1 | `core/logging.py` `configure_logging()`, `LOG_LEVEL` in `config.py`, called from `main.py` |
+| O2 (partial) | `stage_timer`, `ProgressLogger` wired into S2–S5 |
+| O3 | `run_id` contextvar + `RunFilter` on the handler |
+| C1 | `RunContext.stage`/`.paper` commit per stage and per paper; S6–S8 stay one transaction |
+| C2 | `graph.write_paper_graph` — one `execute_write` per paper with `UNWIND` |
+| C3 | Same transaction deletes the paper's `MENTIONS`/`SUPPORTS`/`{paper_id}` edges before merging; shared `Entity` nodes retained |
+| C4 | `core/reconcile.py`, `python -m app.core.reconcile` |
+| C5 | `writer_lock` (PG advisory lock, SQLite lock file for local dev) + `pipeline_runs`; `api/write_guard.py` puts every other write endpoint behind it |
+| C6 | `unpaywall.enrich(..., paper_id=...)`, called that way from `header_backfill` |
+| P1 | `SemanticStatementClassifier.classify_many`, wired through `extract_sections` |
+| P2 | `HeadingClassifier` exemplar cache + `classify_sections`, wired through `parse_and_store` |
+| P3 | `EvidenceIndex.upsert` length sort behind `EMBEDDING_SORT_BY_LENGTH` (default off) |
+| P4 | `JointEntityRelationExtractor` `batch_extract` + per-chunk fallback behind `NERRE_BATCH_SIZE` (default 1) |
+| I1–I6 | `paper_stage_state` / `derived_state` / `nli_pair_scores` tables, per-paper input hashes for S2–S5, `text_sha256`+`embed_version` Qdrant payload with `sync_paper`, S6–S9 fingerprint gate, resumable deletion in `core/maintenance.py`, report snapshots in `explanation/storage.py` |
+
+C3 and C6 are marked "owner decision" in `priority_fix.md` §5. They arrived
+already implemented and merged, so they are recorded here as the owner's
+standing choice rather than re-opened.
+
+### What this session added
+
+1. **O2 §4.2 completed.** The per-stage report table was only partly covered:
+   timers and progress existed, start lines and completion counts did not.
+   Added, counts-only per §4.1 (no sentence/paragraph text, no credentials):
+   - `pipeline start/complete` in `routes_backend._execute_pipeline`
+   - `s2 start/complete` — grobid vs fallback, missing PDFs, backfill
+     attempted/succeeded, keyword vs SciBERT heading decisions
+   - `s3 start/complete` — sentences, rule hits, semantic calls, facts per type
+   - `s4 start/complete` — processed, skipped-no-text, failed, entities, relations
+   - `s5 start/complete` — points, papers ready, **skipped_no_document** and
+     **skipped_no_graph_node** (§4.2 flags both as "silent today"), failed
+   - `s6` — gap points + scroll time, HDBSCAN time + noise count, NLI time +
+     pairs scored
+   - Model-load lines for SciBERT and GLiNER2 (SPECTER2 and DeBERTa-MNLI
+     already had them); per-cluster retrieval/LLM timings at DEBUG in S9
+   - Unpaywall now reports how many OA PDFs a backfill attached
+
+2. **Offline benchmark harness** (`core/benchmark.py`, §D step 5) — the
+   measurement P3/P4/P6 are gated on, which did not exist. Read-only and
+   bounded by `--limit`: `extraction` (P1 label parity + timing), `headings`
+   (P2 argmax parity), `embeddings` (P3 padding ratio from the tokenizer alone,
+   plus vector drift under `--with-model`), `nerre` (P4 entity/relation set
+   parity + timing), `threads` (P6 torch/OMP vs the process CPU budget; reports
+   only, never sets). A test asserts the session is left with nothing pending.
+
+3. **`.env.example`** documented `LOG_LEVEL` (required by O1),
+   `NERRE_BATCH_SIZE` (required by P4) and `EMBEDDING_SORT_BY_LENGTH`, each
+   pointing at the benchmark suite that gates turning it on.
+
+4. **Lint gate restored.** `ruff check app tests` was clean at `75a5c75` and
+   returned **54 errors** at `066a437` — README §12 lists it in the verification
+   suite. Now 0. Import ordering and unused imports were autofixed; the six
+   `B023` closures in `extraction/service.py` and `ner_re/service.py` were fixed
+   properly by binding the loop variables as default arguments, since those
+   callables are handed to `run.paper` and outlive the iteration that built them.
+
+### Deliberately not implemented
+
+- **P5** (batching across papers) — `priority_fix.md` §2.5 defers it until the
+  incremental design exists and notes it conflicts with per-paper prune.
+- **P6** thread tuning — benchmark-only by the plan, and setting thread counts
+  is a machine/container change (CLAUDE.md resource safety). The harness
+  reports; the owner decides.
+- **§1.2 Steps 0–5 and §D step 3** — freeze, `pg_dump`, Qdrant snapshot, Neo4j
+  dump, `/reports` export, finding the SIGKILL cause, the read-only store
+  inspection, the recovery run, and the C3-vs-clean-rebuild call. All owner
+  actions against live services; Docker was unreachable this session.
+- **Running the benchmarks** — needs the model caches and a populated corpus.
+
+### Verification
+
+`backend`: 966 passed, 10 deselected (945 before; +14 benchmark, +7 telemetry).
+`ruff check app tests`: clean. `evaluation/tests`: 4 passed.
+`frontend`: 14 passed, `npm run build` and `npm run lint` clean.
+Benchmark CLI smoke-tested: `threads` against this machine, and
+`extraction`/`headings`/`embeddings` against a throwaway in-memory corpus.
+No real-service run: the Docker daemon was not reachable.
+
+---
+
 ## 2026-09-15 — D-429-03: a 429 with no Retry-After is not retried
 
 ### The diagnostic that prompted it
@@ -2382,3 +2571,562 @@ not. 2 collection errors remain, unchanged in count from the Phase 5 baseline
 but both now advanced past clustering: `tests/api/test_query_errors.py`
 (`app.explanation.service`) and `tests/interactive/test_workflow.py`
 (`langgraph`).
+
+## Admin tooling — corpus reset (owner-requested, outside the phase list)
+
+A dev/admin operation to clear the accumulated corpus without
+`docker compose down -v` (which also destroys the Docker volumes). Not in
+README §15 — the owner asked for it directly as infrastructure-preserving
+tooling, not a pipeline phase.
+
+`app/core/corpus_reset.py` — `reset_corpus(session, neo4j, index,
+pdf_storage_path=None)` is the single implementation behind both
+`DELETE /admin/corpus` (`app/api/routes_backend.py`, same X-API-Key auth as
+every other route on that router) and `python -m app.core.corpus_reset
+--confirm`, mirroring the `delete_paper`/`resume_deletions` +
+`python -m app.core.maintenance` split already established for single-paper
+removal.
+
+Deletion order: PostgreSQL first (children before parents;
+`clustering.storage._dependent_tables()` reused for the cluster family so a
+future table FK'd to `clusters.id` is covered automatically, same rationale
+that function's own docstring gives), then Neo4j (`DETACH DELETE` on the
+`Paper`/`Entity` labels — the only two the pipeline ever writes), then Qdrant
+(drop the collection outright; it is exclusively ScholarLens evidence and
+`ensure_collection()` recreates it lazily), then — only once all three are
+**verified** empty — the PDF files, last, using paths captured before the
+Postgres delete ran.
+
+The first version of this shipped with PDFs deleted *first* (reasoning: only
+Postgres knows which files are "ours," so capture the paths, delete the
+files, delete the rows). Owner review caught the real failure mode that
+ordering has: if a PDF was deleted but Neo4j or Qdrant then failed, Postgres
+still held a `Paper` row with `has_full_text=True` pointing at a `pdf_path`
+that no longer existed — an actively wrong corpus record, not just an
+unfinished reset. PDF deletion cannot be undone, so it now runs last, gated
+behind Postgres/Neo4j/Qdrant all having converged; a `Paper` row can therefore
+never survive to reference a PDF this function has already removed. The
+residual risk this leaves is milder and accepted: if Neo4j or Qdrant fails
+*after* Postgres has already committed, the PDFs are preserved un-deleted
+(never destroyed ahead of a failed reset), and a retry's fresh `pdf_path` scan
+(Postgres already has none) won't find them either — they become the same
+harmless orphan `app.core.reconcile`'s `unreferenced_pdf_count` already
+detects and reports, never a corpus record that lies about what it still has.
+
+Every step is otherwise idempotent (an already-clean store is a no-op, not an
+error), and `current_run() is None` is rejected the same way `delete_paper`
+rejects it, so a reset can never run outside the pipeline writer lock.
+
+Tests: `tests/core/test_corpus_reset.py` (empty/populated/idempotent resets,
+Neo4j label-scoped deletion, a real in-memory Qdrant collection drop, managed
+vs. stray vs. outside-storage-root PDFs, the writer-lock guard, and — for each
+of Postgres/Neo4j/Qdrant in turn — a failure there surfacing rather than
+reporting false success while leaving every PDF file untouched) plus
+`DELETE /admin/corpus` coverage in `tests/api/test_routes_backend.py` (auth
+required, lock contention, and a generic failure returning a detail with no
+leaked exception text — matching `/reports`'s existing convention, not a new
+one).
+
+## Stage 9 rate-limit resilience (owner-requested, outside the phase list)
+
+A run on the 20-paper corpus completed S2–S8 and then failed with
+*"Groq rate limit reached. Retry later or lower REPORT_TOP_K."* The key was
+valid and requests had reached `openai/gpt-oss-20b`, so this was metering, not
+misconfiguration.
+
+### D-09-09 — the limit hit was tokens per minute, not requests
+
+`report_top_k` is 5 and the loop in `explanation/service.py` is sequential, so
+one run makes at most 5 chat-completion calls, well under any request-rate
+ceiling. The token arithmetic is what explains it. A Stage 9 prompt measures
+~12,000 characters (~3,000 tokens) at the defaults — `report_evidence_top_n`
+(8) passages capped at `MAX_EVIDENCE_CHARS` (1200) plus a ~1,500-character
+scaffold — and nothing capped the *completion*, which matters because the
+default model reasons before it answers and those hidden tokens are metered
+too. Five such calls issued back to back land ~20–25k tokens inside one minute
+against a free-tier ceiling of 8,000 TPM, so the second or third call is
+refused.
+
+This could not be confirmed from the artefacts, because `GroqClient` discarded
+the 429's body and headers — exactly where Groq names the ceiling it enforced
+and the `Retry-After` it wants. That is now captured (bounded to 300
+characters) and surfaced, so the next occurrence is self-diagnosing.
+
+### D-09-10 — reuse `app.ingestion.rate_limit`, don't write a second one
+
+The retry loop the discovery sources already use (`send_with_retries` +
+`RateLimiter`) is exactly the required behaviour — bounded retries,
+Retry-After honoured over exponential backoff, a shared limiter every caller
+defers, and logs that name only source and status. Importing it into
+`explanation/` crosses a package boundary that reads oddly, but the
+alternative — moving it to `app/core/` — would churn arxiv and
+semantic_scholar for no behavioural gain, and a second implementation would
+violate hard constraint 8. Reused as-is.
+
+The limiter is **module-level**, so Stage 9 and Mode B `/query` — which spend
+one quota — queue behind each other rather than each behaving as the only
+caller. Consequence to know about: a 429 carrying a multi-hour `Retry-After`
+(a daily quota) parks *every* Groq call in the process for up to
+`MAX_COOLDOWN_SECONDS` (3600), `/query` included. That is deliberate — the
+quota really is gone — and clears on backend restart.
+
+### D-09-11 — `report_top_k` stays at 5
+
+Lowering K treats the symptom. The cost driver was an uncapped completion and
+a 5-call burst, not the number of reports, and K is what turns 27 ranked
+clusters into a gap *report* rather than a single example. Instead:
+`GROQ_MAX_COMPLETION_TOKENS` (2048) bounds the spend per call, retries absorb
+a per-minute refusal, and `GROQ_MIN_INTERVAL_SECONDS` lets a constrained tier
+spread the burst across the window while keeping all K reports. The evidence
+budget (`report_evidence_top_n`, `MAX_EVIDENCE_CHARS`) was left alone: those
+passages *are* the grounding, and trimming them to dodge a quota would trade
+the phase's core credibility claim for a smaller bill. `REPORT_TOP_K` remains
+the documented first lever if a deployment still needs one.
+
+### D-09-12 — one error class per operator action
+
+"LLM provider unavailable" was the answer to a rejected key, an unknown model
+and an exhausted quota alike. Split into `LLMRateLimitError` (429, carrying
+`retry_after`), `LLMAuthError` and `LLMConfigurationError` (both plain
+`LLMError` — *not* "unavailable", because waiting cannot fix either), and
+`LLMUnavailableError` for genuine outages. `_llm_http_error` maps these to
+429 + `Retry-After` / 502 / 503, so the status code itself tells the caller
+whether to wait or to change configuration.
+
+### S9 is resumable — it always was
+
+`POST /reports` calls `generate_top_reports` directly against the stored
+clusters, rankings and vectors; no S2–S8 path is involved, and the pipeline's
+`session.rollback()` on an LLM failure discards only uncommitted S9 work. What
+was missing was any *indication* of this: the error said "reports were not
+generated" and left rebuilding as the obvious next move. The message now names
+`POST /reports` and states the evidence base is intact, and
+`tests/explanation/test_service.py` pins the property
+(`test_a_metered_run_is_resumable_against_the_same_evidence_base`).
+
+The one rough edge left unchanged: a successful `POST /reports` does not mark
+the `s9` derived checkpoint, so a later `/pipeline/run` regenerates the same
+reports. Harmless but wasteful; noted rather than fixed, since the checkpoint
+digest is computed inside `_execute_pipeline` and plumbing it out is more
+coupling than the problem is worth.
+
+Also unchanged: a run cut short still discards the drafts it completed
+(`replace_reports` runs once, at the end, so the previous run's reports
+survive — Phase 9's documented decision). The completed count is now logged so
+the cost of the retry is visible.
+
+### SPECTER2 adapter warning — harmless, no change
+
+`"There are adapters available but none are activated for the forward pass"`
+is emitted twice by `adapters.model_mixin.forward_context` *during*
+`load_adapter`, before `set_active=True` has taken effect — which is why it
+appears just above our own "Loaded SPECTER2 … (768-d)" line. Verified
+directly against the cached checkpoints: after `load_adapter` returns,
+`model.active_adapters` is `Stack[specter2]`, and a forward pass with the
+adapter active differs from the same pass with it deactivated (L2 6.58,
+cosine 0.956). Embeddings are genuine 768-d SPECTER2 proximity vectors. The
+warning describes the loader's own internal pass, not ours. Left untouched.
+
+### Settings added
+
+`groq_max_retries` (4), `groq_backoff_base_seconds` (2.0),
+`groq_backoff_max_seconds` (90.0 — above a minute on purpose, so a TPM ceiling
+is waited out and a daily quota is not), `groq_min_interval_seconds` (0.0, opt
+in), `groq_max_completion_tokens` (2048). All documented in `.env.example`.
+
+### Tests
+
+`tests/explanation/test_llm_rate_limit.py` (new, 22 tests on a fake clock —
+retry/backoff, Retry-After precedence, bounded budget, over-budget waits
+reported rather than slept on, the five error classes, completion cap and
+truncation, proactive pacing, the shared limiter, and no key or bearer header
+on any log path); rate-limit/auth/config/outage status mapping and the
+rate-limited `/pipeline/run` message in `tests/api/test_routes_backend.py`;
+resumability and mid-run progress in `tests/explanation/test_service.py`; the
+new settings plus `REPORT_TOP_K`-from-env in `tests/core/test_config.py`.
+`tests/explanation/test_llm.py` was updated, not just extended: its fakes
+predated status-code classification, and its 429 case had started sleeping for
+real once retries existed. Full backend suite green (1045); `ruff check`
+clean.
+
+---
+
+## Gap-evidence validity fixes (owner-requested, outside the phase list)
+
+Triggered by manual validation of Gap #1 on the 20-paper LLM-security corpus.
+The stored report read:
+
+> "Despite frequent prompt injection attacks, there is a lack of effective,
+> adaptive defenses and inconsistent findings across studies, leaving LLMs
+> vulnerable."
+
+gap_score 11.01, confidence 70%, "Conflicting evidence". The diagnosis found
+three independent defects, all confirmed against the live database:
+
+1. **`contradiction=True` was a false positive.** Four stored pairs, all
+   sharing one right-hand statement -- an ethics/availability disclaimer
+   ("All attack templates are derived from the publicly available BIPIA
+   benchmark ... no attack tooling is released") -- scored against a
+   recommendation bullet, a related-work description, a future-work proposal
+   and one genuine limitation. DeBERTa-MNLI scored all four above P=0.999.
+   None is a disagreement. The single boolean contributed 5.0 of the 11.01.
+2. **`solution_density` was structurally 0.00**, for all 27 clusters. The rule
+   required a contribution sentence containing *every* term of the label; the
+   top gap's label is "prompt attacks injection", and no contribution sentence
+   in the corpus contains all three. The `- w3 * density` term was decorative.
+3. **The evidence base was one paper.** Stage 9 retrieved 8 passages, 7 from
+   one study and 1 from a paper not in the cluster; 5 of the cluster's 6 papers
+   were never quoted. The report's "56% of tests" was that one study's own
+   experiment, presented as the field's position.
+
+### D-06-10 -- a contradiction needs two *claims*, and non-claims never reach the model
+
+`app/clustering/claims.py` rejects headings, bullets, ethics/availability
+disclaimers, section cross-references, related-work descriptions and
+future-work proposals before pairing. A statement that asserts nothing cannot
+be disagreed with, so it is not worth a forward pass either -- the filter runs
+before `candidate_pairs`, not after the model.
+
+Four of the five statements behind cluster 1's flagged pairs are rejected
+outright (bullet / disclaimer / related_work / proposal); the fifth is a real
+claim, and the topic gate drops its pairs instead.
+
+**A finite-verb rule was written and removed.** Any closed list of verbs is a
+list of the verbs its author thought of, and this project's own hand-labelled
+genuine contradiction ("Cross-lingual transfer fully recovers accuracy for
+low-resource languages") was rejected by it because "recovers" was not on the
+list. Distinguishing a third-person "recovers" from a plural noun needs a POS
+tagger this project does not carry. Losing a real disagreement is worse than
+admitting a noun-phrase fragment, which `too_short` and `structural` already
+catch and which still has to clear the topic and NLI gates.
+
+### D-06-11 -- the topic gate is lexical overlap, **not** SPECTER2 cosine
+
+Cosine was the obvious choice and was measured first, on the stored corpus,
+before any code was written. Over the 239 cross-paper pairs inside stored
+clusters it ran 0.836 - 0.975, median 0.923, and the four known false positives
+sat at 0.89 - 0.93, the middle of the distribution. The *most* similar pairs of
+all were boilerplate ("DISCUSSION AND LIMITATIONS" against "This study has
+several limitations", cosine 0.975). SPECTER2 is a document-level model; on
+single sentences from one field everything looks alike, and a cosine gate would
+have selected *for* boilerplate.
+
+Shared stemmed content terms separate the same pairs cleanly: the four false
+positives share 0-1 terms (Jaccard <= 0.042), while `shared >= 3 AND
+Jaccard >= 0.12` admits 3.8% of cross-paper pairs. Both bounds are required --
+long sentences from one field clear the count on shared jargon, and two
+fragments clear the ratio on a single word.
+
+### D-06-12 -- both NLI directions, and corroboration across paper pairs
+
+NLI is asymmetric, so one direction over the threshold is as easily an ordering
+artefact as a disagreement; both must now clear `contradiction_threshold`. The
+stronger direction is still what gets *stored* -- D-06-05 is unchanged for
+scoring, this is a gate on whether the pair counts.
+
+A cluster is flagged only when `contradiction_min_paper_pairs` (default 2)
+distinct **paper** pairs disagree. Cluster 1's "four pairs" were four statements
+against one, from two papers; counting statement pairs is what made one
+disclaimer look like four independent disagreements. `detect()` returns `[]`
+when corroboration fails, so nothing is stored and there is no flag to explain.
+
+**Known cost, deliberate:** a genuine disagreement between exactly two papers is
+not flagged at the default. On a 20-paper corpus that is the commonest shape a
+real contradiction takes *and* the commonest shape a false positive takes, and
+the corpus supplied four of the latter and none of the former. Configurable via
+`CONTRADICTION_MIN_PAPER_PAIRS=1`.
+
+### D-08-10 -- the contradiction signal is graded on breadth, not a boolean
+
+`contradiction_signal(pairs, min_paper_pairs, full_strength)` returns `0.0`
+below the corroboration floor and `pairs / full_strength` (clamped) above it,
+so two disagreeing paper pairs earn two thirds of `w5` rather than all of it.
+
+D-08-06's reasoning is unchanged: the NLI *probability* still does not enter
+the score, because a 0.71 and a 0.99 both mean "these papers disagree" and
+substituting it would re-weight `w5` by how sure a transformer felt. What does
+distinguish a strong disagreement from a weak one is how much of the literature
+takes part, and that is a count the pipeline can defend. Stage 8 re-checks the
+floor rather than trusting the stored flag, so a ranking cannot inherit a flag
+raised by an older run under looser settings.
+
+### D-08-11 -- solution density splits "is this on-theme" from "is this a remedy"
+
+Supersedes D-08-04's every-term rule, which scored 0.00 for all 27 clusters. A
+paper counts as a solver when **both** hold:
+
+* **on-theme** -- it is one of the cluster's own papers, or a contribution
+  shares >= `gap_solution_min_label_overlap` (2) stemmed terms with the label;
+* **proposes a remedy** -- a contribution matches a narrow solution cue
+  (defen[cs] / mitigat / safeguard / countermeasur / harden / protect /
+  prevent / neutraliz / sanitiz / remediat / robust / resilien / guard /
+  detector / detection / filter / firewall / shield).
+
+Lexical overlap is a poor test of "did you solve it" but an adequate test of
+"are you working on this", and cluster membership answers the second outright.
+Membership is what finally recognises Sentra-Guard, a prompt injection defense
+whose contributions say "neutralized more than 98.7% of adversarial attempts"
+and share *no* word with the label "prompt attacks injection".
+
+The cue list is deliberately narrow. Measured on the corpus, a list that also
+included "propose", "present", "introduce", "framework", "method" and
+"benchmark" marked a solver in 26 of 27 clusters and drove density to 1.00
+almost everywhere, which makes the term a constant. The narrow list produced a
+real spread (0.00 - 1.00, most clusters between). D-08-04's corpus-wide
+numerator is preserved: a paper that solved a problem rarely lists it as its
+own limitation.
+
+### D-09-04 -- evidence is capped per paper and prefers the cluster's own papers
+
+Retrieval widens to `report_evidence_top_n * report_evidence_oversample` (8x4),
+then `app/explanation/selection.py` selects breadth-first -- every paper's best
+passage before any paper's second -- preferring the cluster's papers, capped at
+`report_evidence_per_paper_cap` (3) each. Without the headroom the cap could
+only ever *remove* passages; with it, a crowded-out paper can be promoted.
+
+It is a preference, not a filter: a passage from outside the cluster is still
+real retrieved evidence and a thin cluster needs it. Qdrant still ranks;
+nothing here re-scores. `evidence_summary` reports passages and unique papers
+separately, in the prompt and on `GET /reports`, because eight passages from
+one study and eight from eight studies are not equally supported and only the
+second number tells them apart.
+
+### D-09-05 -- (A), (B) and (C) are judged separately, and grounded in code
+
+The prompt asks for `problem_evidence` (the problem exists),
+`solution_insufficiency_evidence` (existing solutions fall short) and
+`research_gap_evidence` (a specific gap remains) as separate cited claims, plus
+`conflicting_evidence`, and states that evidence for (A) does not establish (B)
+or (C). "Prompt injection remains common" is a reason to believe prompt
+injection remains common.
+
+The prompt is not the enforcement. `GroundedClaim` downgrades any claim
+asserted with no citation, and `service.py` re-grounds every claim against the
+ids actually retrieved, so a claim whose citations were invented becomes
+unsupported before it is stored. All four default to unsupported, so a provider
+that omits them reads as "not established" rather than "all of it holds".
+
+### D-09-06 -- pipeline measurements are heuristics, not facts
+
+The old prompt said "computed from the corpus -- treat these as facts", and the
+model duly wrote "inconsistent findings across studies" out of a
+`contradiction_flag` of 1.0 with no opposing passage anywhere in its evidence.
+They are now labelled heuristics, the contradiction measure is named as one
+known to produce false positives, and the prompt states that where the
+measurements and the passages disagree, the passages win.
+
+### Confidence is unchanged, and still not calibrated
+
+Per the owner's instruction the confidence field remains the LLM's own number.
+The prompt now tells the model to lower it when evidence comes from few unique
+papers, is dominated by one paper, lacks direct support for (B) or (C), rests
+on an unconfirmed contradiction, or is incomplete, and the EVIDENCE BASE line
+gives it the numbers to do that with. **This is an LLM-generated estimate, not
+a statistically calibrated probability**, and is documented as such in
+`frontend/src/types.ts`. A deterministic confidence remains open.
+
+### Expected effect on the stored corpus (simulated read-only, not yet rerun)
+
+* All four cluster-1 pairs are dropped, by the claim gate *and* independently by
+  the topic gate.
+* Across all 27 clusters, at most **one** candidate paper pair survives the
+  gates in any cluster, so at `CONTRADICTION_MIN_PAPER_PAIRS=2` **no cluster in
+  this corpus will be flagged**. "Conflicting evidence" disappears from the
+  dashboard for this corpus. That is the honest reading of the evidence, not a
+  bug.
+* `solution_density` becomes non-zero for 17 of 27 clusters (0.25 - 1.00).
+* **Consequence to watch:** `w3 = 25` was set when density was always 0. At
+  density 0.33 it now subtracts 8.33 against a mention_frequency of ~6, so the
+  ranking is dominated by this term and cluster 1 falls out of the top 5
+  entirely (projected ~-2.3). The weight was **not** tuned here -- the owner
+  asked for no untested weight changes -- but recalibrating
+  `GAP_WEIGHT_SOLUTION_DENSITY` is now the live question, and it is an S8-only
+  rerun.
+
+### Files
+
+New: `app/clustering/claims.py`, `app/explanation/selection.py`.
+Changed: `app/clustering/nli.py`, `app/ranking/signals.py`,
+`app/ranking/service.py`, `app/explanation/prompt.py`,
+`app/explanation/schema.py`, `app/explanation/service.py`,
+`app/explanation/storage.py`, `app/core/config.py`, `app/core/schema.py`,
+`app/api/routes_backend.py`, `frontend/src/types.ts`, `.env.example`.
+
+### Settings added
+
+`CONTRADICTION_MIN_CLAIM_WORDS` (8), `CONTRADICTION_MIN_SHARED_TERMS` (3),
+`CONTRADICTION_MIN_TOPIC_JACCARD` (0.12),
+`CONTRADICTION_REQUIRE_BOTH_DIRECTIONS` (true),
+`CONTRADICTION_MIN_PAPER_PAIRS` (2),
+`CONTRADICTION_FULL_STRENGTH_PAPER_PAIRS` (3),
+`GAP_SOLUTION_MIN_LABEL_OVERLAP` (2), `REPORT_EVIDENCE_PER_PAPER_CAP` (3),
+`REPORT_EVIDENCE_OVERSAMPLE` (4). The Stage 8 knob carries the `gap_` prefix so
+the pipeline's derived-state fingerprint already watches it.
+
+### API (additive, backward compatible)
+
+`GET /clusters` gains `contradictions[]` with both statements' ids, paper ids,
+text and score, so "Conflicting evidence" can be explained rather than
+asserted. `GET /reports` gains `justification` (the grounded A/B/C) and a
+derived `evidence_summary`. `gap_reports.justification` is a nullable JSON
+column with an additive `ALTER TABLE ... IF NOT EXISTS` for existing volumes.
+No existing key changed; the frontend was not redesigned.
+
+### Tests
+
+New: `tests/clustering/test_claims.py` (25), `tests/clustering/test_nli_gates.py`
+(17, driven by cluster 1's real statements against an NLI stand-in that scores
+every pair 0.9995), `tests/ranking/test_signals_v2.py` (18, Sentra-Guard's real
+contribution sentences), `tests/explanation/test_selection.py` (19),
+`tests/explanation/test_justification.py` (20),
+`tests/explanation/test_service_diversity.py` (10, end to end through
+`generate_top_reports`).
+
+Updated rather than merely extended, because their fixtures encoded the old
+behaviour: `test_nli.py` (its stand-in contradicted in one direction only, and
+`statements[:2]` no longer clears the topic gate), `test_service.py` (the same
+one-directional stand-in), `test_signals.py`, `tests/ranking/test_service.py`,
+`tests/ranking/test_api_contract.py`, `tests/explanation/test_schema.py`,
+`tests/explanation/test_service.py`, `tests/core/test_schema.py`,
+`tests/explanation/test_api_contract.py`.
+
+Backend 1160 passed, `ruff check app tests` clean, frontend `tsc --noEmit`
+clean and 19 vitest tests green.
+
+**Two pre-existing failures remain and were not touched**:
+`tests/ner_re/test_extractor.py::test_batch_extraction_matches_single_pass_results`
+and `::test_batch_extraction_falls_back_without_dropping_chunk_order`. Both are
+in the uncommitted Stage 4 JointIE batching work, fail on entity content from
+the batch path, and are independent of everything changed here.
+
+### D-06-13 -- non-research statements are filtered at the S6 input boundary
+
+The read-only ranking audit found ~11 of 27 clusters were not themes at all:
+reference-list entries ("In Findings of the Association for Computational
+Linguistics: EMNLP 2023, pages 12365-12394, Singapore."), bibliography author
+lists ("Zhengbao Jiang, Antonios Anastasopoulos, Jun Araki, ..."), citation
+fragments ("2023.", "(Ghosal et al., CVPR 2025)"), acknowledgements and funding
+lines ("the PaliGemma Academic Program award from Google"), and section
+cross-references. Stage 2/3 extracted them as `limitation` statements and Stage
+5 embedded them.
+
+They did not merely clutter the ranking, they *won* it: four reached the
+projected top 10, because a cluster of author names has no on-theme solver and
+so loses nothing to `solution_density`. The density fix was rewarding
+extraction noise.
+
+**Boundary: `load_gap_statements`.** It is the single place Stage 6 reads its
+input and the only consumer of `gap_points()`. Filtering there is downstream of
+Stages 2-5, so nothing is re-parsed, re-extracted or re-embedded and the
+vectors stay in Qdrant exactly as Stage 5 wrote them -- the filter is
+reversible by changing one setting rather than by re-running an expensive
+stage. It is upstream of everything derived, so clusters, labels, member
+counts, Stage 7's per-year counts and Stage 8's signals are all fixed at once.
+
+**A new predicate, not `claim_rejection`.** That one answers "could another
+paper contradict this?" and rejects proposals -- and a future-work statement is
+a proposal, so reusing it here would have discarded half of what README S8
+Stage 6 exists to cluster. `research_statement_rejection` answers the weaker
+"is this research, or is it document furniture?" and rejects only: too_short
+(below `clustering_min_statement_words`, default 6), heading (all-caps),
+bibliography, author_list, acknowledgement, structural, disclaimer. It does
+*not* reject proposals, imperatives, related-work or bullets.
+
+**Three over-rejections found and fixed during the work**, all from reusing the
+contradiction filter's patterns wholesale:
+
+* `supported by` matched "claims that are not supported by the retrieved
+  context" and dropped this project's own hand-labelled hallucination
+  limitation. A funding sentence is now caught by its funder instead.
+* `^(section|table|figure)` dropped "Table 4 shows that accuracy drops sharply
+  for low-resource languages". The cross-reference rule now requires the
+  structural verb as well as the opener.
+* `ethic(s|al)` and `publicly available` dropped "the ethical implications of
+  deploying these models remain underexplored" -- in an AI-safety corpus that
+  is a research gap -- and "Our dataset is publicly available and covers
+  fourteen languages", a contribution claim. Only unambiguous conduct
+  boilerplate (consent, IRB, "does not reflect the view of the authors") is
+  matched now.
+
+Each is pinned by a test in `TestOverRejectionGuards`.
+
+### Settings added
+
+`CLUSTERING_MIN_STATEMENT_WORDS` (6). Carries the `clustering_` prefix so the
+pipeline's derived-state fingerprint invalidates S6 when it changes. Lower than
+`contradiction_min_claim_words` (8) on purpose: clustering needs enough words
+to carry a theme, contradiction needs a full assertable claim.
+
+### Files
+
+Changed: `app/clustering/claims.py` (the new predicate and its patterns),
+`app/clustering/service.py` (the boundary), `app/core/config.py`,
+`.env.example`. New tests: `tests/clustering/test_research_statements.py`,
+`tests/clustering/test_input_filter.py`. Updated fixtures:
+`tests/clustering/test_service.py`, `tests/core/test_telemetry.py` (its
+placeholder text "statement 0" is now correctly filtered as too_short).
+
+Backend 1228 passed, 2 pre-existing `ner_re` failures unchanged; `ruff check
+app tests` clean. No frontend change.
+
+### Stages that must be rerun
+
+S6 -> S7 -> S8 -> S9. Not S1-S5: the corpus, PDFs, parses, facts, graph and
+embeddings are untouched, and no vector is re-encoded. S6 changes detection, S7
+must follow because `replace_clusters` wipes dependent tables and cluster ids
+are not stable across rebuilds, S8 depends on both, S9 depends on S8.
+
+## 2026-09-23 -- Pre-reset engineering audit (code-level only)
+
+Scope: one consolidated code audit before the owner's clean corpus reset. No
+corpus reset, no collection, no S1-S9 run, no LLM call. The existing corpus
+and cached ACL export were inspected read-only.
+
+### D-S2-TYPES-01 -- Semantic Scholar rejects clearly non-research records
+
+`semantic_scholar.search_topic` now requests `publicationTypes` and drops a
+record tagged `Editorial`, `News`, `LettersAndComments` or `CaseReport` --
+unless it is also tagged `Study` or `Review` (explicit research content wins;
+`JournalArticle`/`Conference` name a container, not content, so they do not
+rescue). Missing/null/empty types are accepted. No title/abstract/PDF text is
+read. So rejected records never take a slot, the single search request asks
+for `SEMANTIC_SCHOLAR_REQUEST_LIMIT` (default 20, 1-100, never below the cap)
+and the first `limit` accepted records are returned in relevance order -- no
+extra request, no pagination.
+
+### D-15-02 -- ACL track markers are also read in parenthesised volume labels
+
+Surveying the cached 127,839-record Anthology export showed the D-15-01 regex
+missed every `"(Volume 3: System Demonstrations)"` / `"(Volume 5: Tutorial
+Abstracts)"` venue (the final-colon segment ends in `)`) and NAACL 2025's
+`"...Technologies (System Demonstrations)"`: all ACL 2023-2026, EACL 2024 and
+NAACL 2024/2025 demo and tutorial volumes. The marker list is unchanged; only
+those two placements are now read. Rejections in the export: 1,226 -> 1,655,
+all of them the six listed markers. Not added (no owner decision yet):
+"Demonstrations", "Demonstration Papers", "Tutorials", keynotes, invited
+talks, panels.
+
+### D-PDF-02 -- a non-PDF body is never stored as full text
+
+The corpus held `14.pdf` = a Scientific Reports "JavaScript is disabled"
+HTML page resolved by Unpaywall (`best_oa_location.url`), flagged
+`has_full_text=True`, parsed by the fallback into a one-sentence document and
+never retried. `corpus.download_pdf` (ACL + non-arXiv Unpaywall) now requires
+`%PDF-` within the first 1024 bytes, and writes to `<dest>.part`, moving it
+into place only on success -- /collect fetches before dedup, so re-collecting
+downloads onto a stored paper's existing file and a bad second fetch must not
+destroy it.
+
+### Operational note
+
+The running backend image predates the ACL filter (`is_non_research_track`
+was absent in the container). `docker compose up -d --build backend` is
+required before recollection.
+
+### Tests
+
+New: `tests/ingestion/sources/test_semantic_scholar_publication_types.py`
+(23); additions to `test_acl_venue_validation.py` (15), `test_corpus.py` (7),
+`test_routes_ingestion.py` (1 end-to-end S2 cap test; pass-through test
+extended). Backend 1297 passed, `ruff check app tests` clean. The two
+previously failing `ner_re` batch-extraction tests now pass (untouched here).

@@ -1,4 +1,11 @@
-"""Pairwise contradiction detection (CLUSTER-02)."""
+"""Pairwise contradiction detection (CLUSTER-02).
+
+Every detector built here passes `min_paper_pairs=1`. These tests are about
+how a pair is scored, batched, truncated and ordered, and the hand-labelled
+set contains exactly one disagreeing paper pair; the production default of
+two is a corroboration policy, and it is tested where it belongs, in
+test_nli_gates.py.
+"""
 
 import pytest
 
@@ -21,6 +28,16 @@ def statements() -> list[GapStatement]:
 
 def _by_id(statements, point_id) -> GapStatement:
     return next(item for item in statements if item.point_id == point_id)
+
+
+def _contradiction_pair(statements) -> list[GapStatement]:
+    """The hand-labelled pair, which is the fixture's only gate-clearing one.
+
+    `statements[:2]` no longer reaches the model: p-ml-1 and p-ml-2 describe
+    the same theme in different words and share too little vocabulary to be
+    "under the same setup" (D-06-11), so they are not compared at all.
+    """
+    return [_by_id(statements, pid) for pid in CONTRADICTION_PAIR]
 
 
 class RecordingPredictor:
@@ -110,8 +127,12 @@ class TestCandidatePairs:
 class TestContradictionDetector:
     def test_flags_the_hand_labelled_cross_paper_disagreement(self, statements):
         left, right = (_by_id(statements, pid) for pid in CONTRADICTION_PAIR)
-        predictor = RecordingPredictor({(left.text, right.text)})
-        detector = ContradictionDetector(predictor, threshold=0.5)
+        # Both orders, because a real disagreement contradicts either way round
+        # and D-06-12 now requires that.
+        predictor = RecordingPredictor(
+            {(left.text, right.text), (right.text, left.text)}
+        )
+        detector = ContradictionDetector(predictor, threshold=0.5, min_paper_pairs=1)
 
         found = detector.detect([left, right])
 
@@ -121,16 +142,28 @@ class TestContradictionDetector:
         )
         assert found[0].score == pytest.approx(0.93)
 
-    def test_scores_both_directions_and_keeps_the_stronger(self, statements):
-        # NLI is asymmetric (D-06-05): only the reversed order contradicts here.
+    def test_both_directions_are_scored(self, statements):
+        # NLI is asymmetric (D-06-05), so both orders are put to the model.
         left, right = (_by_id(statements, pid) for pid in CONTRADICTION_PAIR)
         predictor = RecordingPredictor({(right.text, left.text)})
-        detector = ContradictionDetector(predictor, threshold=0.5)
+        detector = ContradictionDetector(predictor, threshold=0.5, min_paper_pairs=1)
 
-        found = detector.detect([left, right])
+        detector.detect([left, right])
 
-        assert len(found) == 1
-        assert found[0].score == pytest.approx(0.93)
+        scored = {pair for call in predictor.calls for pair in call}
+        assert (left.text, right.text) in scored
+        assert (right.text, left.text) in scored
+
+    def test_one_direction_alone_no_longer_flags_a_pair(self, statements):
+        # D-06-12: a contradiction in one order only is as likely an ordering
+        # artefact as a disagreement, so it no longer counts. The stronger
+        # direction is still what gets stored once both agree -- see
+        # test_nli_gates.py::TestBothDirections.
+        left, right = (_by_id(statements, pid) for pid in CONTRADICTION_PAIR)
+        predictor = RecordingPredictor({(right.text, left.text)})
+        detector = ContradictionDetector(predictor, threshold=0.5, min_paper_pairs=1)
+
+        assert detector.detect([left, right]) == []
 
     def test_agreeing_statements_are_not_flagged(self, statements):
         detector = ContradictionDetector(RecordingPredictor(), threshold=0.5)
@@ -139,27 +172,30 @@ class TestContradictionDetector:
 
     def test_a_score_below_the_threshold_is_not_flagged(self, statements):
         left, right = (_by_id(statements, pid) for pid in CONTRADICTION_PAIR)
-        predictor = RecordingPredictor({(left.text, right.text)})
-        detector = ContradictionDetector(predictor, threshold=0.99)
+        predictor = RecordingPredictor(
+            {(left.text, right.text), (right.text, left.text)}
+        )
+        detector = ContradictionDetector(predictor, threshold=0.99, min_paper_pairs=1)
 
         assert detector.detect([left, right]) == []
 
     def test_findings_are_ordered_by_score_descending(self, statements):
-        pairs = {
-            (statements[0].text, statements[1].text),
-            (statements[1].text, statements[2].text),
-        }
+        first, third, fourth = (
+            _by_id(statements, pid) for pid in ("p-ml-1", "p-ml-3", "p-ml-4")
+        )
+        weaker = frozenset((first.text, third.text))
+        stronger = frozenset((third.text, fourth.text))
 
         class Graded(RecordingPredictor):
+            """Symmetric scores, so both directions clear the threshold."""
+
             def __call__(self, batch):
                 out = []
                 for premise, hypothesis in batch:
-                    if (premise, hypothesis) == (
-                        statements[0].text,
-                        statements[1].text,
-                    ):
+                    pair = frozenset((premise, hypothesis))
+                    if pair == weaker:
                         out.append({CONTRADICTION: 0.7, NEUTRAL: 0.2, ENTAILMENT: 0.1})
-                    elif (premise, hypothesis) in pairs:
+                    elif pair == stronger:
                         out.append(
                             {CONTRADICTION: 0.9, NEUTRAL: 0.05, ENTAILMENT: 0.05}
                         )
@@ -169,14 +205,14 @@ class TestContradictionDetector:
                         )
                 return out
 
-        detector = ContradictionDetector(Graded(), threshold=0.5)
-        found = detector.detect(statements[:3])
+        detector = ContradictionDetector(Graded(), threshold=0.5, min_paper_pairs=1)
+        found = detector.detect([first, third, fourth])
 
         assert [round(pair.score, 2) for pair in found] == [0.9, 0.7]
 
     def test_a_single_statement_needs_no_model_call(self, statements):
         predictor = RecordingPredictor()
-        detector = ContradictionDetector(predictor, threshold=0.5)
+        detector = ContradictionDetector(predictor, threshold=0.5, min_paper_pairs=1)
 
         assert detector.detect(statements[:1]) == []
         assert predictor.calls == []
@@ -195,7 +231,9 @@ class TestContradictionDetector:
 
     def test_predictions_are_batched(self, statements):
         predictor = RecordingPredictor()
-        detector = ContradictionDetector(predictor, threshold=0.5, batch_size=2)
+        detector = ContradictionDetector(
+            predictor, threshold=0.5, batch_size=2, min_paper_pairs=1
+        )
 
         detector.detect(statements[:4])
 
@@ -203,10 +241,12 @@ class TestContradictionDetector:
         assert all(len(call) <= 2 for call in predictor.calls)
 
     def test_a_wrong_length_prediction_is_rejected(self, statements):
-        detector = ContradictionDetector(lambda pairs: [], threshold=0.5)
+        detector = ContradictionDetector(
+            lambda pairs: [], threshold=0.5, min_paper_pairs=1
+        )
 
         with pytest.raises(ValueError, match="predictions"):
-            detector.detect(statements[:2])
+            detector.detect(_contradiction_pair(statements))
 
     def test_a_non_finite_probability_is_rejected_clearly(self, statements):
         # NaN survives min()/max() untouched and would otherwise surface as an
@@ -214,18 +254,21 @@ class TestContradictionDetector:
         detector = ContradictionDetector(
             lambda pairs: [{CONTRADICTION: float("nan")} for _ in pairs],
             threshold=0.5,
+            min_paper_pairs=1,
         )
 
         with pytest.raises(ValueError, match="finite"):
-            detector.detect(statements[:2])
+            detector.detect(_contradiction_pair(statements))
 
     def test_a_missing_contradiction_key_is_rejected(self, statements):
         detector = ContradictionDetector(
-            lambda pairs: [{NEUTRAL: 1.0} for _ in pairs], threshold=0.5
+            lambda pairs: [{NEUTRAL: 1.0} for _ in pairs],
+            threshold=0.5,
+            min_paper_pairs=1,
         )
 
         with pytest.raises(ValueError, match="contradiction"):
-            detector.detect(statements[:2])
+            detector.detect(_contradiction_pair(statements))
 
     def test_a_threshold_outside_zero_one_is_rejected(self):
         with pytest.raises(ValueError, match="threshold"):
@@ -234,7 +277,7 @@ class TestContradictionDetector:
     def test_max_pairs_bounds_the_forward_passes(self, statements):
         predictor = RecordingPredictor()
         detector = ContradictionDetector(
-            predictor, threshold=0.5, max_pairs_per_cluster=3
+            predictor, threshold=0.5, max_pairs_per_cluster=3, min_paper_pairs=1
         )
 
         detector.detect(statements)

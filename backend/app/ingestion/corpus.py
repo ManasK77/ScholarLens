@@ -99,14 +99,38 @@ def rows_missing_fulltext(session: Session) -> list[Paper]:
     return list(session.scalars(stmt))
 
 
+# PDF readers accept the `%PDF-` header anywhere in a file's first 1024 bytes.
+_PDF_MAGIC = b"%PDF-"
+_PDF_HEADER_WINDOW = 1024
+
+
 def download_pdf(url: str, dest_path: str, timeout: float = 30.0) -> bool:
+    """Store the PDF at `url`; False on any failure, including a non-PDF body.
+
+    A 200 is not proof of a PDF: an Unpaywall `best_oa_location.url` is often a
+    publisher landing page, and storing that as `has_full_text` hands Stage 2 an
+    HTML "document" and stops Unpaywall from ever trying the paper again.
+
+    The body is written beside `dest_path` and moved into place only once it
+    is known to be a PDF: /collect fetches before dedup, so a re-collected
+    paper downloads onto the file its stored row already points at, and a
+    failed second fetch must not destroy the first.
+    """
+    path = Path(dest_path)
+    partial = path.with_name(f"{path.name}.part")
     try:
         with httpx.stream("GET", url, timeout=timeout, follow_redirects=True) as resp:
             if resp.status_code != 200:
                 return False
-            Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(dest_path, "wb") as f:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(partial, "wb") as f:
                 f.writelines(resp.iter_bytes())
-        return True
+        with open(partial, "rb") as f:
+            is_pdf = _PDF_MAGIC in f.read(_PDF_HEADER_WINDOW)
+        if is_pdf:
+            partial.replace(path)
+        return is_pdf
     except httpx.HTTPError:
         return False
+    finally:
+        partial.unlink(missing_ok=True)

@@ -316,6 +316,158 @@ describe('ScholarLens dashboard', () => {
     expect(screen.queryByText('Connection needed')).not.toBeInTheDocument()
   })
 
+  it('lists every paper the collection returned, not a truncated preview', async () => {
+    const user = userEvent.setup()
+    const collected = Array.from({ length: 12 }, (_, index) => ({
+      id: index + 2,
+      title: `Collected paper ${index + 1}`,
+      authors: ['A'],
+      year: 2025,
+      venue: 'ACL',
+      source: 'arxiv',
+      has_full_text: true,
+      citation_count: 0,
+    }))
+    const populatedFetch = vi.mocked(fetch)
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/papers')) {
+        return new Response(JSON.stringify([...(fixtures['/api/papers?limit=500'] as object[]), ...collected]), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      if (url.endsWith('/collect')) {
+        return new Response(JSON.stringify({
+          count: 12,
+          ids: collected.map((paper) => paper.id),
+          added: 10,
+          duplicates: { total: 2, cross_source: 2, within_source: 0, already_in_corpus: 0 },
+          sources: { arxiv: 'ok', semantic_scholar: 'ok', acl_anthology: 'ok', unpaywall: 'ok' },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      return populatedFetch(input, init)
+    }))
+    render(<App />)
+    await screen.findByText('Multilingual prompt injection remains underexplored.')
+
+    await user.click(screen.getByRole('button', { name: /^add papers$/i }))
+    await user.type(screen.getByLabelText(/research topic/i), 'multilingual prompt injection')
+    await user.click(screen.getByRole('button', { name: /find papers/i }))
+
+    // All twelve, not the first six.
+    expect(await screen.findByText('Collected paper 12')).toBeInTheDocument()
+    for (let index = 1; index <= 12; index += 1) {
+      expect(screen.getByText(`Collected paper ${index}`)).toBeInTheDocument()
+    }
+    // A paper the corpus already held but this search did not return is not
+    // presented as part of it.
+    expect(screen.queryByText('A paper')).not.toBeInTheDocument()
+  })
+
+  it('reports duplicates alongside the papers a collection added', async () => {
+    const user = userEvent.setup()
+    const populatedFetch = vi.mocked(fetch)
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/collect')) {
+        return new Response(JSON.stringify({
+          count: 22,
+          ids: [1],
+          added: 22,
+          duplicates: { total: 8, cross_source: 5, within_source: 1, already_in_corpus: 2 },
+          sources: { arxiv: 'ok', semantic_scholar: 'ok', acl_anthology: 'ok', unpaywall: 'ok' },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      return populatedFetch(input, init)
+    }))
+    render(<App />)
+    await screen.findByText('Multilingual prompt injection remains underexplored.')
+
+    await user.click(screen.getByRole('button', { name: /^add papers$/i }))
+    await user.type(screen.getByLabelText(/research topic/i), 'prompt injection')
+    await user.click(screen.getByRole('button', { name: /find papers/i }))
+
+    expect(await screen.findByText(/22 papers added/)).toBeInTheDocument()
+    expect(screen.getByText(/8 duplicates/)).toBeInTheDocument()
+    expect(screen.getByText(/5 across sources/)).toBeInTheDocument()
+    expect(screen.getByText(/2 already in the corpus/)).toBeInTheDocument()
+  })
+
+  it('leaves the corpus untouched when the delete confirmation is declined', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByText('Multilingual prompt injection remains underexplored.')
+    await user.click(screen.getByRole('button', { name: /^add papers$/i }))
+
+    await user.click(screen.getByRole('button', { name: /delete corpus/i }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText(/this will remove all the stored papers/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^no$/i }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(vi.mocked(fetch).mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
+    expect(screen.getByText('A paper')).toBeInTheDocument()
+  })
+
+  it('deletes the corpus and empties the library once the dialog is confirmed', async () => {
+    const user = userEvent.setup()
+    let deleted = false
+    const populatedFetch = vi.mocked(fetch)
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/admin/corpus') && init?.method === 'DELETE') {
+        deleted = true
+        return new Response(JSON.stringify({ deleted: true, papers: 1, pdfs: 0 }), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      if (url.includes('/papers')) {
+        return new Response(JSON.stringify(deleted ? [] : fixtures['/api/papers?limit=500']), {
+          status: 200, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return populatedFetch(input, init)
+    }))
+    render(<App />)
+    await screen.findByText('Multilingual prompt injection remains underexplored.')
+    await user.click(screen.getByRole('button', { name: /^add papers$/i }))
+    expect(screen.getByText('A paper')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /delete corpus/i }))
+    await user.click(await screen.findByRole('button', { name: /^yes$/i }))
+
+    expect(await screen.findByText('Corpus deleted successfully.')).toBeInTheDocument()
+    const request = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'DELETE')
+    expect(String(request?.[0])).toContain('/admin/corpus')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.queryByText('A paper')).not.toBeInTheDocument()
+    expect(await screen.findByText('Your corpus is empty')).toBeInTheDocument()
+  })
+
+  it('keeps the corpus visible and reports why a failed deletion did not happen', async () => {
+    const user = userEvent.setup()
+    const populatedFetch = vi.mocked(fetch)
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/admin/corpus') && init?.method === 'DELETE') {
+        return new Response(JSON.stringify({ detail: 'Corpus reset failed' }), {
+          status: 502, headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return populatedFetch(input, init)
+    }))
+    render(<App />)
+    await screen.findByText('Multilingual prompt injection remains underexplored.')
+    await user.click(screen.getByRole('button', { name: /^add papers$/i }))
+
+    await user.click(screen.getByRole('button', { name: /delete corpus/i }))
+    await user.click(await screen.findByRole('button', { name: /^yes$/i }))
+
+    expect(await screen.findByText('Corpus reset failed')).toBeInTheDocument()
+    // The corpus is still there, and the button is usable again.
+    expect(screen.getByText('A paper')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /delete corpus/i })).toBeEnabled()
+  })
+
   it('closes the API connection panel with the Escape key', async () => {
     const user = userEvent.setup()
     render(<App />)
