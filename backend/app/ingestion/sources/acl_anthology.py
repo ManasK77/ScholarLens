@@ -15,12 +15,14 @@ bibtexparser) and constructs the PDF URL directly.
 import gzip
 import logging
 import re
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import bibtexparser
 import httpx
 
 from app.ingestion import corpus
+from app.ingestion.relevance import normalize
 from app.ingestion.topic import meaningful_terms
 
 EXPORT_URL = "https://aclanthology.org/anthology+abstracts.bib.gz"
@@ -88,7 +90,9 @@ def _derive_id_and_pdf_url(entry: dict) -> tuple[str, str]:
     return acl_id, pdf_url
 
 
-def _candidate_records(bib_path: str, prefilter_term: str) -> str:
+def _candidate_records(
+    bib_path: str, prefilter_term: str, phrases: Sequence[str] = ()
+) -> str:
     """The raw BibTeX records that could possibly match the topic's terms.
 
     `bibtexparser.load` over the real ~180MB Anthology export builds every one
@@ -112,13 +116,24 @@ def _candidate_records(bib_path: str, prefilter_term: str) -> str:
 
     Anything that survives is still checked against the parsed `title` and
     `abstract` fields; this only decides what is worth parsing.
+
+    `phrases` (D-S1-GATE-01) widens the pass for the relevance gate's concept
+    matcher: a record also survives when its *normalized* text -- braces
+    dropped, hyphens read as spaces, as `relevance.normalize` reads it --
+    contains one of them, so `{P}rompt-{I}njection` counts as "prompt
+    injection".
     """
 
     def _matches(record: str) -> bool:
-        return (
+        if (
             prefilter_term
             in " ".join(record.replace("{", "").replace("}", "").split()).lower()
-        )
+        ):
+            return True
+        if not phrases:
+            return False
+        normalized = normalize(record)
+        return any(phrase in normalized for phrase in phrases)
 
     chunks: list[str] = []
     current: list[str] = []
@@ -139,7 +154,13 @@ def _candidate_records(bib_path: str, prefilter_term: str) -> str:
     return "".join(chunks)
 
 
-def search_topic(bib_path: str, topic: str) -> list[dict]:
+def search_topic(
+    bib_path: str,
+    topic: str,
+    *,
+    matches: Callable[[str, str], bool] | None = None,
+    prefilter_terms: Sequence[str] = (),
+) -> list[dict]:
     """Filter the local .bib file's entries by the topic's terms (D-QUERY-02).
 
     An entry matches when *every* meaningful term in `topic` appears, as a
@@ -154,6 +175,15 @@ def search_topic(bib_path: str, topic: str) -> list[dict]:
     one, so a single-word topic behaves exactly as it always has (`multilingual`
     still matches `non-multilingual`), and every term is still required, so the
     filter does not broaden into an OR over the topic's words.
+
+    **Candidates for the relevance gate (D-S1-GATE-01).** With `matches` (the
+    gate's lexical facet check) an entry is also returned when *it* says every
+    facet of the topic has evidence -- so "machine translation ... prompt
+    injection" is found for "multilingual prompt injection" without the word
+    "multilingual". Entries the legacy rule alone matches are still returned:
+    they are candidates the gate will reject, and a rejection is recorded, not
+    silently skipped. `prefilter_terms` are the gate's normalized phrases for
+    the raw-text pass. This returns candidates; it decides nothing.
     """
     terms = [term.lower() for term in meaningful_terms(topic)]
     if not terms:
@@ -161,14 +191,17 @@ def search_topic(bib_path: str, topic: str) -> list[dict]:
     # Any one term is a valid superset of "all terms", so the cheap raw-text
     # pass uses the longest — the most selective single term available.
     prefilter_term = max(terms, key=len)
-    bib_database = bibtexparser.loads(_candidate_records(bib_path, prefilter_term))
+    bib_database = bibtexparser.loads(
+        _candidate_records(bib_path, prefilter_term, prefilter_terms)
+    )
 
     results = []
     for entry in bib_database.entries:
         title = entry.get("title", "")
         abstract = entry.get("abstract", "")
         haystack = f"{title}\n{abstract}".lower()
-        if not all(term in haystack for term in terms):
+        legacy_match = all(term in haystack for term in terms)
+        if not legacy_match and not (matches is not None and matches(title, abstract)):
             continue
 
         acl_id, pdf_url = _derive_id_and_pdf_url(entry)
@@ -178,7 +211,7 @@ def search_topic(bib_path: str, topic: str) -> list[dict]:
         venue = entry.get("booktitle") or entry.get("journal")
 
         # Rejected before a candidate dict is ever built, so a tutorial/demo
-        # record never reaches `_process_capped` in routes_ingestion.py and
+        # record never reaches `_admit_capped` in routes_ingestion.py and
         # can never occupy an `acl_anthology_max_results` slot -- the cap is
         # spent on candidates that could become corpus rows, not on records
         # discarded before that point (D-15-01).

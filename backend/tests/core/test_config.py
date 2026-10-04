@@ -811,7 +811,10 @@ def test_groq_rate_limit_settings_have_sane_defaults(
     assert settings.groq_backoff_max_seconds > 60.0
     # No proactive spacing by default — retries carry a paid tier just fine.
     assert settings.groq_min_interval_seconds == 0.0
-    assert settings.groq_max_completion_tokens == 2048
+    # D-09-07: the report JSON (~1.2K tokens worst case) plus the default
+    # model's hidden reasoning, sized so the worst-case prompt (~4K) plus this
+    # cap stays inside an 8K tokens-per-minute request budget.
+    assert settings.groq_max_completion_tokens == 4000
 
 
 def test_groq_rate_limit_settings_load_from_env(
@@ -887,3 +890,75 @@ def test_report_top_k_is_configurable_through_the_environment(
     from app.core.config import Settings
 
     assert Settings(_env_file=None).report_top_k == 3
+
+
+def test_relevance_gate_settings_have_documented_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D-S1-GATE-01. Pools are larger than the caps; the caps stay 10."""
+    _set_all_required(monkeypatch)
+
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.arxiv_candidate_pool == 30
+    assert settings.semantic_scholar_request_limit == 40
+    assert settings.acl_anthology_candidate_pool == 100
+    assert settings.arxiv_max_results == 10
+    assert settings.semantic_scholar_max_results == 10
+    assert settings.acl_anthology_max_results == 10
+    assert settings.relevance_model == "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    assert settings.relevance_semantic_floor == -1.0
+    assert settings.relevance_strong_threshold == 3.5
+
+
+def test_relevance_gate_settings_load_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv("RELEVANCE_SEMANTIC_FLOOR", "0.5")
+    monkeypatch.setenv("RELEVANCE_STRONG_THRESHOLD", "4")
+    monkeypatch.setenv("ARXIV_CANDIDATE_POOL", "50")
+    monkeypatch.setenv("ACL_ANTHOLOGY_CANDIDATE_POOL", "20")
+
+    from app.core.config import Settings
+
+    settings = Settings(_env_file=None)
+
+    assert settings.relevance_semantic_floor == 0.5
+    assert settings.relevance_strong_threshold == 4.0
+    assert settings.arxiv_candidate_pool == 50
+    assert settings.acl_anthology_candidate_pool == 20
+
+
+@pytest.mark.parametrize(
+    ("variable", "value"),
+    [
+        ("ARXIV_CANDIDATE_POOL", "0"),
+        ("ARXIV_CANDIDATE_POOL", "101"),
+        ("ACL_ANTHOLOGY_CANDIDATE_POOL", "0"),
+        ("SEMANTIC_SCHOLAR_REQUEST_LIMIT", "101"),
+    ],
+)
+def test_candidate_pools_reject_empty_or_runaway_values(
+    monkeypatch: pytest.MonkeyPatch, variable: str, value: str
+) -> None:
+    _set_all_required(monkeypatch)
+    monkeypatch.setenv(variable, value)
+
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_the_semantic_floor_is_documented_as_calibrated_on_one_topic() -> None:
+    """The value is not a validated constant, and the code must say so."""
+    import inspect
+
+    from app.core import config
+
+    source = inspect.getsource(config)
+    assert "CALIBRATED ON ONE TOPIC ONLY" in source
+    assert "multilingual prompt injection" in source

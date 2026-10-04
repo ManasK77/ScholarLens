@@ -224,6 +224,38 @@ describe('ScholarLens dashboard', () => {
     expect(screen.getByText(/1 missing PDF was skipped/i)).toBeInTheDocument()
   })
 
+  it('says so when only some of the requested gap reports were generated', async () => {
+    const user = userEvent.setup()
+    const fallbackFetch = vi.mocked(fetch)
+    const reportGeneration = (status: string, succeeded: number, failed: number) => ({
+      status, requested: succeeded + failed, succeeded, failed, skipped: 0, reused: 0,
+      failures: Array.from({ length: failed }, (_, index) => ({ cluster_id: index + 5, reason: 'Groq\'s structured output did not validate against the report schema' })),
+      skips: [],
+    })
+    let generation = reportGeneration('partial', 2, 3)
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/pipeline/run')) {
+        return Promise.resolve(new Response(JSON.stringify({ parsed: [1], extracted: [1], graphed: [1], indexed: 8, clusters: [4], trends: [4], gaps: [4], reports: [4], report_generation: generation }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      return fallbackFetch(input, init)
+    }))
+    render(<App />)
+    await screen.findByText('Multilingual prompt injection remains underexplored.')
+    await user.click(screen.getByRole('button', { name: /^add papers$/i }))
+
+    await user.click(screen.getByRole('button', { name: /build evidence base/i }))
+    expect(await screen.findByText(/2 of 5 gap reports were generated; 3 failed/i)).toBeInTheDocument()
+
+    generation = reportGeneration('failed', 0, 2)
+    await user.click(screen.getByRole('button', { name: /build evidence base/i }))
+    expect(await screen.findByText(/no gap reports were generated; 2 failed/i)).toBeInTheDocument()
+
+    generation = reportGeneration('complete', 5, 0)
+    await user.click(screen.getByRole('button', { name: /build evidence base/i }))
+    await screen.findByText('Evidence base ready · 8 passages indexed')
+    expect(screen.queryByText(/gap reports were generated/i)).not.toBeInTheDocument()
+  })
+
   it('breaks the gap score down into the ranking signals the API returns', async () => {
     render(<App />)
     await screen.findByText('Multilingual prompt injection remains underexplored.')

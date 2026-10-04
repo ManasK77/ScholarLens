@@ -179,6 +179,19 @@ export interface UploadResult {
   created: number[]
 }
 
+/** How the run's gap-report step (S9) went. `reports` alone cannot tell
+ *  "2 of 2" from "2 of 5". Absent from an older API. */
+export interface ReportGeneration {
+  status: 'complete' | 'partial' | 'failed' | 'not_requested'
+  requested: number
+  succeeded: number
+  failed: number
+  skipped: number
+  reused: number
+  failures: { cluster_id: number; reason: string }[]
+  skips: { cluster_id: number; reason: string }[]
+}
+
 export interface PipelineResult {
   parsed: number[]
   missing_pdfs?: number[]
@@ -189,6 +202,7 @@ export interface PipelineResult {
   trends: number[]
   gaps: number[]
   reports: number[]
+  report_generation?: ReportGeneration
 }
 
 export interface DashboardData {

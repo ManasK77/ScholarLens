@@ -1,0 +1,59 @@
+{
+  "version": "2026-09-24.1",
+  "description": "S1 relevance-gate concept lexicon (D-S1-GATE-01). Each concept lists the normalized surface forms (lowercase; hyphens, underscores and slashes read as spaces; a trailing plural 's'/'es' is always accepted) that count as evidence for it. A topic phrase matching any form becomes that concept's facet. 'sense' names a concept's head word and the modifiers that keep its meaning, so the head word used with any other modifier ('error injection') is recorded as a different sense. 'min_language_names' lets a concept be evidenced by that many distinct names from 'language_names'. Bump 'version' on every edit: it is stored with each collection run.",
+  "concepts": {
+    "prompt injection": {
+      "forms": [
+        "prompt injection",
+        "instruction injection",
+        "injected instruction",
+        "injected prompt",
+        "prompt hijacking",
+        "goal hijacking"
+      ],
+      "sense": {"head": "injection", "same_sense_modifiers": ["prompt", "instruction"]}
+    },
+    "multilingual": {
+      "forms": [
+        "multilingual",
+        "multi lingual",
+        "cross lingual",
+        "crosslingual",
+        "low resource language",
+        "code switching",
+        "code switched",
+        "code mixing",
+        "code mixed",
+        "non english",
+        "machine translation",
+        "multiple languages",
+        "many languages",
+        "different languages",
+        "language pair"
+      ],
+      "min_language_names": 2
+    },
+    "jailbreak": {
+      "forms": ["jailbreak", "jailbreaking", "jailbroken"]
+    },
+    "large language model": {
+      "forms": ["large language model", "llm"]
+    },
+    "retrieval augmented generation": {
+      "forms": ["retrieval augmented generation", "rag"]
+    }
+  },
+  "language_names": [
+    "afrikaans", "albanian", "amharic", "arabic", "armenian", "assamese", "azerbaijani",
+    "bangla", "basque", "bengali", "bulgarian", "burmese", "cantonese", "catalan", "chinese",
+    "croatian", "czech", "danish", "dutch", "english", "estonian", "farsi", "filipino",
+    "finnish", "french", "galician", "german", "greek", "gujarati", "hausa", "hebrew",
+    "hindi", "hinglish", "hungarian", "icelandic", "igbo", "indonesian", "irish", "italian",
+    "japanese", "javanese", "kannada", "kazakh", "khmer", "korean", "kurdish", "lao",
+    "latvian", "lithuanian", "macedonian", "malay", "malayalam", "mandarin", "marathi",
+    "mongolian", "nepali", "norwegian", "odia", "pashto", "persian", "portuguese", "punjabi",
+    "romanian", "russian", "serbian", "sinhala", "slovak", "slovenian", "somali", "spanish",
+    "sundanese", "swahili", "swedish", "tagalog", "tamil", "tanglish", "telugu", "thai",
+    "turkish", "ukrainian", "urdu", "uzbek", "vietnamese", "welsh", "xhosa", "yoruba", "zulu"
+  ]
+}

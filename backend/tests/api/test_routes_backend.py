@@ -480,13 +480,17 @@ def test_post_reports_generates_and_commits(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        routes_backend.report_service, "generate_top_reports", lambda session: [9]
+        routes_backend.report_service,
+        "generate_reports",
+        lambda session: _outcome([9]),
     )
 
     response = client.post("/reports")
 
     assert response.status_code == 200
-    assert response.json() == {"clusters": [9], "count": 1}
+    body = response.json()
+    assert (body["clusters"], body["count"]) == ([9], 1)
+    assert body["report_generation"]["status"] == "complete"
 
 
 def test_post_reports_returns_502_and_never_leaks_the_exception_on_failure(
@@ -495,7 +499,7 @@ def test_post_reports_returns_502_and_never_leaks_the_exception_on_failure(
     def _boom(session):
         raise RuntimeError("secret internal detail: db password=hunter2")
 
-    monkeypatch.setattr(routes_backend.report_service, "generate_top_reports", _boom)
+    monkeypatch.setattr(routes_backend.report_service, "generate_reports", _boom)
 
     response = client.post("/reports")
 
@@ -514,7 +518,7 @@ def _reports_raising(monkeypatch: pytest.MonkeyPatch, exc: Exception) -> None:
     def _raise(session, *args, **kwargs):
         raise exc
 
-    monkeypatch.setattr(routes_backend.report_service, "generate_top_reports", _raise)
+    monkeypatch.setattr(routes_backend.report_service, "generate_reports", _raise)
 
 
 def test_post_reports_answers_429_with_retry_after_when_groq_meters_us(
@@ -697,8 +701,8 @@ def test_pipeline_run_calls_every_stage_and_commits(
     )
     monkeypatch.setattr(
         routes_backend.report_service,
-        "generate_top_reports",
-        lambda session, settings=None: [1],
+        "generate_reports",
+        lambda session, settings=None, **kwargs: _outcome([1]),
     )
 
     response = client.post("/pipeline/run", json={"generate_reports": True})
@@ -722,10 +726,10 @@ def test_a_rate_limited_pipeline_run_keeps_the_evidence_base_and_says_so(
     """
     _stub_evidence_stages(monkeypatch, [])
 
-    def _metered(session, settings=None):
+    def _metered(session, settings=None, **kwargs):
         raise LLMRateLimitError("Groq rate limit reached (TPM).", retry_after=30.0)
 
-    monkeypatch.setattr(routes_backend.report_service, "generate_top_reports", _metered)
+    monkeypatch.setattr(routes_backend.report_service, "generate_reports", _metered)
 
     response = client.post("/pipeline/run", json={"generate_reports": True})
 
@@ -780,7 +784,7 @@ def test_pipeline_run_skips_report_generation_when_disabled(
     called = []
     monkeypatch.setattr(
         routes_backend.report_service,
-        "generate_top_reports",
+        "generate_reports",
         lambda *a, **k: called.append(True),
     )
 
@@ -891,11 +895,11 @@ def test_pipeline_run_keeps_the_evidence_base_when_report_generation_fails(
 
     monkeypatch.setattr(db_session, "commit", _recording_commit)
 
-    def _reports(session, settings=None):
+    def _reports(session, settings=None, **kwargs):
         events.append("reports")
         raise error
 
-    monkeypatch.setattr(routes_backend.report_service, "generate_top_reports", _reports)
+    monkeypatch.setattr(routes_backend.report_service, "generate_reports", _reports)
 
     response = client.post("/pipeline/run", json={"generate_reports": True})
 
@@ -922,7 +926,7 @@ def test_post_reports_names_the_llm_failure_instead_of_a_generic_error(
     def _fail(session):
         raise error
 
-    monkeypatch.setattr(routes_backend.report_service, "generate_top_reports", _fail)
+    monkeypatch.setattr(routes_backend.report_service, "generate_reports", _fail)
 
     response = client.post("/reports")
 
@@ -1008,3 +1012,169 @@ def test_admin_corpus_reset_rejects_lock_contention(
         response = client.delete("/admin/corpus")
 
     assert response.status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# D-09-08: S9 says how it went, and a partial pass is not marked complete
+# ---------------------------------------------------------------------------
+
+
+def _outcome(stored, failures=(), requested=None, reused=()):
+    from app.explanation.service import ReportOutcome
+
+    failures = [{"cluster_id": cid, "reason": reason} for cid, reason in failures]
+    return ReportOutcome(
+        requested=requested if requested is not None else len(stored) + len(failures),
+        stored=list(stored),
+        reused=list(reused),
+        failures=failures,
+    )
+
+
+def _scripted_reports(monkeypatch, outcomes):
+    """Patch S9 with a queue of outcomes, recording each call's `resume`."""
+    calls: list[dict] = []
+
+    def _generate(session, settings=None, index=None, llm=None, *, resume=False):
+        calls.append({"resume": resume})
+        return outcomes[len(calls) - 1]
+
+    monkeypatch.setattr(routes_backend.report_service, "generate_reports", _generate)
+    return calls
+
+
+BASELINE_PARTIAL = _outcome(
+    [11, 2],
+    failures=[
+        (5, "Groq's structured output did not validate against the report schema"),
+        (9, "Groq's response was truncated by max_completion_tokens (2048)"),
+        (7, "Groq's structured output did not validate against the report schema"),
+    ],
+)
+
+
+def test_a_partial_s9_pass_is_reported_as_partial_not_as_success(client, monkeypatch):
+    """The baseline's exact shape: 5 requested, 2 stored, 3 failed."""
+    _stub_evidence_stages(monkeypatch, [])
+    _scripted_reports(monkeypatch, [BASELINE_PARTIAL])
+
+    response = client.post("/pipeline/run", json={"generate_reports": True})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reports"] == [11, 2]
+    summary = body["report_generation"]
+    assert summary["status"] == "partial"
+    assert (summary["requested"], summary["succeeded"], summary["failed"]) == (5, 2, 3)
+    assert [f["cluster_id"] for f in summary["failures"]] == [5, 9, 7]
+    assert "truncated" in summary["failures"][1]["reason"]
+
+
+def test_a_failed_s9_pass_is_reported_as_failed(client, monkeypatch):
+    _stub_evidence_stages(monkeypatch, [])
+    _scripted_reports(monkeypatch, [_outcome([], failures=[(1, "did not validate")])])
+
+    body = client.post("/pipeline/run", json={"generate_reports": True}).json()
+
+    assert body["report_generation"]["status"] == "failed"
+    assert body["reports"] == []
+
+
+def test_a_complete_s9_pass_is_reported_as_complete(client, monkeypatch):
+    _stub_evidence_stages(monkeypatch, [])
+    _scripted_reports(monkeypatch, [_outcome([1])])
+
+    body = client.post("/pipeline/run", json={"generate_reports": True}).json()
+
+    assert body["report_generation"]["status"] == "complete"
+    assert body["report_generation"]["failed"] == 0
+
+
+def test_a_run_without_reports_says_none_were_requested(client, monkeypatch):
+    _stub_evidence_stages(monkeypatch, [])
+
+    body = client.post("/pipeline/run", json={"generate_reports": False}).json()
+
+    assert body["report_generation"]["status"] == "not_requested"
+
+
+def test_a_partial_pass_is_resumed_by_the_next_run(client, monkeypatch):
+    """The baseline marked S9 current after 2 of 5; the next run would have
+    served those two and never retried the other three."""
+    _stub_evidence_stages(monkeypatch, [])
+    calls = _scripted_reports(
+        monkeypatch,
+        [BASELINE_PARTIAL, _outcome([11, 2, 5, 9, 7], reused=[11, 2])],
+    )
+
+    client.post("/pipeline/run", json={"generate_reports": True})
+    second = client.post("/pipeline/run", json={"generate_reports": True}).json()
+
+    assert calls == [{"resume": False}, {"resume": True}]
+    assert second["report_generation"]["status"] == "complete"
+    assert second["report_generation"]["reused"] == 2
+
+
+def test_a_complete_pass_is_not_regenerated_by_the_next_run(client, monkeypatch):
+    _stub_evidence_stages(monkeypatch, [])
+    calls = _scripted_reports(monkeypatch, [_outcome([1])])
+
+    client.post("/pipeline/run", json={"generate_reports": True})
+    second = client.post("/pipeline/run", json={"generate_reports": True}).json()
+
+    assert len(calls) == 1
+    assert second["report_generation"]["status"] == "complete"
+
+
+def test_a_failed_pass_is_retried_in_full(client, monkeypatch):
+    """Nothing was stored, so there is nothing to resume from."""
+    _stub_evidence_stages(monkeypatch, [])
+    calls = _scripted_reports(
+        monkeypatch, [_outcome([], failures=[(1, "x")]), _outcome([1])]
+    )
+
+    client.post("/pipeline/run", json={"generate_reports": True})
+    client.post("/pipeline/run", json={"generate_reports": True})
+
+    assert calls == [{"resume": False}, {"resume": False}]
+
+
+def test_an_s9_marker_written_before_outcomes_existed_is_not_current(
+    client, db_session, monkeypatch
+):
+    """The baseline database holds an `s9` marker written by the old rule
+    (current after any success, even 2 of 5). It must not stop the next run
+    from generating the reports that failed."""
+    from app.core.pipeline import DerivedState, fingerprint
+
+    _stub_evidence_stages(monkeypatch, [])
+    client.post("/pipeline/run", json={"generate_reports": False})
+    evidence_digest = db_session.get(DerivedState, "s6-s8").input_fingerprint
+    # Exactly what the pre-outcome code stored for this evidence and settings
+    # (the stub settings carry no `report_`/`groq_model` keys).
+    db_session.merge(
+        DerivedState(
+            name="s9",
+            input_fingerprint=fingerprint([evidence_digest, {}, "prompt-v1"]),
+        )
+    )
+    db_session.commit()
+    calls = _scripted_reports(monkeypatch, [_outcome([1])])
+
+    client.post("/pipeline/run", json={"generate_reports": True})
+
+    assert len(calls) == 1
+
+
+def test_post_reports_returns_the_outcome_additively(client, monkeypatch):
+    monkeypatch.setattr(
+        routes_backend.report_service,
+        "generate_reports",
+        lambda session: BASELINE_PARTIAL,
+    )
+
+    body = client.post("/reports").json()
+
+    assert body["clusters"] == [11, 2]
+    assert body["count"] == 2
+    assert body["report_generation"]["status"] == "partial"

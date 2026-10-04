@@ -20,12 +20,24 @@ Three properties this module owns:
   project's core credibility claim (README §15, Phase 9) reduced to code.
 * **The store is replaced only once, at the end.** The full list is built
   first, so a provider outage mid-run raises before `replace_reports` deletes
-  anything and the previous run's reports survive.
+  anything and the previous run's reports survive. A pass that generated
+  nothing usable leaves the stored reports alone for the same reason.
+
+**Outcome (D-09-08).** A pass says what it did: how many gaps it was asked to
+explain, which reports it stored, which generations failed and why, and which
+gaps had nothing to explain. The first clean baseline stored 2 of 5 and was
+indistinguishable from a complete success.
+
+**Resume.** With `resume=True` a gap that already has a stored report keeps it
+and only the rest are generated -- one call per *missing* report, still one
+pass, no loop. The caller decides when that is valid: stored reports are only
+reusable when they were produced from the same evidence and report settings.
 
 Nothing here branches on a paper's `source` (CLAUDE.md hard constraint 5).
 """
 
 import logging
+from dataclasses import dataclass, field
 from time import perf_counter
 
 from pydantic import ValidationError
@@ -34,7 +46,13 @@ from sqlalchemy.orm import Session
 
 from app.clustering.storage import list_clusters, members_for_cluster
 from app.core.config import Settings, get_settings
-from app.explanation.llm import LLMError, LLMUnavailableError, get_llm_client
+from app.explanation.llm import (
+    LLMAuthError,
+    LLMConfigurationError,
+    LLMError,
+    LLMUnavailableError,
+    get_llm_client,
+)
 from app.explanation.prompt import build_prompt, retrieval_query
 from app.explanation.schema import (
     REPORT_SCHEMA,
@@ -43,11 +61,67 @@ from app.explanation.schema import (
     evidence_from_point,
 )
 from app.explanation.selection import evidence_summary, select_evidence
-from app.explanation.storage import replace_reports
+from app.explanation.storage import GapReport, list_reports, replace_reports
 from app.ingestion.corpus import Paper
 from app.ranking.storage import list_rankings
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ReportOutcome:
+    """What one Stage 9 pass did with the gaps it was asked to explain.
+
+    `failures` are generations that came back unusable -- retryable, and what
+    makes a pass incomplete. `skips` are gaps with nothing to explain, which no
+    retry would change, so they never do.
+    """
+
+    requested: int = 0
+    # Every stored cluster id after the pass, rank order, reused ones included.
+    stored: list[int] = field(default_factory=list)
+    # The subset of `stored` carried over from an earlier pass (resume only).
+    reused: list[int] = field(default_factory=list)
+    failures: list[dict] = field(default_factory=list)
+    skips: list[dict] = field(default_factory=list)
+
+    @property
+    def status(self) -> str:
+        if not self.failures:
+            return "complete"
+        return "partial" if self.stored else "failed"
+
+    def as_dict(self) -> dict:
+        """The additive `report_generation` block of the API responses."""
+        return {
+            "status": self.status,
+            "requested": self.requested,
+            "succeeded": len(self.stored),
+            "failed": len(self.failures),
+            "skipped": len(self.skips),
+            "reused": len(self.reused),
+            "failures": list(self.failures),
+            "skips": list(self.skips),
+        }
+
+
+def not_requested() -> dict:
+    """`report_generation` for a pipeline run that was not asked for reports."""
+    return {**ReportOutcome().as_dict(), "status": "not_requested"}
+
+
+def _stored_record(row: GapReport) -> GapReportRecord:
+    """A stored report as a record, so a resumed pass can store it again."""
+    return GapReportRecord(
+        cluster_id=row.cluster_id,
+        gap=row.gap,
+        evidence=list(row.evidence),
+        confidence=row.confidence,
+        suggested_directions=list(row.suggested_directions),
+        provider=row.provider,
+        model=row.model,
+        justification=dict(row.justification or {}),
+    )
 
 
 def _paper_titles(session: Session, paper_ids: set[int]) -> dict[int, str | None]:
@@ -119,6 +193,22 @@ def generate_top_reports(
 ) -> list[int]:
     """Explain the top-ranked gaps and store the reports. Returns cluster ids.
 
+    The ids-only form of `generate_reports`, kept for callers that need no
+    outcome.
+    """
+    return generate_reports(session, settings, index, llm).stored
+
+
+def generate_reports(
+    session: Session,
+    settings: Settings | None = None,
+    index=None,
+    llm=None,
+    *,
+    resume: bool = False,
+) -> ReportOutcome:
+    """Explain the top-ranked gaps, store the reports, and say how it went.
+
     `index` and `llm` are injectable so the phase can be tested without Qdrant
     or a model; production callers pass neither. The caller owns the transaction
     (`routes_backend` commits afterwards), so this flushes and never commits.
@@ -128,19 +218,19 @@ def generate_top_reports(
     rankings = list_rankings(session, settings.report_top_k)
     if not rankings:
         logger.info("Stage 9: no ranked gaps stored yet")
-        return replace_reports(session, [])
+        return ReportOutcome(stored=replace_reports(session, []))
 
-    if index is None:
-        from app.embeddings.indexer import EvidenceIndex
-
-        index = EvidenceIndex(settings)
-    llm = llm or get_llm_client(settings)
-
+    outcome = ReportOutcome(requested=len(rankings))
+    existing = {row.cluster_id: row for row in list_reports(session)} if resume else {}
     labels = {cluster.id: cluster.label for cluster in list_clusters(session)}
 
     reports: list[GapReportRecord] = []
     for ranking in rankings:
         cluster_id = ranking.cluster_id
+        if cluster_id in existing:
+            reports.append(_stored_record(existing[cluster_id]))
+            outcome.reused.append(cluster_id)
+            continue
         members = members_for_cluster(session, cluster_id)
         query = retrieval_query(labels.get(cluster_id), [m.text for m in members])
         if not query.strip():
@@ -153,8 +243,15 @@ def generate_top_reports(
                 "Stage 9: cluster %d has no label or members; not explained",
                 cluster_id,
             )
+            outcome.skips.append(
+                {"cluster_id": cluster_id, "reason": "no label or member statements"}
+            )
             continue
 
+        if index is None:
+            from app.embeddings.indexer import EvidenceIndex
+
+            index = EvidenceIndex(settings)
         started = perf_counter()
         # Retrieved wider than the report needs, then narrowed by
         # `select_evidence`. Without the headroom the per-paper cap could only
@@ -178,9 +275,15 @@ def generate_top_reports(
                 "Stage 9: cluster %d has no retrievable evidence; not explained",
                 cluster_id,
             )
+            outcome.skips.append(
+                {"cluster_id": cluster_id, "reason": "no retrievable evidence"}
+            )
             continue
 
         prompt = build_prompt(labels.get(cluster_id), ranking, evidence)
+        # Built on first use, so a resumed pass with nothing left to generate
+        # needs no provider at all.
+        llm = llm or get_llm_client(settings)
         started = perf_counter()
         try:
             draft = ReportDraft.model_validate(llm.generate_json(prompt, REPORT_SCHEMA))
@@ -204,9 +307,31 @@ def generate_top_reports(
                 exc,
             )
             raise
-        except (LLMError, ValidationError) as exc:
+        except (LLMAuthError, LLMConfigurationError) as exc:
+            # A rejected key or an unusable model fails every gap the same
+            # way; at the configured pacing, trying the rest only spends
+            # minutes to store nothing. Raised before `replace_reports`, so
+            # the stored reports survive.
+            logger.warning("Stage 9: stopped by a deployment error: %s", exc)
+            raise
+        except LLMError as exc:
             logger.warning(
                 "Stage 9: cluster %d produced no usable report: %s", cluster_id, exc
+            )
+            outcome.failures.append({"cluster_id": cluster_id, "reason": str(exc)})
+            continue
+        except ValidationError as exc:
+            logger.warning(
+                "Stage 9: cluster %d produced no usable report: %s", cluster_id, exc
+            )
+            # A count, not pydantic's text: that quotes the model's output,
+            # and this reason is returned by the API.
+            outcome.failures.append(
+                {
+                    "cluster_id": cluster_id,
+                    "reason": "the generated report did not have the required "
+                    f"structure ({exc.error_count()} validation error(s))",
+                }
             )
             continue
 
@@ -226,6 +351,12 @@ def generate_top_reports(
             logger.warning(
                 "Stage 9: cluster %d cited no retrieved evidence; report discarded",
                 cluster_id,
+            )
+            outcome.failures.append(
+                {
+                    "cluster_id": cluster_id,
+                    "reason": "the report cited none of the retrieved evidence",
+                }
             )
             continue
 
@@ -258,10 +389,26 @@ def generate_top_reports(
             )
         )
 
-    ids = replace_reports(session, reports)
+    if not reports and outcome.failures:
+        # Nothing usable came back: keep what is stored rather than replace
+        # it with nothing. Stored reports always belong to the current
+        # clusters -- Stage 6 clears them whenever it rebuilds.
+        logger.warning(
+            "Stage 9: none of %d ranked gap(s) produced a usable report; "
+            "stored reports left unchanged",
+            len(rankings),
+        )
+        return outcome
+
+    outcome.stored = replace_reports(session, reports)
     logger.info(
-        "Stage 9: stored %d grounded report(s) of %d ranked gap(s)",
-        len(ids),
+        "Stage 9: %s -- stored %d grounded report(s) of %d ranked gap(s) "
+        "(reused=%d failed=%d skipped=%d)",
+        outcome.status,
+        len(outcome.stored),
         len(rankings),
+        len(outcome.reused),
+        len(outcome.failures),
+        len(outcome.skips),
     )
-    return ids
+    return outcome

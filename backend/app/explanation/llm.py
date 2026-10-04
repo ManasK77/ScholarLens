@@ -62,6 +62,22 @@ class LLMAuthError(LLMError):
     """Groq rejected the credential. Also not transient — the key must change."""
 
 
+class LLMOutputError(LLMError):
+    """One generation came back unusable; the request itself was fine (D-09-07).
+
+    Groq's best-effort structured output (`strict: false`) validates the
+    finished generation against the schema and answers 400
+    `json_validate_failed` when it does not match. The first clean baseline
+    reported two of those as "check GROQ_MODEL" while the same model, schema
+    and request shape produced the other reports in the same run. This is a
+    per-report failure: Stage 9 records it and moves on to the next gap.
+    """
+
+
+class LLMTruncatedError(LLMOutputError):
+    """The generation hit `max_completion_tokens` before the JSON was finished."""
+
+
 class LLMUnavailableError(LLMError):
     """The provider cannot currently serve generation requests.
 
@@ -98,8 +114,13 @@ class StructuredLLM(Protocol):
 _GROQ_LIMITER = RateLimiter(0.0)
 
 
-def _provider_message(response: httpx.Response) -> str:
-    """Groq's own `error.message`, or "" if the body is not the shape we expect.
+# How much of a rejected generation's start and end is logged for diagnosis.
+# Enough to see whether it stops mid-object; never the whole thing.
+FAILED_GENERATION_LOG_CHARS = 200
+
+
+def _provider_error(response: httpx.Response) -> dict:
+    """Groq's `error` object, or {} if the body is not the shape we expect.
 
     Never raises: this runs on the failure path, where a malformed body is
     exactly what might be arriving.
@@ -107,14 +128,65 @@ def _provider_message(response: httpx.Response) -> str:
     try:
         payload = response.json()
     except (ValueError, TypeError):
-        return ""
-    if not isinstance(payload, dict):
-        return ""
-    error = payload.get("error")
-    message = error.get("message") if isinstance(error, dict) else None
+        return {}
+    error = payload.get("error") if isinstance(payload, dict) else None
+    return error if isinstance(error, dict) else {}
+
+
+def _provider_message(response: httpx.Response) -> str:
+    """Groq's own `error.message`, or "" if the body is not the shape we expect."""
+    message = _provider_error(response).get("message")
     if not isinstance(message, str):
         return ""
     return message.strip()[:PROVIDER_MESSAGE_CHARS]
+
+
+def _is_json_validate_failed(error: dict) -> bool:
+    message = error.get("message")
+    return error.get("code") == "json_validate_failed" or (
+        isinstance(message, str) and "failed to validate json" in message.lower()
+    )
+
+
+def _describe_generation(generation: object, schema: dict) -> str:
+    """What was wrong with a rejected generation, without quoting it.
+
+    Tells the two candidate causes apart: output cut off mid-object (not
+    parseable) versus a finished object that does not match the schema.
+    """
+    if not isinstance(generation, str):
+        return "Groq returned no failed_generation to inspect"
+    size = f"{len(generation)} chars"
+    try:
+        parsed = json.loads(generation)
+    except ValueError:
+        return f"the generation is not parseable JSON ({size}; cut off mid-object?)"
+    if not isinstance(parsed, dict):
+        return f"the generation is JSON but not an object ({size})"
+    missing = [key for key in schema.get("required", ()) if key not in parsed]
+    if missing:
+        return (
+            f"the generation is parseable JSON ({size}) missing required "
+            f"key(s): {', '.join(missing)}"
+        )
+    return (
+        f"the generation is parseable JSON ({size}) with every required key; "
+        "a value did not match its declared type or range"
+    )
+
+
+def _usage(body: object) -> dict:
+    """Token counts from a completion body; {} when Groq sent none."""
+    usage = body.get("usage") if isinstance(body, dict) else None
+    if not isinstance(usage, dict):
+        return {}
+    details = usage.get("completion_tokens_details")
+    reasoning = details.get("reasoning_tokens") if isinstance(details, dict) else None
+    return {
+        "prompt": usage.get("prompt_tokens"),
+        "completion": usage.get("completion_tokens"),
+        "reasoning": reasoning,
+    }
 
 
 def _detail(response: httpx.Response) -> str:
@@ -219,14 +291,40 @@ class GroqClient:
                 "Groq is unavailable. Check network access and the configured provider."
             ) from exc
 
-        self._raise_for_status(response)
+        self._raise_for_status(response, schema)
         return self._parse(response)
 
-    def _raise_for_status(self, response: httpx.Response) -> None:
+    def _raise_for_status(self, response: httpx.Response, schema: dict) -> None:
         """Turn a non-2xx answer into the most specific error we can name."""
         status = response.status_code
         if status < 400:
             return
+        error = _provider_error(response)
+        if status == 400 and _is_json_validate_failed(error):
+            generation = error.get("failed_generation")
+            if isinstance(generation, str):
+                # Logged, never raised: the exception reaches the API response,
+                # and this is corpus text. Head and tail show whether it stops
+                # mid-object.
+                logger.warning(
+                    "Groq failed_generation (%d chars) head=%r tail=%r",
+                    len(generation),
+                    generation[:FAILED_GENERATION_LOG_CHARS],
+                    generation[-FAILED_GENERATION_LOG_CHARS:],
+                )
+            raise LLMOutputError(
+                "Groq's structured output did not validate against the report "
+                f"schema: {_describe_generation(generation, schema)}."
+            )
+        if status == 413:
+            # Groq sizes a request as prompt + max_completion_tokens against
+            # the tokens-per-minute ceiling; one that can never fit is refused.
+            raise LLMError(
+                "Groq refused the request as too large for its per-minute token "
+                "budget (prompt + GROQ_MAX_COMPLETION_TOKENS). Lower "
+                "GROQ_MAX_COMPLETION_TOKENS or REPORT_EVIDENCE_TOP_N."
+                f"{_detail(response)}"
+            )
         if status == 429:
             retry_after = retry_after_seconds(response.headers)
             wait = (
@@ -258,15 +356,37 @@ class GroqClient:
 
     def _parse(self, response: httpx.Response) -> dict:
         try:
-            choice = response.json()["choices"][0]
+            body = response.json()
+            choice = body["choices"][0]
             content = choice["message"]["content"]
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise LLMError("Groq returned invalid structured JSON") from exc
+        usage = _usage(body)
+        # Counts only, one line per generation: the reasoning share of the
+        # completion budget is what GROQ_MAX_COMPLETION_TOKENS is sized from.
+        logger.info(
+            "groq usage prompt=%s completion=%s reasoning=%s finish=%s cap=%s",
+            usage.get("prompt"),
+            usage.get("completion"),
+            usage.get("reasoning"),
+            choice.get("finish_reason"),
+            self.max_completion_tokens,
+        )
         if choice.get("finish_reason") == "length":
             # Distinct from malformed JSON: the model was cut off by our own
             # cap, so the fix is GROQ_MAX_COMPLETION_TOKENS, not the prompt.
-            raise LLMError(
-                "Groq's response was truncated by max_completion_tokens; raise "
+            # The default model's hidden reasoning is billed against the same
+            # cap as the answer, so how much it took is the useful number.
+            spent = (
+                f"; reasoning used {usage['reasoning']} of {usage['completion']} "
+                "completion tokens"
+                if usage.get("reasoning") is not None
+                and usage.get("completion") is not None
+                else ""
+            )
+            raise LLMTruncatedError(
+                "Groq's response was truncated by max_completion_tokens "
+                f"({self.max_completion_tokens}){spent}; raise "
                 "GROQ_MAX_COMPLETION_TOKENS."
             )
         try:

@@ -72,15 +72,40 @@ class Settings(BaseSettings):
     arxiv_contact: str | None = None
     # Sent as Semantic Scholar's search `limit`, which otherwise defaults to 100.
     semantic_scholar_max_results: int = Field(default=10, gt=0, le=10)
-    # Results requested in the one Semantic Scholar search call. A little more
-    # than the cap, so records dropped as non-research by `publicationTypes`
-    # do not use up a slot (D-S2-TYPES-01). Never below the cap; 100 is the
-    # API's own maximum.
-    semantic_scholar_request_limit: int = Field(default=20, gt=0, le=100)
+    # Results requested in the one Semantic Scholar search call -- that
+    # source's candidate pool. Larger than the cap, so records dropped as
+    # non-research by `publicationTypes` (D-S2-TYPES-01) or rejected by the
+    # relevance gate (D-S1-GATE-01) do not use up a slot. Never below the cap;
+    # 100 is the API's own maximum.
+    semantic_scholar_request_limit: int = Field(default=40, gt=0, le=100)
     # ACL Anthology is searched in the local export, which can match hundreds
-    # of records; only the first this-many distinct papers (and their PDFs)
-    # are collected, in export order.
+    # of records; at most this many distinct papers (and their PDFs) are
+    # admitted, highest relevance-gate score first.
     acl_anthology_max_results: int = Field(default=10, gt=0, le=10)
+
+    # --- S1 relevance gate (D-S1-GATE-01) ---
+    # Candidates fetched per source before the gate judges them. The admitted
+    # cap per source stays `*_max_results` (10); the pool is larger so that
+    # rejected candidates do not cost recall. arXiv's is one request whose
+    # page size is this; ACL's bounds how many local matches are judged.
+    arxiv_candidate_pool: int = Field(default=30, gt=0, le=100)
+    acl_anthology_candidate_pool: int = Field(default=100, gt=0, le=1000)
+    # The cross-encoder scoring the topic against a candidate's title and
+    # abstract. Its own setting, so a Mode B reranker change cannot move S1's
+    # calibrated floor.
+    relevance_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    relevance_batch_size: int = Field(default=16, ge=1, le=256)
+    # Raw-logit score below which a candidate with every facet evidenced is
+    # still rejected (`low_semantic_relevance`). CALIBRATED ON ONE TOPIC ONLY:
+    # "multilingual prompt injection", a 50-document hand-labelled pool,
+    # 2026-09-24 -- every on-topic document scored >= -0.27 there, and the one
+    # facet-complete off-topic document -6.58. Not a validated constant;
+    # re-check it for a new topic.
+    relevance_semantic_floor: float = -1.0
+    # Admitted candidates at or above this score are tier "strong", below it
+    # "conceptual". A label for auditing only; it admits and rejects nothing.
+    # Calibrated on the same single topic as the floor.
+    relevance_strong_threshold: float = 3.5
     # Semantic Scholar's introductory keyed rate is one request per second;
     # the default leaves headroom.
     semantic_scholar_min_interval_seconds: float = Field(default=1.5, ge=1.0, le=60.0)
@@ -351,11 +376,18 @@ class Settings(BaseSettings):
     # waiting rather than into retries.
     groq_min_interval_seconds: float = Field(default=0.0, ge=0.0, le=300.0)
     # Ceiling on the tokens one generation may produce. The default model
-    # reasons before it answers and those hidden tokens are metered too, so
-    # uncapped, a single report's spend against the per-minute ceiling is
-    # unbounded. A Stage 9 report needs a few hundred; the default leaves ample
-    # room for reasoning on top. `None` sends no cap.
-    groq_max_completion_tokens: int | None = Field(default=2048, gt=0, le=32768)
+    # reasons before it answers and those hidden tokens are billed against
+    # this same cap, so uncapped, a single report's spend against the
+    # per-minute ceiling is unbounded. `None` sends no cap.
+    #
+    # Sized from the baseline (D-09-07), not guessed: the report JSON measured
+    # ~500-700 tokens and is ~1.2K worst case (8 cited UUID evidence ids
+    # repeated across five id lists); 2048 left the reasoning under ~900, and
+    # one of five reports ran out. 4000 leaves ~2.8K for reasoning, while the
+    # worst-case prompt (~4K: 8 passages at the 1200-char cap, plus the
+    # schema) plus this cap stays within an 8K tokens-per-minute request --
+    # Groq sizes a request as prompt + cap and answers 413 when it cannot fit.
+    groq_max_completion_tokens: int | None = Field(default=4000, gt=0, le=32768)
 
     # --- Backend API authentication (Phase 11) ---
     # The shared secret callers present as `X-API-Key`. Distinct from

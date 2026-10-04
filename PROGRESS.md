@@ -3130,3 +3130,95 @@ New: `tests/ingestion/sources/test_semantic_scholar_publication_types.py`
 `test_routes_ingestion.py` (1 end-to-end S2 cap test; pass-through test
 extended). Backend 1297 passed, `ruff check app tests` clean. The two
 previously failing `ner_re` batch-extraction tests now pass (untouched here).
+
+## 2026-09-23 -- S9 reliability after the first clean baseline
+
+Baseline S9: 5 ranked gaps attempted, 2 reports stored, 3 failed (clusters 5
+and 7: HTTP 400 "Failed to validate JSON"; cluster 9: `finish_reason:
+length`), yet `/pipeline/run` answered a plain 200. No corpus data, S1-S8 code
+or weights were touched; no Groq call was made.
+
+### D-09-07 -- output failures are classified, diagnosed and budgeted
+
+* Model: `openai/gpt-oss-20b` (config default), `response_format:
+  json_schema`, `strict: false` (Groq best-effort mode: the finished
+  generation is validated and a mismatch answers 400 `json_validate_failed`).
+  The request shape is compatible -- the same model/schema/request produced
+  the other two reports -- so "check GROQ_MODEL" was a misdiagnosis. A 400
+  `json_validate_failed` is now `LLMOutputError` (per report, not retried);
+  the message says whether `failed_generation` was unparseable (cut off) or
+  a finished object missing keys, and the generation itself is only logged,
+  bounded (200-char head/tail), never returned by the API.
+* Truncation is `LLMTruncatedError(LLMOutputError)` and reports the reasoning
+  share of the completion when Groq sends `usage`. Every generation logs
+  `groq usage prompt= completion= reasoning= finish= cap=`.
+* Budget, measured: stored report JSON ~500-700 tokens, ~1.2K worst case
+  (UUID evidence ids repeated across five id lists); prompt ~2.4-2.6K,
+  ~4K worst case. 2048 left <~900 tokens for gpt-oss reasoning, which is
+  billed against the same cap. Default raised to 4000: ~2.8K reasoning room,
+  and worst-case prompt + cap stays within an 8K-TPM request (Groq answers
+  413 when prompt + cap cannot fit; 413 now has its own message).
+* Most likely cause of the two 400s (not proven -- `failed_generation` was
+  not logged at the time): the same budget exhaustion, with the JSON cut off
+  after reasoning finished, then failing validation. All three failures
+  returned ~5s after their paced slot. The next run's `failed_generation` /
+  `usage` log lines settle it.
+
+### D-09-08 -- S9 reports its outcome and resumes only what failed
+
+* `generate_reports(...) -> ReportOutcome`: requested, stored, reused,
+  failures (retryable: output/validation/ungrounded) and skips
+  (deterministic: no evidence / no label). Status is `complete` (no
+  failures), `partial` or `failed`. `generate_top_reports` is its ids-only
+  wrapper. An auth/configuration error now stops the pass after one call.
+  A pass that stores nothing leaves existing reports untouched.
+* `/pipeline/run` and `POST /reports` gain an additive `report_generation`
+  block; HTTP status is unchanged (200 -- the evidence base is built).
+* The `s9` marker is written only for a complete pass; a partial pass writes
+  `s9-partial`, and the next run resumes (`resume=True`) -- reusing stored
+  reports and generating only the missing ones. The report digest gained
+  `s9-outcome-v2`, so the baseline's `s9` marker (written after 2/5) is no
+  longer current and the next run regenerates S9 (all five, once).
+* Frontend: `PipelineResult.report_generation` typed; the pipeline card shows
+  a warning for `partial`/`failed`. No redesign.
+
+## 2026-09-24 -- S1 final relevance gate (D-S1-GATE-01)
+
+Source results are candidates, not proof of relevance. `/collect` now judges
+every candidate before it can enter `papers`, and records every decision.
+S2-S9 untouched; corpus not reset or recollected.
+
+* **Gate** (`app/ingestion/relevance.py`, gate `relevance-gate-v1`): topic
+  split into facets through the versioned lexicon
+  (`app/ingestion/concept_lexicon.json`, `2026-09-24.1`); unknown words are
+  word-boundary facets. Order: no text -> `insufficient_text`; unevidenced
+  facet whose head word appears in another sense ("error injection") ->
+  `sense_mismatch:<facet>`; unevidenced facet with no abstract ->
+  `insufficient_text`; unevidenced facet -> `missing_facet:<facet>`;
+  cross-encoder (raw logit, `RELEVANCE_MODEL`) below
+  `RELEVANCE_SEMANTIC_FLOOR` -> `low_semantic_relevance`; else
+  `relevant:strong` (>= `RELEVANCE_STRONG_THRESHOLD`) / `relevant:conceptual`.
+  Only facet-complete candidates are scored, in one batch.
+* **Calibration caveat:** floor -1.0 and strong 3.5 were calibrated on ONE
+  topic ("multilingual prompt injection", 50 hand-labelled documents). They
+  are settings, not validated constants.
+* **Audit:** `collection_runs` (topic, facets, gate/lexicon versions,
+  settings, source status, counts) + `candidate_decisions` (every candidate:
+  admitted / rejected / capped, reason code, reason, score, tier, evidence,
+  paper id). `GET /collections/{id}/decisions` reads it without the write
+  lock. Corpus reset clears both tables.
+* **Caps and pools:** arXiv pool 30 (one request), Semantic Scholar 40, ACL
+  up to 100 local matches; admitted cap per source stays 10. Admitted
+  candidates are ranked by gate score before the cap; rejected ones never
+  take a slot; admitted-but-over-cap are recorded as `capped` /
+  `source_cap_reached`. A rejected copy of a paper already admitted for the
+  same topic is `duplicate_of_admitted`; a rejected candidate never modifies
+  an existing row.
+* **ACL candidates:** legacy all-terms rule OR the gate's facet evidence
+  (normalized-phrase prefilter), so "machine translation ... prompt
+  injection" is found; legacy-only matches stay candidates so their
+  rejection is recorded.
+* **Uploads:** `owner_upload` decision under an `upload` run; no gating.
+* **Offline evaluation (50 docs, real cross-encoder):** ON 12/12 admitted;
+  PARTIAL 2 admitted / 2 rejected; NEIGHBOR 2 admitted (both explicitly
+  discuss prompt injection) / 15 rejected; OFF 0 / 17.

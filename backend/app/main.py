@@ -31,6 +31,7 @@ app = FastAPI(title="ScholarLens")
 
 app.include_router(routes_health.router)
 app.include_router(routes_ingestion.router)
+app.include_router(routes_ingestion.audit_router)
 app.include_router(routes_backend.router)
 
 

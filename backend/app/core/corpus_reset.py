@@ -44,6 +44,7 @@ from app.clustering.storage import Cluster, _dependent_tables
 from app.core.pipeline import DerivedState, PaperStageState, current_run, pipeline_run
 from app.explanation.storage import ReportSnapshot
 from app.extraction.storage import ExtractedFact
+from app.ingestion.collection_audit import CandidateDecision, CollectionRun
 from app.ingestion.corpus import Paper, get_engine
 from app.parsing.storage import ParsedDocument
 
@@ -55,11 +56,10 @@ logger = logging.getLogger(__name__)
 # relation edge between them, so no separate relationship query is needed —
 # and nothing outside these two labels is ever touched.
 _CLEAR_GRAPH_QUERY = (
-    "MATCH (n) WHERE 'Paper' IN labels(n) OR 'Entity' IN labels(n) " "DETACH DELETE n"
+    "MATCH (n) WHERE 'Paper' IN labels(n) OR 'Entity' IN labels(n) DETACH DELETE n"
 )
 _COUNT_GRAPH_QUERY = (
-    "MATCH (n) WHERE 'Paper' IN labels(n) OR 'Entity' IN labels(n) "
-    "RETURN count(n) AS c"
+    "MATCH (n) WHERE 'Paper' IN labels(n) OR 'Entity' IN labels(n) RETURN count(n) AS c"
 )
 
 
@@ -194,6 +194,14 @@ def reset_corpus(
     postgres_records[PaperStageState.__tablename__] = session.execute(
         delete(PaperStageState)
     ).rowcount
+    # The collection audit trail (D-S1-GATE-01) describes the corpus being
+    # wiped, and `candidate_decisions` references `papers`: children first.
+    postgres_records[CandidateDecision.__tablename__] = session.execute(
+        delete(CandidateDecision)
+    ).rowcount
+    postgres_records[CollectionRun.__tablename__] = session.execute(
+        delete(CollectionRun)
+    ).rowcount
     postgres_records[Paper.__tablename__] = session.execute(delete(Paper)).rowcount
     postgres_records[DerivedState.__tablename__] = session.execute(
         delete(DerivedState)
@@ -212,6 +220,8 @@ def reset_corpus(
             ExtractedFact.__table__,
             ParsedDocument.__table__,
             PaperStageState.__table__,
+            CandidateDecision.__table__,
+            CollectionRun.__table__,
             Paper.__table__,
             DerivedState.__table__,
         ),
@@ -304,9 +314,11 @@ def main():
     from app.ner_re.graph import graph_session
 
     settings = get_settings()
-    with Session(get_engine()) as session, pipeline_run(
-        session, {"operation": "reset-corpus"}
-    ) as run, graph_session(settings) as neo4j:
+    with (
+        Session(get_engine()) as session,
+        pipeline_run(session, {"operation": "reset-corpus"}) as run,
+        graph_session(settings) as neo4j,
+    ):
         index = EvidenceIndex(settings)
         with run.stage("reset"):
             result = reset_corpus(session, neo4j, index, settings.pdf_storage_path)

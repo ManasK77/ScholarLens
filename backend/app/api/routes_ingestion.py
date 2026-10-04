@@ -23,10 +23,21 @@ unauthenticated callers with 429/500 routinely, and an unguarded exception
 there used to roll back every arXiv row already written while the PDFs those
 rows pointed at stayed on disk.
 
-/upload accepts one or more PDFs via manual_upload.save_upload.
+**Relevance gate (D-S1-GATE-01).** Source results are candidates, not proof
+of relevance. Each source's candidate pool (larger than its cap) is judged by
+`app.ingestion.relevance`; only admitted candidates are written, ranked by the
+gate's score rather than the source's order, so a rejected candidate never
+takes a slot. Every candidate -- admitted, rejected, or capped (relevant, but
+the cap was full) -- is recorded in `candidate_decisions` under a
+`collection_runs` row that stores the topic (`app.ingestion.collection_audit`).
+
+/upload accepts one or more PDFs via manual_upload.save_upload, and records an
+`owner_upload` decision for each: the owner vouches for them, so discovery
+gating does not apply.
 """
 
 import logging
+from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 
@@ -37,7 +48,8 @@ from sqlalchemy.orm import Session
 from app.api.security import require_api_key
 from app.api.write_guard import exclusive_write
 from app.core.config import get_settings
-from app.ingestion import corpus, dedup, manual_upload, unpaywall
+from app.ingestion import collection_audit, corpus, dedup, manual_upload, unpaywall
+from app.ingestion.relevance import build_gate
 from app.ingestion.sources import acl_anthology, arxiv, semantic_scholar
 
 logger = logging.getLogger(__name__)
@@ -46,6 +58,9 @@ logger = logging.getLogger(__name__)
 # whole router sits behind the Phase 11 API key (README §12 shows /collect
 # being called with X-API-Key). /health stays open — see app.api.security.
 router = APIRouter(dependencies=[Depends(require_api_key), Depends(exclusive_write)])
+# Reads of the collection audit trail take no write lock: they must stay
+# available while a collection or pipeline run holds it.
+audit_router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 class CollectRequest(BaseModel):
@@ -135,30 +150,78 @@ class SourceOutcome:
     # One entry per duplicate *encounter*: a candidate that merged onto a row
     # that already existed, whether from this run or an earlier one.
     duplicates: list[int] = field(default_factory=list)
+    # The relevance gate's reason code for every rejected candidate.
+    rejected: list[str] = field(default_factory=list)
+    # Candidates the gate admitted but the source cap had no room for.
+    capped: int = 0
+    # Local matches beyond the candidate pool, never judged (ACL only).
+    beyond_candidate_pool: int = 0
 
 
-def _process_capped(
+def _gate_score(decision) -> float:
+    return decision.score if decision.score is not None else float("-inf")
+
+
+def _admit_capped(
     session: Session,
+    run: collection_audit.CollectionRun,
+    gate,
     candidates: Sequence[dict],
     source: str,
     limit: int,
     fetch_pdf: Callable[[dict], str | None] | None = None,
 ) -> SourceOutcome:
-    """Write `source`'s candidates until `limit` distinct corpus rows are touched.
+    """Judge every candidate, then write the admitted ones until `limit` rows.
 
     The cap counts papers, not candidates: a candidate that dedups onto a row
-    this source already touched is merged as usual but does not use up a slot.
-    A source with fewer matches simply returns fewer. The check runs before a
-    candidate's PDF is fetched, so nothing past the cap is downloaded.
+    this source already touched is merged as usual but does not use up a slot,
+    and a rejected candidate never reaches the cap at all. Admitted candidates
+    are taken highest gate score first -- a source's own ordering is not
+    evidence of relevance. The check runs before a candidate's PDF is fetched,
+    so nothing past the cap is downloaded.
 
-    The cap is this source's alone — each source gets its own `SourceOutcome`
-    and its own limit, so three sources answering in full store three sources'
-    worth of papers. There is no run-wide cap anywhere.
+    A candidate the gate rejects is still admitted when it is a copy of a
+    paper already admitted for this topic (``duplicate_of_admitted``): a
+    Semantic Scholar record with no abstract is the same paper, not a new
+    relevance question. A rejected candidate never modifies an existing row.
+
+    Every candidate's decision is recorded, in the order the source returned
+    them.
     """
     outcome = SourceOutcome(candidates=len(candidates))
-    for candidate in candidates:
+    verdicts = gate.evaluate_many(
+        [
+            (candidate.get("title"), candidate.get("abstract"))
+            for candidate in candidates
+        ]
+    )
+    records: list[tuple[int, object, str | None, int | None]] = []
+    admitted: list[tuple[int, dict, object]] = []
+    for index, (candidate, verdict) in enumerate(
+        zip(candidates, verdicts, strict=True)
+    ):
+        if not verdict.admitted:
+            existing = dedup.find_existing(
+                session, _to_paper_dict(candidate, source, None)
+            )
+            if existing is not None:
+                if collection_audit.admitted_for_topic(session, existing.id, run.topic):
+                    verdict = verdict.as_duplicate_of(existing.id)
+                else:
+                    verdict = verdict.with_evidence(existing_paper_id=existing.id)
+        if verdict.admitted:
+            admitted.append((index, candidate, verdict))
+        else:
+            outcome.rejected.append(verdict.reason_code)
+            records.append((index, verdict, None, None))
+
+    # Stable: equal scores keep the source's order.
+    admitted.sort(key=lambda item: _gate_score(item[2]), reverse=True)
+    for index, candidate, verdict in admitted:
         if len(outcome.kept) >= limit:
-            break
+            outcome.capped += 1
+            records.append((index, verdict.capped(source, limit), "capped", None))
+            continue
         outcome.processed += 1
         pdf_path = fetch_pdf(candidate) if fetch_pdf is not None else None
         paper_id, inserted = _process_one(
@@ -169,6 +232,18 @@ def _process_capped(
             outcome.inserted.add(paper_id)
         else:
             outcome.duplicates.append(paper_id)
+        records.append((index, verdict, None, paper_id))
+
+    for index, verdict, override, paper_id in sorted(records, key=lambda r: r[0]):
+        collection_audit.record(
+            session,
+            run,
+            source,
+            candidates[index],
+            verdict,
+            paper_id=paper_id,
+            outcome=override,
+        )
     return outcome
 
 
@@ -198,6 +273,9 @@ class RunLedger:
         self.duplicated: set[int] = set()
         self.sources_by_paper: dict[int, set[str]] = {}
         self.stats: dict[str, dict[str, int]] = {}
+        self.rejected: Counter[str] = Counter()
+        self.capped = 0
+        self.admitted = 0
 
     def record(self, source: str, outcome: SourceOutcome) -> None:
         self.touched |= outcome.kept
@@ -205,11 +283,17 @@ class RunLedger:
         self.duplicated.update(outcome.duplicates)
         for paper_id in outcome.kept:
             self.sources_by_paper.setdefault(paper_id, set()).add(source)
+        self.rejected.update(outcome.rejected)
+        self.capped += outcome.capped
+        self.admitted += outcome.processed
         self.stats[source] = {
             "candidates": outcome.candidates,
             "processed": outcome.processed,
             "added": len(outcome.inserted),
             "duplicates": len(outcome.duplicates),
+            "rejected": len(outcome.rejected),
+            "capped": outcome.capped,
+            "beyond_candidate_pool": outcome.beyond_candidate_pool,
         }
         # One line per source per run, so a run that stored nothing from a
         # source says whether the source returned nothing or returned only
@@ -217,12 +301,14 @@ class RunLedger:
         # `"status": "ok"`.
         logger.info(
             "Collection source=%s candidates=%d processed=%d added=%d "
-            "duplicate_candidates=%d",
+            "duplicate_candidates=%d rejected=%d capped=%d",
             source,
             outcome.candidates,
             outcome.processed,
             len(outcome.inserted),
             len(outcome.duplicates),
+            len(outcome.rejected),
+            outcome.capped,
         )
 
     def enriched(self, paper_ids: Iterable[int]) -> None:
@@ -263,6 +349,28 @@ def collect(
     settings = get_settings()
     ledger = RunLedger()
     statuses: dict[str, str] = {}
+    gate = build_gate(body.topic, settings)
+    arxiv_pool = max(settings.arxiv_candidate_pool, settings.arxiv_max_results)
+    s2_pool = max(
+        settings.semantic_scholar_request_limit, settings.semantic_scholar_max_results
+    )
+    acl_pool = max(
+        settings.acl_anthology_candidate_pool, settings.acl_anthology_max_results
+    )
+    run = collection_audit.start_collection(
+        session,
+        body.topic,
+        gate.describe(),
+        {
+            **gate.describe(),
+            "arxiv_candidate_pool": arxiv_pool,
+            "semantic_scholar_candidate_pool": s2_pool,
+            "acl_anthology_candidate_pool": acl_pool,
+            "arxiv_max_results": settings.arxiv_max_results,
+            "semantic_scholar_max_results": settings.semantic_scholar_max_results,
+            "acl_anthology_max_results": settings.acl_anthology_max_results,
+        },
+    )
 
     def _download_arxiv_pdf(url: str, dest_path: str) -> bool:
         """Every arXiv-hosted PDF this run fetches, from discovery or Unpaywall.
@@ -302,7 +410,7 @@ def collect(
     def _arxiv() -> None:
         candidates = arxiv.search_topic(
             body.topic,
-            max_results=settings.arxiv_max_results,
+            max_results=arxiv_pool,
             num_retries=settings.arxiv_num_retries,
             min_interval_seconds=settings.arxiv_min_interval_seconds,
             backoff_base_seconds=settings.arxiv_backoff_base_seconds,
@@ -311,8 +419,10 @@ def collect(
         )
         ledger.record(
             "arxiv",
-            _process_capped(
+            _admit_capped(
                 session,
+                run,
+                gate,
                 candidates,
                 "arxiv",
                 settings.arxiv_max_results,
@@ -326,8 +436,8 @@ def collect(
         candidates = semantic_scholar.search_topic(
             body.topic,
             settings.semantic_scholar_api_key,
-            limit=settings.semantic_scholar_max_results,
-            request_limit=settings.semantic_scholar_request_limit,
+            limit=s2_pool,
+            request_limit=s2_pool,
             max_retries=settings.semantic_scholar_max_retries,
             min_interval_seconds=settings.semantic_scholar_min_interval_seconds,
             backoff_base_seconds=settings.semantic_scholar_backoff_base_seconds,
@@ -335,8 +445,10 @@ def collect(
         )
         ledger.record(
             "semantic_scholar",
-            _process_capped(
+            _admit_capped(
                 session,
+                run,
+                gate,
                 candidates,
                 "semantic_scholar",
                 settings.semantic_scholar_max_results,
@@ -345,19 +457,29 @@ def collect(
 
     def _acl_anthology() -> None:
         acl_anthology.download_anthology_export(settings.acl_anthology_bib_path)
-        candidates = acl_anthology.search_topic(
-            settings.acl_anthology_bib_path, body.topic
+        found = acl_anthology.search_topic(
+            settings.acl_anthology_bib_path,
+            body.topic,
+            matches=gate.facets_evidenced,
+            prefilter_terms=gate.prefilter_terms(),
         )
-        ledger.record(
+        # The export has no ranking of its own: records with evidence for
+        # every facet are judged first, so the pool is spent on candidates
+        # that could be admitted.
+        found.sort(
+            key=lambda c: not gate.facets_evidenced(c.get("title"), c.get("abstract"))
+        )
+        outcome = _admit_capped(
+            session,
+            run,
+            gate,
+            found[:acl_pool],
             "acl_anthology",
-            _process_capped(
-                session,
-                candidates,
-                "acl_anthology",
-                settings.acl_anthology_max_results,
-                lambda c: acl_anthology.fetch_pdf(c, settings.pdf_storage_path),
-            ),
+            settings.acl_anthology_max_results,
+            lambda c: acl_anthology.fetch_pdf(c, settings.pdf_storage_path),
         )
+        outcome.beyond_candidate_pool = max(0, len(found) - acl_pool)
+        ledger.record("acl_anthology", outcome)
 
     def _unpaywall() -> None:
         enriched = unpaywall.enrich(
@@ -382,6 +504,13 @@ def collect(
             detail="No discovery source could be reached. Check network access.",
         )
 
+    run.source_status = dict(statuses)
+    run.counts = {
+        "admitted": ledger.admitted,
+        "rejected": sum(ledger.rejected.values()),
+        "capped": ledger.capped,
+        "added": len(ledger.inserted),
+    }
     session.commit()
 
     duplicates = ledger.duplicate_summary()
@@ -399,6 +528,14 @@ def collect(
         "duplicates": duplicates,
         "sources": statuses,
         "source_stats": ledger.stats,
+        # Additive (D-S1-GATE-01): what the relevance gate kept out, and where
+        # every decision is recorded.
+        "collection_run_id": run.id,
+        "rejected": {
+            "total": sum(ledger.rejected.values()),
+            "by_reason": dict(ledger.rejected),
+        },
+        "capped": ledger.capped,
     }
 
 
@@ -411,6 +548,7 @@ def upload(
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
 
     created = []
+    run = collection_audit.start_upload(session)
     for file in files:
         try:
             file_bytes = _read_bounded(file, max_bytes)
@@ -425,7 +563,27 @@ def upload(
         except manual_upload.UploadRejected as exc:
             raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
         created.append(result["id"])
+        collection_audit.record_upload(session, run, result["id"], file.filename)
 
+    run.counts = {"admitted": len(created)}
     session.commit()
 
     return {"created": created}
+
+
+@audit_router.get("/collections/{run_id}/decisions")
+def collection_decisions(
+    run_id: int,
+    session: Session = Depends(corpus.get_session),  # noqa: B008 — required FastAPI DI pattern
+):
+    """One collection's audit trail: the run, and every candidate's decision."""
+    run = session.get(collection_audit.CollectionRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Collection run not found")
+    return {
+        "run": collection_audit.serialize_run(run),
+        "decisions": [
+            collection_audit.serialize_decision(row)
+            for row in collection_audit.decisions_for_run(session, run_id)
+        ],
+    }

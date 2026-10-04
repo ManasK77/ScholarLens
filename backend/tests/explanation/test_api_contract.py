@@ -82,28 +82,30 @@ class TestFrozenHandlerShape:
             for node in ast.walk(_handler("generate_reports"))
             if isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "generate_top_reports"
+            and node.func.attr == "generate_reports"
         ]
 
         assert [arg.id for arg in call.args] == ["session"]
         assert call.keywords == []
 
     def test_the_pipeline_run_handler_passes_settings_positionally(self):
-        """`generate_top_reports(session, settings)` — settings is 2nd."""
+        """`generate_reports(session, settings, resume=...)` — settings is 2nd."""
         [call] = [
             node
             for node in ast.walk(_handler("run_pipeline"))
             if isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "generate_top_reports"
+            and node.func.attr == "generate_reports"
         ]
 
         assert [arg.id for arg in call.args] == ["session", "settings"]
-        assert call.keywords == []
+        # `resume` is the one keyword: whether stored reports from a partial
+        # pass over the same evidence are kept (D-09-08).
+        assert [keyword.arg for keyword in call.keywords] == ["resume"]
 
     def test_the_pipeline_explains_after_indexing_and_ranking(self):
         """Stage 9 reads Stage 8's rows and retrieves against Stage 5's index."""
-        # `index_all` is called by bare name, `generate_top_reports` through
+        # `index_all` is called by bare name, `generate_reports` through
         # its module, so both call shapes have to be collected.
         order = [
             node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id
@@ -112,8 +114,8 @@ class TestFrozenHandlerShape:
             and isinstance(node.func, ast.Attribute | ast.Name)
         ]
 
-        assert order.index("rebuild_rankings") < order.index("generate_top_reports")
-        assert order.index("index_all") < order.index("generate_top_reports")
+        assert order.index("rebuild_rankings") < order.index("generate_reports")
+        assert order.index("index_all") < order.index("generate_reports")
 
 
 class TestProjectedPayload:

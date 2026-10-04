@@ -406,10 +406,19 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
     try {
       const result = await api.runPipeline(generateReports)
       setPipelineStatus(`Evidence base ready · ${result.indexed} passages indexed`)
+      const warnings: string[] = []
       const missingCount = result.missing_pdfs?.length ?? 0
       if (missingCount) {
-        setPipelineWarning(`${missingCount} missing ${missingCount === 1 ? 'PDF was' : 'PDFs were'} skipped. Fetch or upload ${missingCount === 1 ? 'it' : 'them'} again.`)
+        warnings.push(`${missingCount} missing ${missingCount === 1 ? 'PDF was' : 'PDFs were'} skipped. Fetch or upload ${missingCount === 1 ? 'it' : 'them'} again.`)
       }
+      // A 200 does not mean every requested gap report exists (D-09-08).
+      const reportRun = result.report_generation
+      if (reportRun?.status === 'partial') {
+        warnings.push(`Only ${reportRun.succeeded} of ${reportRun.succeeded + reportRun.failed} gap reports were generated; ${reportRun.failed} failed. Build again to retry just the failed ones.`)
+      } else if (reportRun?.status === 'failed') {
+        warnings.push(`No gap reports were generated; ${reportRun.failed} failed. Build again to retry.`)
+      }
+      if (warnings.length) setPipelineWarning(warnings.join(' '))
       await onRefresh()
     } catch (reason) {
       setOperationError(reason instanceof Error ? reason.message : 'The evidence pipeline failed.')

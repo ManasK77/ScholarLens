@@ -466,3 +466,24 @@ def test_the_reset_result_names_the_sequences_it_restarted(session, neo4j, index
         result = reset_corpus(session, neo4j, index)
 
     assert "papers" in result["sequences_restarted"]
+
+
+def test_reset_removes_the_collection_audit_trail(session, neo4j, index):
+    """D-S1-GATE-01: `candidate_decisions` references `papers`, and every
+    decision describes the corpus being wiped, so the reset clears both audit
+    tables -- before `papers`, children first."""
+    from app.ingestion import collection_audit
+
+    _seed_full_corpus(session, index)
+    paper_id = session.scalar(select(Paper.id))
+    run = collection_audit.start_upload(session)
+    collection_audit.record_upload(session, run, paper_id, "paper.pdf")
+    session.commit()
+
+    with pipeline_run(session, {}):
+        result = reset_corpus(session, neo4j, index)
+
+    assert session.scalar(select(collection_audit.CandidateDecision)) is None
+    assert session.scalar(select(collection_audit.CollectionRun)) is None
+    assert result["postgres_records"]["candidate_decisions"] == 1
+    assert result["postgres_records"]["collection_runs"] == 1

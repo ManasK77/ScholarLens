@@ -334,7 +334,7 @@ def _llm_http_error(exc: LLMError, prefix: str = "") -> HTTPException:
 @router.post("/reports", dependencies=[Depends(exclusive_write)])
 def generate_reports(session: Session = Depends(corpus.get_session)):  # noqa: B008
     try:
-        ids = report_service.generate_top_reports(session)
+        outcome = report_service.generate_reports(session)
     except LLMError as exc:
         logger.warning("Mode A report generation stopped: %s", exc)
         raise _llm_http_error(exc) from exc
@@ -342,7 +342,12 @@ def generate_reports(session: Session = Depends(corpus.get_session)):  # noqa: B
         logger.exception("Mode A report generation failed")
         raise HTTPException(status_code=502, detail="Report generation failed") from exc
     session.commit()
-    return {"clusters": ids, "count": len(ids)}
+    return {
+        "clusters": outcome.stored,
+        "count": len(outcome.stored),
+        # Additive (D-09-08): which of the requested reports failed, and why.
+        "report_generation": outcome.as_dict(),
+    }
 
 
 @router.post("/query")
@@ -436,6 +441,24 @@ def _derived_fingerprint(session, settings):
     )
 
 
+# Bumped when what an `s9` marker *means* changes. "s9-outcome-v2": a marker is
+# written only for a complete pass (D-09-08). Markers from before that were
+# also written after partial passes, so they must not count as current.
+_S9_MARKER_VERSION = "s9-outcome-v2"
+
+
+def _report_digest(digest: str, settings) -> str:
+    """What S9's stored reports were produced from: evidence + report settings."""
+    return fingerprint(
+        [
+            digest,
+            settings_fingerprint(settings, ("report_", "groq_model")),
+            "prompt-v1",
+            _S9_MARKER_VERSION,
+        ]
+    )
+
+
 def _count(result) -> int:
     """How many items a stage produced. Stages return either ids or a count."""
     return len(result) if hasattr(result, "__len__") else int(result)
@@ -496,36 +519,42 @@ def _execute_pipeline(body, session, settings, run):
             run.mark_derived("s6-s8", digest)
         session.commit()
     reports: list[int] = []
+    report_generation = report_service.not_requested()
     if body.generate_reports:
-        report_digest = fingerprint(
-            [
-                digest,
-                settings_fingerprint(
-                    settings,
-                    (
-                        "report_",
-                        "groq_model",
-                    ),
-                ),
-                "prompt-v1",
-            ]
-        )
+        report_digest = _report_digest(digest, settings)
         with run.stage("s9"):
             try:
                 if run.derived_current("s9", report_digest):
                     reports = [r.cluster_id for r in list_reports(session)]
+                    report_generation = report_service.ReportOutcome(
+                        requested=len(reports), stored=reports, reused=reports
+                    ).as_dict()
                 else:
-                    reports = report_service.generate_top_reports(session, settings)
-                    # A run that generated no valid reports should retry later.
-                    if reports or not gaps:
+                    # D-09-08: only a pass with no failed generation is
+                    # complete. A partial one stores what succeeded and is
+                    # resumed next run -- only its missing reports are
+                    # generated -- instead of being served as finished.
+                    outcome = report_service.generate_reports(
+                        session,
+                        settings,
+                        resume=run.derived_current("s9-partial", report_digest),
+                    )
+                    reports = outcome.stored
+                    report_generation = outcome.as_dict()
+                    if outcome.status == "complete":
                         run.mark_derived("s9", report_digest)
+                    elif outcome.status == "partial":
+                        # Every stored report now belongs to this digest, so
+                        # the next run may reuse them.
+                        run.mark_derived("s9-partial", report_digest)
             except LLMError as exc:
                 session.rollback()
                 raise _llm_http_error(exc, _S9_PREFIX) from exc
             session.commit()
     logger.info(
         "pipeline complete parsed=%d missing_pdfs=%d extracted=%d graphed=%d "
-        "indexed=%d clusters=%d trends=%d gaps=%d reports=%d checkpoints=%s",
+        "indexed=%d clusters=%d trends=%d gaps=%d reports=%d report_status=%s "
+        "checkpoints=%s",
         _count(parsed),
         _count(parsing.missing_pdfs),
         _count(extracted),
@@ -535,6 +564,7 @@ def _execute_pipeline(body, session, settings, run):
         _count(trends),
         _count(gaps),
         _count(reports),
+        report_generation["status"],
         run.counts,
     )
     return {
@@ -547,6 +577,8 @@ def _execute_pipeline(body, session, settings, run):
         "trends": trends,
         "gaps": gaps,
         "reports": reports,
+        # Additive (D-09-08): `reports` alone cannot tell 2 of 2 from 2 of 5.
+        "report_generation": report_generation,
         "run_id": run.id,
         "checkpoints": run.counts,
     }
@@ -563,9 +595,11 @@ def reset_corpus_endpoint(session: Session = Depends(corpus.get_session)):  # no
     """
     settings = get_settings()
     try:
-        with pipeline_run(session, {"operation": "reset-corpus"}) as run, graph_session(
-            settings
-        ) as neo4j, run.stage("reset"):
+        with (
+            pipeline_run(session, {"operation": "reset-corpus"}) as run,
+            graph_session(settings) as neo4j,
+            run.stage("reset"),
+        ):
             result = reset_corpus(
                 session, neo4j, EvidenceIndex(settings), settings.pdf_storage_path
             )

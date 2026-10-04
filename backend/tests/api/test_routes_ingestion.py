@@ -13,6 +13,7 @@ from app.ingestion import corpus
 from app.ingestion.corpus import Base, Paper
 from app.ingestion.sources import acl_anthology, arxiv, semantic_scholar
 from app.main import app
+from tests.ingestion.gate_fakes import PermissiveGate
 
 REQUIRED_ENV = {
     "NEO4J_URI": "bolt://neo4j:7687",
@@ -40,6 +41,16 @@ def _settings_env(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     for key, value in REQUIRED_ENV.items():
         monkeypatch.setenv(key, value)
     monkeypatch.setenv("PDF_STORAGE_PATH", str(tmp_path))
+
+
+@pytest.fixture(autouse=True)
+def _permissive_relevance_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests are about caps, dedup and source failures, with placeholder
+    titles ("A paper") that share nothing with their placeholder topic. The
+    relevance gate itself is exercised in test_collect_relevance.py."""
+    monkeypatch.setattr(
+        routes_ingestion, "build_gate", lambda topic, settings: PermissiveGate(topic)
+    )
 
 
 @pytest.fixture()
@@ -113,7 +124,7 @@ def test_collect_orchestrates_sources_dedups_and_enriches(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
     monkeypatch.setattr(
-        acl_anthology, "search_topic", lambda bib_path, topic: [acl_candidate]
+        acl_anthology, "search_topic", lambda bib_path, topic, **kw: [acl_candidate]
     )
     monkeypatch.setattr(
         acl_anthology, "fetch_pdf", lambda candidate, dest_dir, **kw: None
@@ -146,7 +157,7 @@ def test_collect_includes_enriched_ids(
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
-    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
 
     def fake_enrich(session, email, dest_dir, **kw):
         return [42]
@@ -177,7 +188,7 @@ def test_collect_calls_download_anthology_export_before_search(
     monkeypatch.setattr(
         acl_anthology,
         "search_topic",
-        lambda bib_path, topic: calls.append("search") or [],
+        lambda bib_path, topic, **kw: calls.append("search") or [],
     )
     monkeypatch.setattr(
         routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir, **kw: []
@@ -310,7 +321,7 @@ def test_collect_survives_one_failing_discovery_source(
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
-    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
         routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir, **kw: []
     )
@@ -378,7 +389,7 @@ def test_collect_reports_a_failing_enrichment_step_without_losing_papers(
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
-    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
 
     def _boom(session, email, dest_dir):
         raise RuntimeError("unpaywall down")
@@ -425,7 +436,7 @@ def test_collect_reports_every_source_ok_on_a_clean_run(
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
-    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
         routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir, **kw: []
     )
@@ -471,7 +482,7 @@ def test_collect_passes_the_configured_request_limits_to_each_source(
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
-    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
         routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir, **kw: []
     )
@@ -479,8 +490,10 @@ def test_collect_passes_the_configured_request_limits_to_each_source(
     response = client.post("/collect", json={"topic": "anything"})
 
     assert response.status_code == 200
+    # D-S1-GATE-01: sources are asked for their candidate pool, not their
+    # cap -- the cap now applies to what the relevance gate admits.
     assert seen["arxiv"] == {
-        "max_results": 7,
+        "max_results": 30,
         "num_retries": 0,
         "min_interval_seconds": 4.0,
         "backoff_base_seconds": 7.0,
@@ -488,7 +501,7 @@ def test_collect_passes_the_configured_request_limits_to_each_source(
         "contact": "ops@example.org",
     }
     assert seen["semantic_scholar"] == {
-        "limit": 9,
+        "limit": 30,
         "request_limit": 30,
         "max_retries": 2,
         "min_interval_seconds": 1.25,
@@ -523,7 +536,7 @@ def test_collect_passes_the_configured_politeness_to_arxiv_pdf_downloads(
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
-    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
         routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir, **kw: []
     )
@@ -566,7 +579,7 @@ def test_collect_gives_unpaywall_a_polite_downloader_for_arxiv_copies(
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
-    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(routes_ingestion.unpaywall, "enrich", _enrich)
 
     response = client.post("/collect", json={"topic": "anything"})
@@ -590,7 +603,7 @@ def test_collect_keeps_a_paper_whose_pdf_download_fails(
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
-    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
         routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir, **kw: []
     )
@@ -634,7 +647,7 @@ def test_collect_makes_one_arxiv_request_when_throttled_without_retry_after(
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
-    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
         routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir, **kw: []
     )
@@ -672,7 +685,7 @@ def test_collect_reports_an_exhausted_arxiv_source_and_keeps_the_others(
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
-    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
         routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir, **kw: []
     )
@@ -750,7 +763,7 @@ def _stub_sources(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
     monkeypatch.setattr(
-        acl_anthology, "search_topic", lambda bib_path, topic: acl_results
+        acl_anthology, "search_topic", lambda bib_path, topic, **kw: acl_results
     )
     monkeypatch.setattr(acl_anthology, "fetch_pdf", _fetch)
     monkeypatch.setattr(
@@ -974,18 +987,27 @@ def test_collect_reports_what_each_source_contributed_before_processing(
         "processed": 0,
         "added": 0,
         "duplicates": 0,
+        "rejected": 0,
+        "capped": 0,
+        "beyond_candidate_pool": 0,
     }
     assert body["source_stats"]["semantic_scholar"] == {
         "candidates": 2,
         "processed": 2,
         "added": 2,
         "duplicates": 0,
+        "rejected": 0,
+        "capped": 0,
+        "beyond_candidate_pool": 0,
     }
     assert body["source_stats"]["acl_anthology"] == {
         "candidates": 1,
         "processed": 1,
         "added": 0,
         "duplicates": 1,
+        "rejected": 0,
+        "capped": 0,
+        "beyond_candidate_pool": 0,
     }
     # The status field keeps its existing contract untouched.
     assert body["sources"]["arxiv"] == "ok"
@@ -1107,7 +1129,7 @@ def test_collect_semantic_scholar_non_research_records_do_not_use_up_its_cap(
     monkeypatch.setattr(
         acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
     )
-    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
+    monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
         routes_ingestion.unpaywall, "enrich", lambda session, email, dest_dir, **kw: []
     )
