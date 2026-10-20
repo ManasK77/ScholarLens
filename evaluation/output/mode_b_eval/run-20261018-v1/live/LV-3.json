@@ -1,0 +1,119 @@
+{
+ "mode": "live",
+ "sent": true,
+ "test_id": "LV-3",
+ "question": "What accuracy does the Turkish prompt injection benchmark report for GPT-4 on Turkish prompts?",
+ "started_at": "2026-10-18T08:08:20Z",
+ "http_status": 200,
+ "elapsed_seconds": 71.62,
+ "outcome": "grounding_failed",
+ "expected_outcome": "grounding_failed",
+ "outcome_as_expected": true,
+ "verdict": "SAFE_NON_ANSWER",
+ "checks": {
+  "http_200": {
+   "ok": true,
+   "detail": 200
+  },
+  "response_schema": {
+   "ok": true,
+   "detail": null
+  },
+  "answer_non_empty": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_structure": {
+   "ok": true,
+   "detail": null
+  },
+  "claims_cite_returned_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "citations_match_stored_sources": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_titles_match_corpus": {
+   "ok": true,
+   "detail": null
+  },
+  "non_answer_carries_no_claims": {
+   "ok": true,
+   "detail": "grounding_failed"
+  },
+  "refusal_lists_no_citations": {
+   "ok": true,
+   "detail": 0
+  },
+  "loop_bounds": {
+   "ok": true,
+   "detail": {
+    "retrieval_rounds": 1,
+    "retry_count": 0,
+    "regeneration_count": 1
+   }
+  }
+ },
+ "workflow": {
+  "retrieval_rounds": 1,
+  "assessments": [
+   "sufficient=True;relevant=12;papers=7"
+  ],
+  "reformulations": 0,
+  "invalid_reformulations": 0,
+  "grounding_reasons": [
+   "claim_check_failed",
+   "claim_check_failed"
+  ],
+  "veto_codes": [
+   [
+    [
+     "unsupported_term",
+     "low_overlap"
+    ]
+   ],
+   [
+    [
+     "unsupported_term",
+     "low_overlap"
+    ]
+   ]
+  ],
+  "llm_calls": 2,
+  "reranked": true,
+  "generations": 2,
+  "regenerations": 1,
+  "grounding_checks": [
+   "structural=True;grounded=False;claims=1;cited=1;invalid_citations=0;unsupported=1;reason=claim_check_failed;vetoed=1;prose_uncovered=0;veto_codes=unsupported_term+low_overlap",
+   "structural=True;grounded=False;claims=1;cited=12;invalid_citations=0;unsupported=1;reason=claim_check_failed;vetoed=1;prose_uncovered=0;veto_codes=unsupported_term+low_overlap"
+  ],
+  "terminal": "grounding_failed"
+ },
+ "llm_calls": 2,
+ "expected_paper_ids": [],
+ "expected_paper_overlap": [],
+ "response": {
+  "answer": "A grounded answer could not be produced from the retrieved evidence. Try a narrower question or add more relevant papers.",
+  "claims": [],
+  "citations": [],
+  "grounded": false,
+  "retrieval_rounds": 1,
+  "retry_count": 0,
+  "regeneration_count": 1,
+  "trace": [
+   "retrieve:round=1;vector=12;graph=4;total=16",
+   "assess:sufficient=True;relevant=12;papers=7",
+   "rerank",
+   "generate:strict=False",
+   "grounding:structural=True;grounded=False;claims=1;cited=1;invalid_citations=0;unsupported=1;reason=claim_check_failed;vetoed=1;prose_uncovered=0;veto_codes=unsupported_term+low_overlap",
+   "regenerate:1",
+   "generate:strict=True",
+   "grounding:structural=True;grounded=False;claims=1;cited=12;invalid_citations=0;unsupported=1;reason=claim_check_failed;vetoed=1;prose_uncovered=0;veto_codes=unsupported_term+low_overlap",
+   "grounding_failed"
+  ],
+  "provider": "groq",
+  "model": "openai/gpt-oss-20b"
+ }
+}

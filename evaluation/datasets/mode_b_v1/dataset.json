@@ -1,0 +1,21 @@
+{
+ "name": "mode_b_v1",
+ "version": 1,
+ "status": "provisional",
+ "source": "agent-authored",
+ "authored_by": "AI coding agent (Claude) working on this repository, 2026-10-18",
+ "independent": false,
+ "labellers": 1,
+ "adjudicated": false,
+ "inter_annotator_agreement": null,
+ "labelled_before_scores": true,
+ "frozen_at": "2026-10-18T07:18Z",
+ "frozen_sha256": {
+  "questions.csv": "ce759430b148a125cdd0ee3fa07637daaa9a7050fe0778ef4c68d5329c352063",
+  "labels.csv": "5c14007f86a6db3f9542bed8ac1a161152ef78a34ef9a318f92732ef203acc6f",
+  "claims.csv": "1f465372d46ac2faa0517a007797def7952aff6a01b7f19b6d11adec09acf799"
+ },
+ "catalogue": "evaluation/output/mode_b_calibration/independent/passages.csv",
+ "catalogue_sha256": "2b9d904ea64e7308447286b56fb19fbc5c888703bf165da394d6d376190bb0e0",
+ "see": "DATASET.md"
+}

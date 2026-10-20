@@ -1,0 +1,2515 @@
+{
+ "claims": {
+  "by_phenomenon": {
+   "absolute_added": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 1
+   },
+   "causal_unsupported": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 1
+   },
+   "comparison_reversed": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 0
+   },
+   "contradiction_antonym": {
+    "label": "unsupported",
+    "n": 2,
+    "vetoed": 1
+   },
+   "cross_paper_synthesis": {
+    "label": "supported",
+    "n": 1,
+    "vetoed": 0
+   },
+   "cross_task_overgeneralization": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 1
+   },
+   "dataset_swapped": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 1
+   },
+   "factual_list": {
+    "label": "supported",
+    "n": 2,
+    "vetoed": 0
+   },
+   "language_added": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 1
+   },
+   "language_swapped": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 1
+   },
+   "meaning_changing_paraphrase": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 0
+   },
+   "misattributed": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 1
+   },
+   "model_swapped": {
+    "label": "unsupported",
+    "n": 2,
+    "vetoed": 1
+   },
+   "named_method": {
+    "label": "supported",
+    "n": 1,
+    "vetoed": 0
+   },
+   "negated_statement": {
+    "label": "supported",
+    "n": 2,
+    "vetoed": 1
+   },
+   "negation_flip": {
+    "label": "unsupported",
+    "n": 3,
+    "vetoed": 3
+   },
+   "number_changed": {
+    "label": "unsupported",
+    "n": 4,
+    "vetoed": 4
+   },
+   "numeric": {
+    "label": "supported",
+    "n": 7,
+    "vetoed": 0
+   },
+   "numeric_percent": {
+    "label": "supported",
+    "n": 6,
+    "vetoed": 0
+   },
+   "overgeneralization": {
+    "label": "unsupported",
+    "n": 3,
+    "vetoed": 2
+   },
+   "paraphrase": {
+    "label": "supported",
+    "n": 5,
+    "vetoed": 0
+   },
+   "paraphrase_low_overlap": {
+    "label": "supported",
+    "n": 2,
+    "vetoed": 0
+   },
+   "partial_support": {
+    "label": "unsupported",
+    "n": 2,
+    "vetoed": 0
+   },
+   "resource_level_added": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 1
+   },
+   "unsupported_priority": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 0
+   },
+   "unsupported_quantifier": {
+    "label": "unsupported",
+    "n": 1,
+    "vetoed": 1
+   },
+   "verbatim": {
+    "label": "supported",
+    "n": 4,
+    "vetoed": 0
+   },
+   "wrong_citation": {
+    "label": "unsupported",
+    "n": 2,
+    "vetoed": 2
+   }
+  },
+  "false_rejections": [
+   {
+    "claim_id": "c13",
+    "label": "supported",
+    "phenomenon": "negated_statement",
+    "reasons": [
+     "unsupported_name"
+    ]
+   }
+  ],
+  "note": "The deterministic checks can only reject. 'vetoed' on unsupported claims is their catch rate; the rest reach the LLM grounding check. 'vetoed' on supported claims is a false rejection (over-refusal). No result here establishes entailment.",
+  "passed_to_llm_check": [
+   {
+    "claim_id": "u06",
+    "label": "unsupported",
+    "phenomenon": "comparison_reversed",
+    "reasons": []
+   },
+   {
+    "claim_id": "u11",
+    "label": "unsupported",
+    "phenomenon": "partial_support",
+    "reasons": []
+   },
+   {
+    "claim_id": "u24",
+    "label": "unsupported",
+    "phenomenon": "meaning_changing_paraphrase",
+    "reasons": []
+   },
+   {
+    "claim_id": "u25",
+    "label": "unsupported",
+    "phenomenon": "partial_support",
+    "reasons": []
+   },
+   {
+    "claim_id": "u26",
+    "label": "unsupported",
+    "phenomenon": "contradiction_antonym",
+    "reasons": []
+   },
+   {
+    "claim_id": "u27",
+    "label": "unsupported",
+    "phenomenon": "overgeneralization",
+    "reasons": []
+   },
+   {
+    "claim_id": "u28",
+    "label": "unsupported",
+    "phenomenon": "unsupported_priority",
+    "reasons": []
+   },
+   {
+    "claim_id": "u30",
+    "label": "unsupported",
+    "phenomenon": "model_swapped",
+    "reasons": []
+   }
+  ],
+  "reasons": {
+   "low_overlap": 4,
+   "misattributed": 1,
+   "polarity_mismatch": 4,
+   "unsupported_absolute": 2,
+   "unsupported_cause": 1,
+   "unsupported_name": 4,
+   "unsupported_term": 10
+  },
+  "supported": {
+   "vetoed": {
+    "ci95": [
+     0.0059,
+     0.1667
+    ],
+    "k": 1,
+    "n": 30,
+    "rate": 0.0333
+   }
+  },
+  "unsupported": {
+   "vetoed": {
+    "ci95": [
+     0.5555,
+     0.8582
+    ],
+    "k": 22,
+    "n": 30,
+    "rate": 0.7333
+   }
+  }
+ },
+ "live": {
+  "loop_bound_violations": 0,
+  "note": "Live runs are few and chosen by the developer; their counts describe these runs only. Agent reviews are not independent human review.",
+  "outcome_as_expected": {
+   "ci95": [
+    0.0968,
+    0.7
+   ],
+   "k": 2,
+   "n": 6,
+   "rate": 0.3333
+  },
+  "reviews_by_reviewer_type": {
+   "agent": {
+    "citation_complete": {
+     "ci95": [
+      0.2065,
+      1.0
+     ],
+     "k": 1,
+     "n": 1,
+     "rate": 1.0
+    },
+    "citation_correct": {
+     "ci95": [
+      0.2065,
+      1.0
+     ],
+     "k": 1,
+     "n": 1,
+     "rate": 1.0
+    },
+    "claims_reviewed": 1,
+    "independent_reviews": 0,
+    "partially_supported": {
+     "ci95": [
+      0.0,
+      0.7935
+     ],
+     "k": 0,
+     "n": 1,
+     "rate": 0.0
+    },
+    "supported": {
+     "ci95": [
+      0.2065,
+      1.0
+     ],
+     "k": 1,
+     "n": 1,
+     "rate": 1.0
+    },
+    "unsupported": {
+     "ci95": [
+      0.0,
+      0.7935
+     ],
+     "k": 0,
+     "n": 1,
+     "rate": 0.0
+    }
+   }
+  },
+  "runs": [
+   {
+    "citations": 0,
+    "cited_papers": [],
+    "claims": 0,
+    "elapsed_seconds": 180.03,
+    "expected_outcome": "grounded_answer",
+    "expected_paper_overlap": null,
+    "failed_checks": [],
+    "file": "LV-1.json",
+    "generations": null,
+    "grounding_reasons": null,
+    "http_status": 504,
+    "llm_calls": null,
+    "outcome": null,
+    "outcome_as_expected": false,
+    "question": "Which natural language had the highest full compliance rate for malicious prompts in the multilingual and obfuscated attack evaluation?",
+    "reformulations": null,
+    "regenerations": null,
+    "retrieval_rounds": null,
+    "test_id": "LV-1",
+    "verdict": "FAIL"
+   },
+   {
+    "citations": 0,
+    "cited_papers": [],
+    "claims": 0,
+    "elapsed_seconds": 71.3,
+    "expected_outcome": "grounded_answer",
+    "expected_paper_overlap": [],
+    "failed_checks": [],
+    "file": "LV-2.json",
+    "generations": 2,
+    "grounding_reasons": [
+     "claim_check_failed",
+     "claim_check_failed"
+    ],
+    "http_status": 200,
+    "llm_calls": 2,
+    "outcome": "grounding_failed",
+    "outcome_as_expected": false,
+    "question": "Which papers report that LLM safety or instruction compliance is weaker for non-English prompts?",
+    "reformulations": 0,
+    "regenerations": 1,
+    "retrieval_rounds": 1,
+    "test_id": "LV-2",
+    "verdict": "SAFE_NON_ANSWER"
+   },
+   {
+    "citations": 0,
+    "cited_papers": [],
+    "claims": 0,
+    "elapsed_seconds": 71.52,
+    "expected_outcome": "grounded_answer",
+    "expected_paper_overlap": [],
+    "failed_checks": [],
+    "file": "LV-2b.json",
+    "generations": 2,
+    "grounding_reasons": [
+     "claim_check_failed",
+     "claim_check_failed"
+    ],
+    "http_status": 200,
+    "llm_calls": 2,
+    "outcome": "grounding_failed",
+    "outcome_as_expected": false,
+    "question": "Which papers report that LLM safety or instruction compliance is weaker for non-English prompts?",
+    "reformulations": 0,
+    "regenerations": 1,
+    "retrieval_rounds": 1,
+    "test_id": "LV-2b",
+    "verdict": "SAFE_NON_ANSWER"
+   },
+   {
+    "citations": 0,
+    "cited_papers": [],
+    "claims": 0,
+    "elapsed_seconds": 71.62,
+    "expected_outcome": "grounding_failed",
+    "expected_paper_overlap": [],
+    "failed_checks": [],
+    "file": "LV-3.json",
+    "generations": 2,
+    "grounding_reasons": [
+     "claim_check_failed",
+     "claim_check_failed"
+    ],
+    "http_status": 200,
+    "llm_calls": 2,
+    "outcome": "grounding_failed",
+    "outcome_as_expected": true,
+    "question": "What accuracy does the Turkish prompt injection benchmark report for GPT-4 on Turkish prompts?",
+    "reformulations": 0,
+    "regenerations": 1,
+    "retrieval_rounds": 1,
+    "test_id": "LV-3",
+    "verdict": "SAFE_NON_ANSWER"
+   },
+   {
+    "citations": 1,
+    "cited_papers": [
+     3
+    ],
+    "claims": 1,
+    "elapsed_seconds": 96.02,
+    "expected_outcome": "grounded_answer",
+    "expected_paper_overlap": [
+     3
+    ],
+    "failed_checks": [],
+    "file": "LV-1b.json",
+    "generations": 1,
+    "grounding_reasons": [
+     "ok"
+    ],
+    "http_status": 200,
+    "llm_calls": 2,
+    "outcome": "grounded_answer",
+    "outcome_as_expected": true,
+    "question": "Which natural language had the highest full compliance rate for malicious prompts in the multilingual and obfuscated attack evaluation?",
+    "reformulations": 0,
+    "regenerations": 0,
+    "retrieval_rounds": 1,
+    "test_id": "LV-1b",
+    "verdict": "PASS"
+   },
+   {
+    "citations": 0,
+    "cited_papers": [],
+    "claims": 0,
+    "elapsed_seconds": 82.17,
+    "expected_outcome": "grounded_answer",
+    "expected_paper_overlap": [],
+    "failed_checks": [],
+    "file": "LV-2c.json",
+    "generations": 2,
+    "grounding_reasons": [
+     "claim_check_failed",
+     "claim_check_failed"
+    ],
+    "http_status": 200,
+    "llm_calls": 2,
+    "outcome": "grounding_failed",
+    "outcome_as_expected": false,
+    "question": "Which papers report that LLM safety or instruction compliance is weaker for non-English prompts?",
+    "reformulations": 0,
+    "regenerations": 1,
+    "retrieval_rounds": 1,
+    "test_id": "LV-2c",
+    "verdict": "SAFE_NON_ANSWER"
+   }
+  ]
+ },
+ "retrieval": {
+  "chosen_on_calibration": {
+   "calibration_balanced_accuracy": 0.8055,
+   "n": 64,
+   "objective": "balanced accuracy, answerable (relevant+partial) vs weak+unrelated",
+   "threshold": 0.915318
+  },
+  "chosen_threshold": {
+   "all_by_question_type": {
+    "absence_stated": {
+     "accepted": {
+      "ci95": [
+       0.2065,
+       1.0
+      ],
+      "k": 1,
+      "n": 1,
+      "rate": 1.0
+     },
+     "labels": [
+      "relevant"
+     ],
+     "n": 1
+    },
+    "adjacent_topic": {
+     "accepted": {
+      "ci95": [
+       0.2801,
+       0.7873
+      ],
+      "k": 6,
+      "n": 11,
+      "rate": 0.5455
+     },
+     "labels": [
+      "weak"
+     ],
+     "n": 11
+    },
+    "causal_explanation": {
+     "accepted": {
+      "ci95": [
+       0.3424,
+       1.0
+      ],
+      "k": 2,
+      "n": 2,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 2
+    },
+    "comparison": {
+     "accepted": {
+      "ci95": [
+       0.5655,
+       1.0
+      ],
+      "k": 5,
+      "n": 5,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 5
+    },
+    "factual": {
+     "accepted": {
+      "ci95": [
+       0.7847,
+       1.0
+      ],
+      "k": 14,
+      "n": 14,
+      "rate": 1.0
+     },
+     "labels": [
+      "relevant"
+     ],
+     "n": 14
+    },
+    "future_work": {
+     "accepted": {
+      "ci95": [
+       0.3424,
+       1.0
+      ],
+      "k": 2,
+      "n": 2,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 2
+    },
+    "limitations": {
+     "accepted": {
+      "ci95": [
+       0.5655,
+       1.0
+      ],
+      "k": 5,
+      "n": 5,
+      "rate": 1.0
+     },
+     "labels": [
+      "relevant"
+     ],
+     "n": 5
+    },
+    "misleading_overlap": {
+     "accepted": {
+      "ci95": [
+       0.4535,
+       0.8828
+      ],
+      "k": 10,
+      "n": 14,
+      "rate": 0.7143
+     },
+     "labels": [
+      "weak"
+     ],
+     "n": 14
+    },
+    "not_in_index": {
+     "accepted": {
+      "ci95": [
+       0.4365,
+       0.9699
+      ],
+      "k": 5,
+      "n": 6,
+      "rate": 0.8333
+     },
+     "labels": [
+      "weak"
+     ],
+     "n": 6
+    },
+    "numeric": {
+     "accepted": {
+      "ci95": [
+       0.5776,
+       0.9567
+      ],
+      "k": 11,
+      "n": 13,
+      "rate": 0.8462
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 13
+    },
+    "off_topic": {
+     "accepted": {
+      "ci95": [
+       0.0,
+       0.1135
+      ],
+      "k": 0,
+      "n": 30,
+      "rate": 0.0
+     },
+     "labels": [
+      "unrelated"
+     ],
+     "n": 30
+    },
+    "overgeneralization_trap": {
+     "accepted": {
+      "ci95": [
+       0.2065,
+       1.0
+      ],
+      "k": 1,
+      "n": 1,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant"
+     ],
+     "n": 1
+    },
+    "partial_single_paper": {
+     "accepted": {
+      "ci95": [
+       0.7302,
+       0.9895
+      ],
+      "k": 16,
+      "n": 17,
+      "rate": 0.9412
+     },
+     "labels": [
+      "partially_relevant"
+     ],
+     "n": 17
+    },
+    "synthesis": {
+     "accepted": {
+      "ci95": [
+       0.7008,
+       1.0
+      ],
+      "k": 9,
+      "n": 9,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 9
+    }
+   },
+   "calibration": {
+    "answerable_vs_not": {
+     "balanced_accuracy": 0.8055,
+     "f1": 0.8,
+     "fn": 0,
+     "fp": 14,
+     "precision": 0.6667,
+     "recall": 1.0,
+     "specificity": 0.6111,
+     "tn": 22,
+     "tp": 28
+    },
+    "confusion": {
+     "partially_relevant": {
+      "accept": 14,
+      "reject": 0
+     },
+     "relevant": {
+      "accept": 14,
+      "reject": 0
+     },
+     "unrelated": {
+      "accept": 0,
+      "reject": 18
+     },
+     "weak": {
+      "accept": 14,
+      "reject": 4
+     }
+    },
+    "false_accept": {
+     "unrelated": {
+      "ci95": [
+       0.0,
+       0.1759
+      ],
+      "k": 0,
+      "n": 18,
+      "rate": 0.0
+     },
+     "weak": {
+      "ci95": [
+       0.5478,
+       0.91
+      ],
+      "k": 14,
+      "n": 18,
+      "rate": 0.7778
+     },
+     "weak_or_unrelated": {
+      "ci95": [
+       0.2478,
+       0.5514
+      ],
+      "k": 14,
+      "n": 36,
+      "rate": 0.3889
+     }
+    },
+    "false_reject": {
+     "partially_relevant": {
+      "ci95": [
+       0.0,
+       0.2153
+      ],
+      "k": 0,
+      "n": 14,
+      "rate": 0.0
+     },
+     "relevant": {
+      "ci95": [
+       0.0,
+       0.2153
+      ],
+      "k": 0,
+      "n": 14,
+      "rate": 0.0
+     }
+    },
+    "min_chunks": 2,
+    "min_papers": 2,
+    "n": 64,
+    "rejected": {
+     "ci95": [
+      0.2392,
+      0.466
+     ],
+     "k": 22,
+     "n": 64,
+     "rate": 0.3438
+    },
+    "relevant_vs_unrelated": {
+     "balanced_accuracy": 1.0,
+     "f1": 1.0,
+     "fn": 0,
+     "fp": 0,
+     "precision": 1.0,
+     "recall": 1.0,
+     "specificity": 1.0,
+     "tn": 18,
+     "tp": 14
+    },
+    "threshold": 0.915318
+   },
+   "distinct_paper_rule": {
+    "min_papers=1": {
+     "all": {
+      "answerable_vs_not": {
+       "balanced_accuracy": 0.8124,
+       "f1": 0.8554,
+       "fn": 1,
+       "fp": 22,
+       "precision": 0.7556,
+       "recall": 0.9855,
+       "specificity": 0.6393,
+       "tn": 39,
+       "tp": 68
+      },
+      "confusion": {
+       "partially_relevant": {
+        "accept": 27,
+        "reject": 1
+       },
+       "relevant": {
+        "accept": 41,
+        "reject": 0
+       },
+       "unrelated": {
+        "accept": 0,
+        "reject": 30
+       },
+       "weak": {
+        "accept": 22,
+        "reject": 9
+       }
+      },
+      "false_accept": {
+       "unrelated": {
+        "ci95": [
+         0.0,
+         0.1135
+        ],
+        "k": 0,
+        "n": 30,
+        "rate": 0.0
+       },
+       "weak": {
+        "ci95": [
+         0.5341,
+         0.839
+        ],
+        "k": 22,
+        "n": 31,
+        "rate": 0.7097
+       },
+       "weak_or_unrelated": {
+        "ci95": [
+         0.2517,
+         0.4861
+        ],
+        "k": 22,
+        "n": 61,
+        "rate": 0.3607
+       }
+      },
+      "false_reject": {
+       "partially_relevant": {
+        "ci95": [
+         0.0063,
+         0.1771
+        ],
+        "k": 1,
+        "n": 28,
+        "rate": 0.0357
+       },
+       "relevant": {
+        "ci95": [
+         0.0,
+         0.0857
+        ],
+        "k": 0,
+        "n": 41,
+        "rate": 0.0
+       }
+      },
+      "min_chunks": 2,
+      "min_papers": 1,
+      "n": 130,
+      "rejected": {
+       "ci95": [
+        0.2348,
+        0.3916
+       ],
+       "k": 40,
+       "n": 130,
+       "rate": 0.3077
+      },
+      "relevant_vs_unrelated": {
+       "balanced_accuracy": 1.0,
+       "f1": 1.0,
+       "fn": 0,
+       "fp": 0,
+       "precision": 1.0,
+       "recall": 1.0,
+       "specificity": 1.0,
+       "tn": 30,
+       "tp": 41
+      },
+      "threshold": 0.915318
+     },
+     "held_out": {
+      "answerable_vs_not": {
+       "balanced_accuracy": 0.8478,
+       "f1": 0.9091,
+       "fn": 1,
+       "fp": 7,
+       "precision": 0.8511,
+       "recall": 0.9756,
+       "specificity": 0.72,
+       "tn": 18,
+       "tp": 40
+      },
+      "confusion": {
+       "partially_relevant": {
+        "accept": 13,
+        "reject": 1
+       },
+       "relevant": {
+        "accept": 27,
+        "reject": 0
+       },
+       "unrelated": {
+        "accept": 0,
+        "reject": 12
+       },
+       "weak": {
+        "accept": 7,
+        "reject": 6
+       }
+      },
+      "false_accept": {
+       "unrelated": {
+        "ci95": [
+         0.0,
+         0.2425
+        ],
+        "k": 0,
+        "n": 12,
+        "rate": 0.0
+       },
+       "weak": {
+        "ci95": [
+         0.2914,
+         0.7679
+        ],
+        "k": 7,
+        "n": 13,
+        "rate": 0.5385
+       },
+       "weak_or_unrelated": {
+        "ci95": [
+         0.1428,
+         0.4758
+        ],
+        "k": 7,
+        "n": 25,
+        "rate": 0.28
+       }
+      },
+      "false_reject": {
+       "partially_relevant": {
+        "ci95": [
+         0.0127,
+         0.3147
+        ],
+        "k": 1,
+        "n": 14,
+        "rate": 0.0714
+       },
+       "relevant": {
+        "ci95": [
+         0.0,
+         0.1246
+        ],
+        "k": 0,
+        "n": 27,
+        "rate": 0.0
+       }
+      },
+      "min_chunks": 2,
+      "min_papers": 1,
+      "n": 66,
+      "rejected": {
+       "ci95": [
+        0.1927,
+        0.4064
+       ],
+       "k": 19,
+       "n": 66,
+       "rate": 0.2879
+      },
+      "relevant_vs_unrelated": {
+       "balanced_accuracy": 1.0,
+       "f1": 1.0,
+       "fn": 0,
+       "fp": 0,
+       "precision": 1.0,
+       "recall": 1.0,
+       "specificity": 1.0,
+       "tn": 12,
+       "tp": 27
+      },
+      "threshold": 0.915318
+     }
+    },
+    "min_papers=2": {
+     "all": {
+      "answerable_vs_not": {
+       "balanced_accuracy": 0.8061,
+       "f1": 0.8461,
+       "fn": 3,
+       "fp": 21,
+       "precision": 0.7586,
+       "recall": 0.9565,
+       "specificity": 0.6557,
+       "tn": 40,
+       "tp": 66
+      },
+      "confusion": {
+       "partially_relevant": {
+        "accept": 27,
+        "reject": 1
+       },
+       "relevant": {
+        "accept": 39,
+        "reject": 2
+       },
+       "unrelated": {
+        "accept": 0,
+        "reject": 30
+       },
+       "weak": {
+        "accept": 21,
+        "reject": 10
+       }
+      },
+      "false_accept": {
+       "unrelated": {
+        "ci95": [
+         0.0,
+         0.1135
+        ],
+        "k": 0,
+        "n": 30,
+        "rate": 0.0
+       },
+       "weak": {
+        "ci95": [
+         0.5014,
+         0.8143
+        ],
+        "k": 21,
+        "n": 31,
+        "rate": 0.6774
+       },
+       "weak_or_unrelated": {
+        "ci95": [
+         0.2375,
+         0.4695
+        ],
+        "k": 21,
+        "n": 61,
+        "rate": 0.3443
+       }
+      },
+      "false_reject": {
+       "partially_relevant": {
+        "ci95": [
+         0.0063,
+         0.1771
+        ],
+        "k": 1,
+        "n": 28,
+        "rate": 0.0357
+       },
+       "relevant": {
+        "ci95": [
+         0.0135,
+         0.1614
+        ],
+        "k": 2,
+        "n": 41,
+        "rate": 0.0488
+       }
+      },
+      "min_chunks": 2,
+      "min_papers": 2,
+      "n": 130,
+      "rejected": {
+       "ci95": [
+        0.2558,
+        0.4155
+       ],
+       "k": 43,
+       "n": 130,
+       "rate": 0.3308
+      },
+      "relevant_vs_unrelated": {
+       "balanced_accuracy": 0.9756,
+       "f1": 0.975,
+       "fn": 2,
+       "fp": 0,
+       "precision": 1.0,
+       "recall": 0.9512,
+       "specificity": 1.0,
+       "tn": 30,
+       "tp": 39
+      },
+      "threshold": 0.915318
+     },
+     "held_out": {
+      "answerable_vs_not": {
+       "balanced_accuracy": 0.8234,
+       "f1": 0.8837,
+       "fn": 3,
+       "fp": 7,
+       "precision": 0.8444,
+       "recall": 0.9268,
+       "specificity": 0.72,
+       "tn": 18,
+       "tp": 38
+      },
+      "confusion": {
+       "partially_relevant": {
+        "accept": 13,
+        "reject": 1
+       },
+       "relevant": {
+        "accept": 25,
+        "reject": 2
+       },
+       "unrelated": {
+        "accept": 0,
+        "reject": 12
+       },
+       "weak": {
+        "accept": 7,
+        "reject": 6
+       }
+      },
+      "false_accept": {
+       "unrelated": {
+        "ci95": [
+         0.0,
+         0.2425
+        ],
+        "k": 0,
+        "n": 12,
+        "rate": 0.0
+       },
+       "weak": {
+        "ci95": [
+         0.2914,
+         0.7679
+        ],
+        "k": 7,
+        "n": 13,
+        "rate": 0.5385
+       },
+       "weak_or_unrelated": {
+        "ci95": [
+         0.1428,
+         0.4758
+        ],
+        "k": 7,
+        "n": 25,
+        "rate": 0.28
+       }
+      },
+      "false_reject": {
+       "partially_relevant": {
+        "ci95": [
+         0.0127,
+         0.3147
+        ],
+        "k": 1,
+        "n": 14,
+        "rate": 0.0714
+       },
+       "relevant": {
+        "ci95": [
+         0.0206,
+         0.2337
+        ],
+        "k": 2,
+        "n": 27,
+        "rate": 0.0741
+       }
+      },
+      "min_chunks": 2,
+      "min_papers": 2,
+      "n": 66,
+      "rejected": {
+       "ci95": [
+        0.2185,
+        0.4379
+       ],
+       "k": 21,
+       "n": 66,
+       "rate": 0.3182
+      },
+      "relevant_vs_unrelated": {
+       "balanced_accuracy": 0.9629,
+       "f1": 0.9615,
+       "fn": 2,
+       "fp": 0,
+       "precision": 1.0,
+       "recall": 0.9259,
+       "specificity": 1.0,
+       "tn": 12,
+       "tp": 25
+      },
+      "threshold": 0.915318
+     }
+    }
+   },
+   "held_out": {
+    "answerable_vs_not": {
+     "balanced_accuracy": 0.8234,
+     "f1": 0.8837,
+     "fn": 3,
+     "fp": 7,
+     "precision": 0.8444,
+     "recall": 0.9268,
+     "specificity": 0.72,
+     "tn": 18,
+     "tp": 38
+    },
+    "confusion": {
+     "partially_relevant": {
+      "accept": 13,
+      "reject": 1
+     },
+     "relevant": {
+      "accept": 25,
+      "reject": 2
+     },
+     "unrelated": {
+      "accept": 0,
+      "reject": 12
+     },
+     "weak": {
+      "accept": 7,
+      "reject": 6
+     }
+    },
+    "false_accept": {
+     "unrelated": {
+      "ci95": [
+       0.0,
+       0.2425
+      ],
+      "k": 0,
+      "n": 12,
+      "rate": 0.0
+     },
+     "weak": {
+      "ci95": [
+       0.2914,
+       0.7679
+      ],
+      "k": 7,
+      "n": 13,
+      "rate": 0.5385
+     },
+     "weak_or_unrelated": {
+      "ci95": [
+       0.1428,
+       0.4758
+      ],
+      "k": 7,
+      "n": 25,
+      "rate": 0.28
+     }
+    },
+    "false_reject": {
+     "partially_relevant": {
+      "ci95": [
+       0.0127,
+       0.3147
+      ],
+      "k": 1,
+      "n": 14,
+      "rate": 0.0714
+     },
+     "relevant": {
+      "ci95": [
+       0.0206,
+       0.2337
+      ],
+      "k": 2,
+      "n": 27,
+      "rate": 0.0741
+     }
+    },
+    "min_chunks": 2,
+    "min_papers": 2,
+    "n": 66,
+    "rejected": {
+     "ci95": [
+      0.2185,
+      0.4379
+     ],
+     "k": 21,
+     "n": 66,
+     "rate": 0.3182
+    },
+    "relevant_vs_unrelated": {
+     "balanced_accuracy": 0.9629,
+     "f1": 0.9615,
+     "fn": 2,
+     "fp": 0,
+     "precision": 1.0,
+     "recall": 0.9259,
+     "specificity": 1.0,
+     "tn": 12,
+     "tp": 25
+    },
+    "threshold": 0.915318
+   },
+   "held_out_by_question_type": {
+    "absence_stated": {
+     "accepted": {
+      "ci95": [
+       0.2065,
+       1.0
+      ],
+      "k": 1,
+      "n": 1,
+      "rate": 1.0
+     },
+     "labels": [
+      "relevant"
+     ],
+     "n": 1
+    },
+    "adjacent_topic": {
+     "accepted": {
+      "ci95": [
+       0.1582,
+       0.7495
+      ],
+      "k": 3,
+      "n": 7,
+      "rate": 0.4286
+     },
+     "labels": [
+      "weak"
+     ],
+     "n": 7
+    },
+    "causal_explanation": {
+     "accepted": {
+      "ci95": [
+       0.2065,
+       1.0
+      ],
+      "k": 1,
+      "n": 1,
+      "rate": 1.0
+     },
+     "labels": [
+      "relevant"
+     ],
+     "n": 1
+    },
+    "comparison": {
+     "accepted": {
+      "ci95": [
+       0.4385,
+       1.0
+      ],
+      "k": 3,
+      "n": 3,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 3
+    },
+    "factual": {
+     "accepted": {
+      "ci95": [
+       0.7225,
+       1.0
+      ],
+      "k": 10,
+      "n": 10,
+      "rate": 1.0
+     },
+     "labels": [
+      "relevant"
+     ],
+     "n": 10
+    },
+    "future_work": {
+     "accepted": {
+      "ci95": [
+       0.3424,
+       1.0
+      ],
+      "k": 2,
+      "n": 2,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 2
+    },
+    "limitations": {
+     "accepted": {
+      "ci95": [
+       0.2065,
+       1.0
+      ],
+      "k": 1,
+      "n": 1,
+      "rate": 1.0
+     },
+     "labels": [
+      "relevant"
+     ],
+     "n": 1
+    },
+    "misleading_overlap": {
+     "accepted": {
+      "ci95": [
+       0.2077,
+       0.9385
+      ],
+      "k": 2,
+      "n": 3,
+      "rate": 0.6667
+     },
+     "labels": [
+      "weak"
+     ],
+     "n": 3
+    },
+    "not_in_index": {
+     "accepted": {
+      "ci95": [
+       0.2077,
+       0.9385
+      ],
+      "k": 2,
+      "n": 3,
+      "rate": 0.6667
+     },
+     "labels": [
+      "weak"
+     ],
+     "n": 3
+    },
+    "numeric": {
+     "accepted": {
+      "ci95": [
+       0.3589,
+       0.9178
+      ],
+      "k": 5,
+      "n": 7,
+      "rate": 0.7143
+     },
+     "labels": [
+      "relevant"
+     ],
+     "n": 7
+    },
+    "off_topic": {
+     "accepted": {
+      "ci95": [
+       0.0,
+       0.2425
+      ],
+      "k": 0,
+      "n": 12,
+      "rate": 0.0
+     },
+     "labels": [
+      "unrelated"
+     ],
+     "n": 12
+    },
+    "overgeneralization_trap": {
+     "accepted": {
+      "ci95": [
+       0.2065,
+       1.0
+      ],
+      "k": 1,
+      "n": 1,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant"
+     ],
+     "n": 1
+    },
+    "partial_single_paper": {
+     "accepted": {
+      "ci95": [
+       0.5291,
+       0.9776
+      ],
+      "k": 7,
+      "n": 8,
+      "rate": 0.875
+     },
+     "labels": [
+      "partially_relevant"
+     ],
+     "n": 8
+    },
+    "synthesis": {
+     "accepted": {
+      "ci95": [
+       0.6457,
+       1.0
+      ],
+      "k": 7,
+      "n": 7,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 7
+    }
+   },
+   "threshold": 0.915318
+  },
+  "coverage": {
+   "label_counts": {
+    "calibration": {
+     "partially_relevant": 14,
+     "relevant": 14,
+     "unrelated": 18,
+     "weak": 18
+    },
+    "held_out": {
+     "partially_relevant": 14,
+     "relevant": 27,
+     "unrelated": 12,
+     "weak": 13
+    }
+   },
+   "labelled": 130,
+   "missing_from_run": [],
+   "scored": 130,
+   "split": {
+    "calibration": 64,
+    "held_out": 66
+   },
+   "unlabelled_in_run": []
+  },
+  "current_threshold": {
+   "all": {
+    "answerable_vs_not": {
+     "balanced_accuracy": 0.4937,
+     "f1": 0.6837,
+     "fn": 2,
+     "fp": 60,
+     "precision": 0.5276,
+     "recall": 0.971,
+     "specificity": 0.0164,
+     "tn": 1,
+     "tp": 67
+    },
+    "confusion": {
+     "partially_relevant": {
+      "accept": 28,
+      "reject": 0
+     },
+     "relevant": {
+      "accept": 39,
+      "reject": 2
+     },
+     "unrelated": {
+      "accept": 30,
+      "reject": 0
+     },
+     "weak": {
+      "accept": 30,
+      "reject": 1
+     }
+    },
+    "false_accept": {
+     "unrelated": {
+      "ci95": [
+       0.8865,
+       1.0
+      ],
+      "k": 30,
+      "n": 30,
+      "rate": 1.0
+     },
+     "weak": {
+      "ci95": [
+       0.8381,
+       0.9943
+      ],
+      "k": 30,
+      "n": 31,
+      "rate": 0.9677
+     },
+     "weak_or_unrelated": {
+      "ci95": [
+       0.9128,
+       0.9971
+      ],
+      "k": 60,
+      "n": 61,
+      "rate": 0.9836
+     }
+    },
+    "false_reject": {
+     "partially_relevant": {
+      "ci95": [
+       0.0,
+       0.1206
+      ],
+      "k": 0,
+      "n": 28,
+      "rate": 0.0
+     },
+     "relevant": {
+      "ci95": [
+       0.0135,
+       0.1614
+      ],
+      "k": 2,
+      "n": 41,
+      "rate": 0.0488
+     }
+    },
+    "min_chunks": 2,
+    "min_papers": 2,
+    "n": 130,
+    "rejected": {
+     "ci95": [
+      0.0079,
+      0.0657
+     ],
+     "k": 3,
+     "n": 130,
+     "rate": 0.0231
+    },
+    "relevant_vs_unrelated": {
+     "balanced_accuracy": 0.4756,
+     "f1": 0.7091,
+     "fn": 2,
+     "fp": 30,
+     "precision": 0.5652,
+     "recall": 0.9512,
+     "specificity": 0.0,
+     "tn": 0,
+     "tp": 39
+    },
+    "threshold": 0.2
+   },
+   "by_question_type": {
+    "absence_stated": {
+     "accepted": {
+      "ci95": [
+       0.2065,
+       1.0
+      ],
+      "k": 1,
+      "n": 1,
+      "rate": 1.0
+     },
+     "labels": [
+      "relevant"
+     ],
+     "n": 1
+    },
+    "adjacent_topic": {
+     "accepted": {
+      "ci95": [
+       0.7412,
+       1.0
+      ],
+      "k": 11,
+      "n": 11,
+      "rate": 1.0
+     },
+     "labels": [
+      "weak"
+     ],
+     "n": 11
+    },
+    "causal_explanation": {
+     "accepted": {
+      "ci95": [
+       0.3424,
+       1.0
+      ],
+      "k": 2,
+      "n": 2,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 2
+    },
+    "comparison": {
+     "accepted": {
+      "ci95": [
+       0.5655,
+       1.0
+      ],
+      "k": 5,
+      "n": 5,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 5
+    },
+    "factual": {
+     "accepted": {
+      "ci95": [
+       0.7847,
+       1.0
+      ],
+      "k": 14,
+      "n": 14,
+      "rate": 1.0
+     },
+     "labels": [
+      "relevant"
+     ],
+     "n": 14
+    },
+    "future_work": {
+     "accepted": {
+      "ci95": [
+       0.3424,
+       1.0
+      ],
+      "k": 2,
+      "n": 2,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 2
+    },
+    "limitations": {
+     "accepted": {
+      "ci95": [
+       0.5655,
+       1.0
+      ],
+      "k": 5,
+      "n": 5,
+      "rate": 1.0
+     },
+     "labels": [
+      "relevant"
+     ],
+     "n": 5
+    },
+    "misleading_overlap": {
+     "accepted": {
+      "ci95": [
+       0.6853,
+       0.9873
+      ],
+      "k": 13,
+      "n": 14,
+      "rate": 0.9286
+     },
+     "labels": [
+      "weak"
+     ],
+     "n": 14
+    },
+    "not_in_index": {
+     "accepted": {
+      "ci95": [
+       0.6097,
+       1.0
+      ],
+      "k": 6,
+      "n": 6,
+      "rate": 1.0
+     },
+     "labels": [
+      "weak"
+     ],
+     "n": 6
+    },
+    "numeric": {
+     "accepted": {
+      "ci95": [
+       0.5776,
+       0.9567
+      ],
+      "k": 11,
+      "n": 13,
+      "rate": 0.8462
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 13
+    },
+    "off_topic": {
+     "accepted": {
+      "ci95": [
+       0.8865,
+       1.0
+      ],
+      "k": 30,
+      "n": 30,
+      "rate": 1.0
+     },
+     "labels": [
+      "unrelated"
+     ],
+     "n": 30
+    },
+    "overgeneralization_trap": {
+     "accepted": {
+      "ci95": [
+       0.2065,
+       1.0
+      ],
+      "k": 1,
+      "n": 1,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant"
+     ],
+     "n": 1
+    },
+    "partial_single_paper": {
+     "accepted": {
+      "ci95": [
+       0.8157,
+       1.0
+      ],
+      "k": 17,
+      "n": 17,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant"
+     ],
+     "n": 17
+    },
+    "synthesis": {
+     "accepted": {
+      "ci95": [
+       0.7008,
+       1.0
+      ],
+      "k": 9,
+      "n": 9,
+      "rate": 1.0
+     },
+     "labels": [
+      "partially_relevant",
+      "relevant"
+     ],
+     "n": 9
+    }
+   },
+   "calibration": {
+    "answerable_vs_not": {
+     "balanced_accuracy": 0.5139,
+     "f1": 0.6153,
+     "fn": 0,
+     "fp": 35,
+     "precision": 0.4444,
+     "recall": 1.0,
+     "specificity": 0.0278,
+     "tn": 1,
+     "tp": 28
+    },
+    "confusion": {
+     "partially_relevant": {
+      "accept": 14,
+      "reject": 0
+     },
+     "relevant": {
+      "accept": 14,
+      "reject": 0
+     },
+     "unrelated": {
+      "accept": 18,
+      "reject": 0
+     },
+     "weak": {
+      "accept": 17,
+      "reject": 1
+     }
+    },
+    "false_accept": {
+     "unrelated": {
+      "ci95": [
+       0.8241,
+       1.0
+      ],
+      "k": 18,
+      "n": 18,
+      "rate": 1.0
+     },
+     "weak": {
+      "ci95": [
+       0.7424,
+       0.9901
+      ],
+      "k": 17,
+      "n": 18,
+      "rate": 0.9444
+     },
+     "weak_or_unrelated": {
+      "ci95": [
+       0.8583,
+       0.9951
+      ],
+      "k": 35,
+      "n": 36,
+      "rate": 0.9722
+     }
+    },
+    "false_reject": {
+     "partially_relevant": {
+      "ci95": [
+       0.0,
+       0.2153
+      ],
+      "k": 0,
+      "n": 14,
+      "rate": 0.0
+     },
+     "relevant": {
+      "ci95": [
+       0.0,
+       0.2153
+      ],
+      "k": 0,
+      "n": 14,
+      "rate": 0.0
+     }
+    },
+    "min_chunks": 2,
+    "min_papers": 2,
+    "n": 64,
+    "rejected": {
+     "ci95": [
+      0.0028,
+      0.0833
+     ],
+     "k": 1,
+     "n": 64,
+     "rate": 0.0156
+    },
+    "relevant_vs_unrelated": {
+     "balanced_accuracy": 0.5,
+     "f1": 0.6087,
+     "fn": 0,
+     "fp": 18,
+     "precision": 0.4375,
+     "recall": 1.0,
+     "specificity": 0.0,
+     "tn": 0,
+     "tp": 14
+    },
+    "threshold": 0.2
+   },
+   "distinct_paper_rule": {
+    "min_papers=1": {
+     "answerable_vs_not": {
+      "balanced_accuracy": 0.5,
+      "f1": 0.6935,
+      "fn": 0,
+      "fp": 61,
+      "precision": 0.5308,
+      "recall": 1.0,
+      "specificity": 0.0,
+      "tn": 0,
+      "tp": 69
+     },
+     "confusion": {
+      "partially_relevant": {
+       "accept": 28,
+       "reject": 0
+      },
+      "relevant": {
+       "accept": 41,
+       "reject": 0
+      },
+      "unrelated": {
+       "accept": 30,
+       "reject": 0
+      },
+      "weak": {
+       "accept": 31,
+       "reject": 0
+      }
+     },
+     "false_accept": {
+      "unrelated": {
+       "ci95": [
+        0.8865,
+        1.0
+       ],
+       "k": 30,
+       "n": 30,
+       "rate": 1.0
+      },
+      "weak": {
+       "ci95": [
+        0.8897,
+        1.0
+       ],
+       "k": 31,
+       "n": 31,
+       "rate": 1.0
+      },
+      "weak_or_unrelated": {
+       "ci95": [
+        0.9408,
+        1.0
+       ],
+       "k": 61,
+       "n": 61,
+       "rate": 1.0
+      }
+     },
+     "false_reject": {
+      "partially_relevant": {
+       "ci95": [
+        0.0,
+        0.1206
+       ],
+       "k": 0,
+       "n": 28,
+       "rate": 0.0
+      },
+      "relevant": {
+       "ci95": [
+        0.0,
+        0.0857
+       ],
+       "k": 0,
+       "n": 41,
+       "rate": 0.0
+      }
+     },
+     "min_chunks": 2,
+     "min_papers": 1,
+     "n": 130,
+     "rejected": {
+      "ci95": [
+       0.0,
+       0.0287
+      ],
+      "k": 0,
+      "n": 130,
+      "rate": 0.0
+     },
+     "relevant_vs_unrelated": {
+      "balanced_accuracy": 0.5,
+      "f1": 0.7322,
+      "fn": 0,
+      "fp": 30,
+      "precision": 0.5775,
+      "recall": 1.0,
+      "specificity": 0.0,
+      "tn": 0,
+      "tp": 41
+     },
+     "threshold": 0.2
+    },
+    "min_papers=2": {
+     "answerable_vs_not": {
+      "balanced_accuracy": 0.4937,
+      "f1": 0.6837,
+      "fn": 2,
+      "fp": 60,
+      "precision": 0.5276,
+      "recall": 0.971,
+      "specificity": 0.0164,
+      "tn": 1,
+      "tp": 67
+     },
+     "confusion": {
+      "partially_relevant": {
+       "accept": 28,
+       "reject": 0
+      },
+      "relevant": {
+       "accept": 39,
+       "reject": 2
+      },
+      "unrelated": {
+       "accept": 30,
+       "reject": 0
+      },
+      "weak": {
+       "accept": 30,
+       "reject": 1
+      }
+     },
+     "false_accept": {
+      "unrelated": {
+       "ci95": [
+        0.8865,
+        1.0
+       ],
+       "k": 30,
+       "n": 30,
+       "rate": 1.0
+      },
+      "weak": {
+       "ci95": [
+        0.8381,
+        0.9943
+       ],
+       "k": 30,
+       "n": 31,
+       "rate": 0.9677
+      },
+      "weak_or_unrelated": {
+       "ci95": [
+        0.9128,
+        0.9971
+       ],
+       "k": 60,
+       "n": 61,
+       "rate": 0.9836
+      }
+     },
+     "false_reject": {
+      "partially_relevant": {
+       "ci95": [
+        0.0,
+        0.1206
+       ],
+       "k": 0,
+       "n": 28,
+       "rate": 0.0
+      },
+      "relevant": {
+       "ci95": [
+        0.0135,
+        0.1614
+       ],
+       "k": 2,
+       "n": 41,
+       "rate": 0.0488
+      }
+     },
+     "min_chunks": 2,
+     "min_papers": 2,
+     "n": 130,
+     "rejected": {
+      "ci95": [
+       0.0079,
+       0.0657
+      ],
+      "k": 3,
+      "n": 130,
+      "rate": 0.0231
+     },
+     "relevant_vs_unrelated": {
+      "balanced_accuracy": 0.4756,
+      "f1": 0.7091,
+      "fn": 2,
+      "fp": 30,
+      "precision": 0.5652,
+      "recall": 0.9512,
+      "specificity": 0.0,
+      "tn": 0,
+      "tp": 39
+     },
+     "threshold": 0.2
+    }
+   },
+   "held_out": {
+    "answerable_vs_not": {
+     "balanced_accuracy": 0.4756,
+     "f1": 0.7429,
+     "fn": 2,
+     "fp": 25,
+     "precision": 0.6094,
+     "recall": 0.9512,
+     "specificity": 0.0,
+     "tn": 0,
+     "tp": 39
+    },
+    "confusion": {
+     "partially_relevant": {
+      "accept": 14,
+      "reject": 0
+     },
+     "relevant": {
+      "accept": 25,
+      "reject": 2
+     },
+     "unrelated": {
+      "accept": 12,
+      "reject": 0
+     },
+     "weak": {
+      "accept": 13,
+      "reject": 0
+     }
+    },
+    "false_accept": {
+     "unrelated": {
+      "ci95": [
+       0.7575,
+       1.0
+      ],
+      "k": 12,
+      "n": 12,
+      "rate": 1.0
+     },
+     "weak": {
+      "ci95": [
+       0.7719,
+       1.0
+      ],
+      "k": 13,
+      "n": 13,
+      "rate": 1.0
+     },
+     "weak_or_unrelated": {
+      "ci95": [
+       0.8668,
+       1.0
+      ],
+      "k": 25,
+      "n": 25,
+      "rate": 1.0
+     }
+    },
+    "false_reject": {
+     "partially_relevant": {
+      "ci95": [
+       0.0,
+       0.2153
+      ],
+      "k": 0,
+      "n": 14,
+      "rate": 0.0
+     },
+     "relevant": {
+      "ci95": [
+       0.0206,
+       0.2337
+      ],
+      "k": 2,
+      "n": 27,
+      "rate": 0.0741
+     }
+    },
+    "min_chunks": 2,
+    "min_papers": 2,
+    "n": 66,
+    "rejected": {
+     "ci95": [
+      0.0083,
+      0.1039
+     ],
+     "k": 2,
+     "n": 66,
+     "rate": 0.0303
+    },
+    "relevant_vs_unrelated": {
+     "balanced_accuracy": 0.4629,
+     "f1": 0.7813,
+     "fn": 2,
+     "fp": 12,
+     "precision": 0.6757,
+     "recall": 0.9259,
+     "specificity": 0.0,
+     "tn": 0,
+     "tp": 25
+    },
+    "threshold": 0.2
+   },
+   "threshold": 0.2
+  },
+  "gate_score": {
+   "auroc": {
+    "answerable_vs_weak_or_unrelated": 0.8558,
+    "partial_vs_weak": 0.7419,
+    "relevant_vs_unrelated": 0.9512,
+    "relevant_vs_weak": 0.7459
+   },
+   "by_label": {
+    "partially_relevant": {
+     "max": 0.9567,
+     "median": 0.9393,
+     "min": 0.9133,
+     "n": 28,
+     "p10": 0.9184,
+     "p25": 0.9277,
+     "p75": 0.9455,
+     "p90": 0.9489
+    },
+    "relevant": {
+     "max": 0.965,
+     "median": 0.9403,
+     "min": 0.9186,
+     "n": 39,
+     "p10": 0.9265,
+     "p25": 0.9316,
+     "p75": 0.9499,
+     "p90": 0.958
+    },
+    "unrelated": {
+     "max": 0.9131,
+     "median": 0.8731,
+     "min": 0.8511,
+     "n": 30,
+     "p10": 0.8577,
+     "p25": 0.8655,
+     "p75": 0.8874,
+     "p90": 0.8939
+    },
+    "weak": {
+     "max": 0.9561,
+     "median": 0.9262,
+     "min": 0.8907,
+     "n": 30,
+     "p10": 0.9041,
+     "p25": 0.9116,
+     "p75": 0.9355,
+     "p90": 0.9433
+    }
+   },
+   "definition": "highest threshold at which Mode B's sufficiency rule (2 chunks, 2 papers) accepts the question's round-1 hits",
+   "never_accepted": {
+    "partially_relevant": 0,
+    "relevant": 2,
+    "unrelated": 0,
+    "weak": 1
+   },
+   "overlap": {
+    "max_unrelated": 0.91306716,
+    "max_weak": 0.9561471,
+    "min_partial": 0.91327405,
+    "min_relevant": 0.9185538
+   }
+  },
+  "ranking": {
+   "all": {
+    "mrr": {
+     "mean": 0.2404,
+     "n": 69
+    },
+    "paper_recall_at_k": {
+     "mean": 0.9336,
+     "n": 69
+    },
+    "passage_recall_at_k": {
+     "mean": 0.2899,
+     "n": 69
+    },
+    "top1_paper_expected": {
+     "ci95": [
+      0.5642,
+      0.7791
+     ],
+     "k": 47,
+     "n": 69,
+     "rate": 0.6812
+    }
+   },
+   "held_out": {
+    "mrr": {
+     "mean": 0.2551,
+     "n": 41
+    },
+    "paper_recall_at_k": {
+     "mean": 0.937,
+     "n": 41
+    },
+    "passage_recall_at_k": {
+     "mean": 0.2866,
+     "n": 41
+    },
+    "top1_paper_expected": {
+     "ci95": [
+      0.5055,
+      0.7844
+     ],
+     "k": 27,
+     "n": 41,
+     "rate": 0.6585
+    }
+   }
+  },
+  "single_paper_relevant_by_paper": {
+   "1": {
+    "expected_paper_in_top_k": 4,
+    "gate_scores": [
+     0.92651355,
+     0.93746567,
+     0.9270207,
+     0.9233598
+    ],
+    "n": 4
+   },
+   "10": {
+    "expected_paper_in_top_k": 2,
+    "gate_scores": [
+     null,
+     null
+    ],
+    "n": 2
+   },
+   "2": {
+    "expected_paper_in_top_k": 6,
+    "gate_scores": [
+     0.94401383,
+     0.9402814,
+     0.9289869,
+     0.9601213,
+     0.9316689,
+     0.96295744
+    ],
+    "n": 6
+   },
+   "20": {
+    "expected_paper_in_top_k": 3,
+    "gate_scores": [
+     0.9484247,
+     0.951921,
+     0.9414196
+    ],
+    "n": 3
+   },
+   "3": {
+    "expected_paper_in_top_k": 5,
+    "gate_scores": [
+     0.9507881,
+     0.9499311,
+     0.95804447,
+     0.94581103,
+     0.9352356
+    ],
+    "n": 5
+   },
+   "4": {
+    "expected_paper_in_top_k": 3,
+    "gate_scores": [
+     0.94071895,
+     0.93158334,
+     0.91920936
+    ],
+    "n": 3
+   },
+   "5": {
+    "expected_paper_in_top_k": 3,
+    "gate_scores": [
+     0.9549415,
+     0.9185538,
+     0.9296684
+    ],
+    "n": 3
+   },
+   "6": {
+    "expected_paper_in_top_k": 3,
+    "gate_scores": [
+     0.94005823,
+     0.9296392,
+     0.9340899
+    ],
+    "n": 3
+   },
+   "7": {
+    "expected_paper_in_top_k": 1,
+    "gate_scores": [
+     0.95998263
+    ],
+    "n": 1
+   },
+   "8": {
+    "expected_paper_in_top_k": 3,
+    "gate_scores": [
+     0.9410171,
+     0.94081855,
+     0.94660926
+    ],
+    "n": 3
+   },
+   "9": {
+    "expected_paper_in_top_k": 2,
+    "gate_scores": [
+     0.93202174,
+     0.92611504
+    ],
+    "n": 2
+   }
+  }
+ },
+ "schema": "scholarlens-mode-b-eval/1",
+ "settings": {
+  "retrieval_min_chunks": 2,
+  "retrieval_min_papers": 2,
+  "retrieval_min_score": 0.2,
+  "retrieval_top_n": 12
+ },
+ "warnings": []
+}

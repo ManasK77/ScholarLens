@@ -23,6 +23,9 @@ class TimeShiftResult:
     matches: tuple[TimeShiftMatch, ...]
     precision: float | None
     recall: float | None
+    # Gaps with a `relevant_future_paper_ids` label; precision and recall
+    # are computed over these only (D-13-04).
+    labelled_gaps: int = 0
 
 
 def evaluate_time_shift(
@@ -37,9 +40,10 @@ def evaluate_time_shift(
     predicted: set[tuple[str, str]] = set()
     truth: set[tuple[str, str]] = set()
     addressed: set[str] = set()
+    labelled = {g.gap_id for g in gaps if g.relevant_future_paper_ids is not None}
     for gap in gaps:
         truth.update(
-            (gap.gap_id, paper_id) for paper_id in gap.relevant_future_paper_ids
+            (gap.gap_id, paper_id) for paper_id in gap.relevant_future_paper_ids or ()
         )
         candidates: list[TimeShiftMatch] = []
         for paper in future_papers:
@@ -63,12 +67,12 @@ def evaluate_time_shift(
                 sorted(candidates, key=lambda item: item.similarity, reverse=True)
             )
 
-    true_positives = len(predicted & truth)
-    precision = (
-        true_positives / len(predicted)
-        if truth and predicted
-        else (0.0 if truth else None)
-    )
+    # An unlabelled gap's matches are neither right nor wrong: they are
+    # excluded, not counted as false positives (D-13-04).
+    scored = {pair for pair in predicted if pair[0] in labelled}
+    true_positives = len(scored & truth)
+    # No prediction among labelled gaps: precision is undefined, not 0.
+    precision = true_positives / len(scored) if labelled and scored else None
     recall = true_positives / len(truth) if truth else None
     return TimeShiftResult(
         total_gaps=len(gaps),
@@ -77,4 +81,5 @@ def evaluate_time_shift(
         matches=tuple(matches),
         precision=precision,
         recall=recall,
+        labelled_gaps=len(labelled),
     )

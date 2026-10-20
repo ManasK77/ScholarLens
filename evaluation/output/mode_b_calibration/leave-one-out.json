@@ -1,0 +1,183 @@
+{
+ "mode": "from_file",
+ "queries": {
+  "relevant": 4,
+  "partial": 3,
+  "weak": 3,
+  "unrelated": 4
+ },
+ "kth_best_by_category": {
+  "relevant": {
+   "n": 4,
+   "min": 0.945,
+   "p10": 0.945,
+   "p25": 0.9503,
+   "median": 0.9544,
+   "p75": 0.9584,
+   "p90": 0.9614,
+   "max": 0.9614
+  },
+  "partial": {
+   "n": 3,
+   "min": 0.9257,
+   "p10": 0.9257,
+   "p25": 0.9322,
+   "median": 0.9322,
+   "p75": 0.9382,
+   "p90": 0.9382,
+   "max": 0.9382
+  },
+  "weak": {
+   "n": 3,
+   "min": 0.9233,
+   "p10": 0.9233,
+   "p25": 0.9233,
+   "median": 0.9233,
+   "p75": 0.9327,
+   "p90": 0.9327,
+   "max": 0.9327
+  },
+  "unrelated": {
+   "n": 4,
+   "min": 0.8685,
+   "p10": 0.8685,
+   "p25": 0.8714,
+   "median": 0.876,
+   "p75": 0.8805,
+   "p90": 0.8886,
+   "max": 0.8886
+  }
+ },
+ "accepted_by_threshold": {
+  "relevant": {
+   "0.2": 4,
+   "0.5": 4,
+   "0.6": 4,
+   "0.7": 4,
+   "0.75": 4,
+   "0.8": 4,
+   "0.82": 4,
+   "0.84": 4,
+   "0.86": 4,
+   "0.88": 4,
+   "0.9": 4,
+   "0.92": 4,
+   "0.95": 3
+  },
+  "partial": {
+   "0.2": 3,
+   "0.5": 3,
+   "0.6": 3,
+   "0.7": 3,
+   "0.75": 3,
+   "0.8": 3,
+   "0.82": 3,
+   "0.84": 3,
+   "0.86": 3,
+   "0.88": 3,
+   "0.9": 3,
+   "0.92": 3,
+   "0.95": 0
+  },
+  "weak": {
+   "0.2": 3,
+   "0.5": 3,
+   "0.6": 3,
+   "0.7": 3,
+   "0.75": 3,
+   "0.8": 3,
+   "0.82": 3,
+   "0.84": 3,
+   "0.86": 3,
+   "0.88": 3,
+   "0.9": 3,
+   "0.92": 3,
+   "0.95": 0
+  },
+  "unrelated": {
+   "0.2": 4,
+   "0.5": 4,
+   "0.6": 4,
+   "0.7": 4,
+   "0.75": 4,
+   "0.8": 4,
+   "0.82": 4,
+   "0.84": 4,
+   "0.86": 4,
+   "0.88": 2,
+   "0.9": 0,
+   "0.92": 0,
+   "0.95": 0
+  }
+ },
+ "relevant_vs_unrelated": {
+  "separable": true,
+  "low": 0.8886,
+  "high": 0.945
+ },
+ "leave_one_out": {
+  "held_out": 8,
+  "correct": 8,
+  "thresholds": {
+   "n": 8,
+   "min": 0.9127,
+   "p10": 0.9168,
+   "p25": 0.9168,
+   "median": 0.9168,
+   "p75": 0.9168,
+   "p90": 0.9168,
+   "max": 0.9194
+  },
+  "results": [
+   {
+    "category": "relevant",
+    "score": 0.9614,
+    "threshold": 0.9168,
+    "correct": true
+   },
+   {
+    "category": "relevant",
+    "score": 0.945,
+    "threshold": 0.9194,
+    "correct": true
+   },
+   {
+    "category": "relevant",
+    "score": 0.9584,
+    "threshold": 0.9168,
+    "correct": true
+   },
+   {
+    "category": "relevant",
+    "score": 0.9503,
+    "threshold": 0.9168,
+    "correct": true
+   },
+   {
+    "category": "unrelated",
+    "score": 0.8685,
+    "threshold": 0.9168,
+    "correct": true
+   },
+   {
+    "category": "unrelated",
+    "score": 0.8805,
+    "threshold": 0.9168,
+    "correct": true
+   },
+   {
+    "category": "unrelated",
+    "score": 0.8714,
+    "threshold": 0.9168,
+    "correct": true
+   },
+   {
+    "category": "unrelated",
+    "score": 0.8886,
+    "threshold": 0.9127,
+    "correct": true
+   }
+  ]
+ },
+ "label_status": "synthetic queries, author-assigned categories; not expert-validated"
+}

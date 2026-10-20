@@ -14,7 +14,23 @@ from app.extraction.semantic import (
     get_semantic_classifier,
 )
 from app.extraction.storage import ExtractedFact, replace_facts
+from app.parsing.section_classifier import _keyword_match
 from app.parsing.storage import ParsedDocument, get_parsed_document
+
+# Bump when what a stored fact means changes, so the S3 checkpoint re-runs.
+EXTRACTION_VERSION = "rules-scibert-v1-0.55-0.03-prior-keyword-v1"
+
+
+def _prior_section_type(section_type: str | None, heading: str | None) -> str | None:
+    """The section type S3 may treat as a per-sentence prior.
+
+    Stage 2 maps a heading its keywords miss onto the nearest of seven labels,
+    so "Ethics Statement" or a table header can arrive typed `Limitations`.
+    That guess must not label every sentence beneath it a limitation.
+    """
+    if heading and heading.strip() and _keyword_match(heading) != section_type:
+        return None
+    return section_type
 
 
 def extract_sections(
@@ -34,6 +50,7 @@ def extract_sections(
     for section_index, section in enumerate(sections):
         section_type = section.get("type")
         section_heading = section.get("heading")
+        prior_type = _prior_section_type(section_type, section_heading)
         for paragraph_index, paragraph in enumerate(section.get("paragraphs", [])):
             sentences = paragraph.get("sentences") or split_sentences(
                 paragraph.get("text", "")
@@ -43,7 +60,7 @@ def extract_sections(
                 if not sentence:
                     continue
                 counts["sentences"] = counts.get("sentences", 0) + 1
-                fact_types = extract_rule_types(sentence, section_type)
+                fact_types = extract_rule_types(sentence, prior_type)
                 if fact_types:
                     counts["rule_hits"] = counts.get("rule_hits", 0) + 1
                     for fact_type in sorted(fact_types, key=lambda value: value.value):
@@ -159,7 +176,7 @@ def extract_all_parsed(
         digest = fingerprint(
             {
                 "sections": parsed_document.sections,
-                "extraction": "rules-scibert-v1-0.55-0.03",
+                "extraction": EXTRACTION_VERSION,
             }
         )
         if run is None:

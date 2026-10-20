@@ -1,0 +1,26 @@
+{
+ "note": "Offline analysis, provisional agent-authored labels; cross-encoder cross-encoder/ms-marco-MiniLM-L-6-v2 (cached commit 233902d2), top-1 logit over each question's stored round-1 hits (texts cut at 1,200 chars as in production). Floor chosen on the calibration split only, reported once on held-out. NOT deployed.",
+ "calibration_max_unrelated": -8.679861068725586,
+ "calibration_min_relevant": -2.792384624481201,
+ "floor": -5.7361228466033936,
+ "accepted_at_floor": {
+  "calibration": {
+   "relevant": "14/14",
+   "partially_relevant": "14/14",
+   "weak": "15/18",
+   "unrelated": "0/18"
+  },
+  "held_out": {
+   "relevant": "27/27",
+   "partially_relevant": "14/14",
+   "weak": "11/13",
+   "unrelated": "0/12"
+  }
+ },
+ "held_out_answerable_rejected": [],
+ "auroc_all": {
+  "relevant_vs_unrelated": 1.0,
+  "relevant_vs_weak": 0.8639,
+  "partial_vs_weak": 0.7039
+ }
+}

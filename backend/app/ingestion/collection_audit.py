@@ -12,12 +12,23 @@ without a row here.
 Manual uploads record an ``owner_upload`` decision under an ``upload`` run:
 the owner vouches for them, so discovery relevance gating does not apply, but
 their provenance is kept in the same place.
+
+**Evidence (Phase 1 closeout, 2026-10-12).** A decision's evidence keeps the
+gate's own verdict in ``gate`` and every later transition in ``gate_history``
+(`relevance.RelevanceDecision._then`); `gate_history` here also reconstructs
+that history for records written before it existed. Rejected and capped
+candidates carry ``text_audit`` (`text_audit`): a hash and length of the text
+the gate judged and a bounded abstract excerpt, so a false negative can be
+reviewed without storing whole abstracts.
 """
 
+import hashlib
+import re
 from datetime import datetime
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -30,6 +41,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.ingestion.corpus import Base
+from app.ingestion.relevance import normalize
 
 # Longest client-supplied filename kept as upload provenance.
 MAX_FILENAME_CHARS = 255
@@ -48,6 +60,14 @@ class CollectionRun(Base):
     source_status: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     counts: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # The run's lifecycle and its complete, persisted result (2026-10-12):
+    # `running` from the moment the run starts, then `completed`,
+    # `completed_with_warnings`, `partial` or `failed`. `summary` is the
+    # /collect response minus the id list, so a finished run can be audited
+    # without its response or the logs. Nullable: older runs have neither.
+    status: Mapped[str | None] = mapped_column(String, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class CandidateDecision(Base):
@@ -77,6 +97,62 @@ class CandidateDecision(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class FulltextAttempt(Base):
+    """One provider's attempt to obtain one paper's full text (D-FULLTEXT-01).
+
+    Appended, never rewritten: a later failure never hides an earlier
+    success. `location` is the URL's host and path only -- no query string.
+    """
+
+    __tablename__ = "fulltext_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("collection_runs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    paper_id: Mapped[int | None] = mapped_column(
+        ForeignKey("papers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    provider: Mapped[str] = mapped_column(String, nullable=False)
+    stage: Mapped[str] = mapped_column(String, nullable=False)  # discovery | enrichment
+    outcome: Mapped[str] = mapped_column(String, nullable=False)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    retryable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    location_found: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    location: Mapped[str | None] = mapped_column(String, nullable=True)
+    pdf_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    detail: Mapped[str | None] = mapped_column(String, nullable=True)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+def serialize_attempt(row: FulltextAttempt) -> dict:
+    return {
+        "id": row.id,
+        "run_id": row.run_id,
+        "paper_id": row.paper_id,
+        "provider": row.provider,
+        "stage": row.stage,
+        "outcome": row.outcome,
+        "http_status": row.http_status,
+        "retryable": row.retryable,
+        "location_found": row.location_found,
+        "location": row.location,
+        "stored": bool(row.pdf_path),
+        "detail": row.detail,
+        "attempted_at": row.attempted_at.isoformat() if row.attempted_at else None,
+    }
+
+
+def attempts_for_run(session: Session, run_id: int) -> list[FulltextAttempt]:
+    return list(
+        session.scalars(
+            select(FulltextAttempt)
+            .where(FulltextAttempt.run_id == run_id)
+            .order_by(FulltextAttempt.id)
+        )
+    )
+
+
 def _topic_key(topic: str | None) -> str:
     return " ".join((topic or "").lower().split())
 
@@ -86,6 +162,7 @@ def start_collection(
 ) -> CollectionRun:
     run = CollectionRun(
         kind="collect",
+        status="running",
         topic=topic,
         gate_version=gate_description.get("gate_version"),
         lexicon_version=gate_description.get("lexicon_version"),
@@ -193,10 +270,120 @@ def serialize_run(run: CollectionRun) -> dict:
         "source_status": run.source_status,
         "counts": run.counts,
         "created_at": run.created_at.isoformat() if run.created_at else None,
+        "status": run.status,
+        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "summary": run.summary,
     }
 
 
+def text_audit(candidate: dict, excerpt_chars: int) -> dict:
+    """Bounded evidence of the text a rejected or capped candidate was judged on.
+
+    The hash and length are of the gate's normalized text, so two records of
+    the same candidate text can be matched without storing it; the excerpt is
+    at most `excerpt_chars` characters of the abstract, none when that is 0.
+    Uses only what the source already returned -- nothing is fetched.
+    """
+    title = " ".join((candidate.get("title") or "").split())
+    abstract = " ".join((candidate.get("abstract") or "").split())
+    normalized = normalize(f"{title} {abstract}")
+    excerpt = abstract[:excerpt_chars] if abstract and excerpt_chars > 0 else None
+    return {
+        "normalization": "relevance.normalize(title + ' ' + abstract)",
+        "sha256": hashlib.sha256(normalized.encode("utf-8")).hexdigest(),
+        "normalized_length": len(normalized),
+        "abstract_available": bool(abstract),
+        "abstract_length": len(abstract),
+        "abstract_excerpt": excerpt,
+        "excerpt_truncated": None if excerpt is None else len(abstract) > len(excerpt),
+        "excerpt_max_chars": excerpt_chars,
+    }
+
+
+# The promotion reason gate v1/v2 wrote, which is the only place a capped
+# promotion's original verdict survived before `gate_history` existed.
+_PROMOTED_FROM = re.compile(r"the gate's verdict on this copy alone was '([^']+)'")
+_STEP_FOR = {
+    "duplicate_of_admitted": "duplicate_promotion",
+    "source_cap_reached": "source_cap",
+    "owner_upload": "owner_upload",
+}
+
+
+def _entry(step: str, admitted: bool, reason_code: str, reason: str) -> dict:
+    return {
+        "step": step,
+        "admitted": admitted,
+        "reason_code": reason_code,
+        "reason": reason,
+    }
+
+
+def gate_history(row: CandidateDecision) -> tuple[list[dict], str]:
+    """Every verdict this candidate went through, oldest first, and its source.
+
+    The source says how much of that history was actually stored:
+
+    * ``recorded`` -- the row stored its own `gate_history` (a promotion or a
+      cap since 2026-10-12);
+    * ``no_transition`` -- the row is a single verdict (the gate's, or an
+      owner upload) and nothing happened after it; the history is that one
+      verdict, and nothing is implied about a history that was not kept;
+    * ``reconstructed`` -- an older row that *did* go through a transition but
+      stored only `evidence["gate"]`. Before 2026-10-12, a promoted copy that
+      was then capped stored the *promotion* there; its original verdict is
+      recovered from the promotion's reason text and marked ``recovered_from``.
+    """
+    evidence = row.evidence or {}
+    if evidence.get("gate_history"):
+        return list(evidence["gate_history"]), "recorded"
+    history: list[dict] = []
+    earlier = evidence.get("gate")
+    if not earlier:
+        step = _STEP_FOR.get(row.reason_code, "gate")
+        return [
+            _entry(step, row.decision == "admitted", row.reason_code, row.reason)
+        ], "no_transition"
+    if earlier:
+        if earlier.get("reason_code") == "duplicate_of_admitted":
+            match = _PROMOTED_FROM.search(earlier.get("reason") or "")
+            if match:
+                history.append(
+                    {
+                        **_entry("gate", False, match.group(1), ""),
+                        "recovered_from": "duplicate_promotion_reason",
+                    }
+                )
+            history.append(
+                _entry(
+                    "duplicate_promotion",
+                    True,
+                    "duplicate_of_admitted",
+                    earlier.get("reason") or "",
+                )
+            )
+        else:
+            history.append(
+                _entry(
+                    "gate",
+                    bool(earlier.get("admitted")),
+                    earlier.get("reason_code") or "",
+                    earlier.get("reason") or "",
+                )
+            )
+    history.append(
+        _entry(
+            _STEP_FOR.get(row.reason_code, "gate"),
+            row.decision == "admitted",
+            row.reason_code,
+            row.reason,
+        )
+    )
+    return history, "reconstructed"
+
+
 def serialize_decision(row: CandidateDecision) -> dict:
+    history, history_source = gate_history(row)
     return {
         "id": row.id,
         "source": row.source,
@@ -210,6 +397,10 @@ def serialize_decision(row: CandidateDecision) -> dict:
         "tier": row.tier,
         "evidence": row.evidence,
         "paper_id": row.paper_id,
+        # Additive (2026-10-12): the decision's verdicts in order; see
+        # `gate_history` for how older records are reconstructed.
+        "gate_history": history,
+        "gate_history_source": history_source,
     }
 
 

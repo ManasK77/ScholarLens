@@ -1,0 +1,2 @@
+run_file,test_id,claim_index,reviewer,reviewer_type,independent,support,citation_correct,citation_complete,answer_relevant,notes
+LV-1b.json,LV-1b,0,claude-agent,agent,no,supported,yes,yes,yes,"Cited b77a41e9 (paper 3) states 'Turkish shows the highest full compliance (80.18%)' among the four natural languages and three encodings of Table III. The claim matches; it omits the 80.18% figure and the comparison languages (correct but minimal)."

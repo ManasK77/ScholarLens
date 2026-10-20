@@ -137,6 +137,40 @@ def retry_delay(headers: Mapping[str, str], attempt: int, base_seconds: float) -
     return backoff if retry_after is None else max(retry_after, backoff)
 
 
+class WaitBudgetExceeded(Exception):
+    """The next slot is further away than the caller can wait; nothing was
+    reserved and nothing was sent. Distinct from `CooldownActive`: the
+    provider is not refusing, the caller simply has no time left."""
+
+    def __init__(self, wait_seconds: float, budget_seconds: float) -> None:
+        super().__init__(
+            f"next request slot in {wait_seconds:.1f}s, "
+            f"only {max(budget_seconds, 0.0):.1f}s left"
+        )
+        self.wait_seconds = wait_seconds
+        self.budget_seconds = budget_seconds
+
+
+def _acquire_within(
+    limiter: RateLimiter,
+    max_wait: float,
+    wait_budget: Callable[[], float] | None,
+) -> None:
+    if wait_budget is None:
+        limiter.acquire(max_wait_seconds=max_wait)
+        return
+    budget = wait_budget()
+    if budget <= 0:
+        raise WaitBudgetExceeded(0.0, budget)
+    try:
+        limiter.acquire(max_wait_seconds=min(max_wait, budget))
+    except CooldownActive as exc:
+        # Beyond the ordinary ceiling it is a real cooldown, reported as such.
+        if exc.wait_seconds > max_wait:
+            raise
+        raise WaitBudgetExceeded(exc.wait_seconds, budget) from exc
+
+
 def send_with_retries(
     send: Callable[[], ResponseT],
     *,
@@ -147,6 +181,7 @@ def send_with_retries(
     backoff_max_seconds: float,
     retryable_exceptions: tuple[type[BaseException], ...] = (),
     retry_429_without_retry_after: bool = True,
+    wait_budget: Callable[[], float] | None = None,
 ) -> ResponseT:
     """Send through `limiter`, retrying 429/5xx answers; return the final answer.
 
@@ -172,13 +207,20 @@ def send_with_retries(
     have deferred — fewer requests, not a shorter wait. A 429 that *does* carry
     Retry-After, and every 5xx, keep their retries. Defaults to True, so a
     caller that doesn't pass it is unchanged.
+
+    `wait_budget`, when given, returns how many seconds the caller can still
+    wait (Mode B: what is left of the query deadline). Before every attempt,
+    the first and each retry, a slot further away than that raises
+    `WaitBudgetExceeded`, reserving and sending nothing, so no request starts
+    after the caller has stopped waiting for it. Defaults to `None`: no
+    budget, the original behaviour.
     """
     # Queueing behind ordinary spacing is always allowed; only a longer,
     # server-imposed wait makes a caller give up without sending.
     max_wait = max(backoff_max_seconds, limiter.min_interval_seconds)
     attempt = 0
     while True:
-        limiter.acquire(max_wait_seconds=max_wait)
+        _acquire_within(limiter, max_wait, wait_budget)
         try:
             resp = send()
         except retryable_exceptions as exc:

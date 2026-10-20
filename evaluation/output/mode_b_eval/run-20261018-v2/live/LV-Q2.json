@@ -1,0 +1,157 @@
+{
+ "mode": "live",
+ "sent": true,
+ "test_id": "LV-Q2",
+ "question": "Which papers report that LLM safety or instruction compliance is weaker for non-English prompts?",
+ "started_at": "2026-10-18T17:28:06Z",
+ "http_status": 200,
+ "elapsed_seconds": 61.87,
+ "outcome": "grounded_answer",
+ "expected_outcome": "grounded_answer",
+ "outcome_as_expected": true,
+ "verdict": "PASS",
+ "checks": {
+  "http_200": {
+   "ok": true,
+   "detail": 200
+  },
+  "response_schema": {
+   "ok": true,
+   "detail": null
+  },
+  "answer_non_empty": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_structure": {
+   "ok": true,
+   "detail": null
+  },
+  "claims_cite_returned_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "citations_cited_by_claims": {
+   "ok": true,
+   "detail": null
+  },
+  "removed_claim_count_valid": {
+   "ok": true,
+   "detail": 0
+  },
+  "citations_match_stored_sources": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_titles_match_corpus": {
+   "ok": true,
+   "detail": null
+  },
+  "grounded_answer_has_claims_and_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "loop_bounds": {
+   "ok": true,
+   "detail": {
+    "retrieval_rounds": 1,
+    "retry_count": 0,
+    "regeneration_count": 0
+   }
+  }
+ },
+ "workflow": {
+  "retrieval_rounds": 1,
+  "assessments": [
+   "sufficient=True;relevant=12;papers=5;scope=synthesis;required_papers=2;uncovered_subjects=0"
+  ],
+  "reformulations": 0,
+  "invalid_reformulations": 0,
+  "grounding_reasons": [
+   "ok"
+  ],
+  "veto_codes": [
+   [
+    [],
+    []
+   ]
+  ],
+  "llm_calls": 2,
+  "reranked": true,
+  "generations": 1,
+  "regenerations": 0,
+  "grounding_checks": [
+   "structural=True;grounded=True;claims=2;cited=3;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;kept=2;prose_uncovered=1;veto_codes=-,-"
+  ],
+  "terminal": "grounding:structural=True;grounded=True;claims=2;cited=3;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;kept=2;prose_uncovered=1;veto_codes=-,-"
+ },
+ "llm_calls": 2,
+ "expected_paper_ids": [
+  3,
+  10
+ ],
+ "expected_paper_overlap": [
+  3
+ ],
+ "response": {
+  "answer": "Paper 3 reports that safety alignment is uneven across languages, with non‑English languages (e.g., Turkish, Simplified Chinese, Russian) exhibiting systematically higher full compliance rates than English, indicating weaker safety for non‑English prompts. Paper 1 observes that instruction‑following behavior in multilingual LLMs varies across languages, with uneven compliance in non‑English settings, implying weaker instruction compliance for non‑English prompts.",
+  "claims": [
+   {
+    "text": "Paper 3 reports that safety alignment is uneven across languages, with non‑English languages (e.g., Turkish, Simplified Chinese, Russian) exhibiting systematically higher full compliance rates than English, indicating weaker safety for non‑English prompts.",
+    "evidence_ids": [
+     "a61a1ab2-0758-5efe-9694-069de4316a5b",
+     "b6620f6d-b756-54e8-91ae-6771d2799a11"
+    ]
+   },
+   {
+    "text": "Paper 1 observes that instruction‑following behavior in multilingual LLMs varies across languages, with uneven compliance in non‑English settings, implying weaker instruction compliance for non‑English prompts.",
+    "evidence_ids": [
+     "51855923-b1f5-5873-b021-6d5834a7de37"
+    ]
+   }
+  ],
+  "citations": [
+   {
+    "id": "b6620f6d-b756-54e8-91ae-6771d2799a11",
+    "paper_id": 3,
+    "title": "An Empirical Evaluation of Prompt Injection Vulnerabilities in Large Language Models Across Multilingual and Obfuscated Attack Scenarios",
+    "year": 2026,
+    "source_type": "paragraph",
+    "text_chars": 329,
+    "text_start": "When analyzed at the per-model level, all evaluated LLMs exhibit higher full-compliance rates for non-English prompts compared to English prompts.The uniformity"
+   },
+   {
+    "id": "51855923-b1f5-5873-b021-6d5834a7de37",
+    "paper_id": 1,
+    "title": "Multilingual Hidden Prompt Injection Attacks on LLM-Based Academic Reviewing",
+    "year": 2025,
+    "source_type": "paragraph",
+    "text_chars": 475,
+    "text_start": "Prior studies have observed that instruction-following behaviour in multilingual LLMs can vary across languages, even when prompts are semantically equivalent ["
+   },
+   {
+    "id": "a61a1ab2-0758-5efe-9694-069de4316a5b",
+    "paper_id": 3,
+    "title": "An Empirical Evaluation of Prompt Injection Vulnerabilities in Large Language Models Across Multilingual and Obfuscated Attack Scenarios",
+    "year": 2026,
+    "source_type": "paragraph",
+    "text_chars": 628,
+    "text_start": "The results also reveal that safety alignment is unevenly distributed across languages and encodings.Non-English languages, particularly Turkish, Simplified Chi"
+   }
+  ],
+  "grounded": true,
+  "retrieval_rounds": 1,
+  "retry_count": 0,
+  "regeneration_count": 0,
+  "removed_claim_count": 0,
+  "trace": [
+   "retrieve:round=1;vector=12;graph=5;total=17",
+   "assess:sufficient=True;relevant=12;papers=5;scope=synthesis;required_papers=2;uncovered_subjects=0",
+   "rerank",
+   "generate:strict=False",
+   "grounding:structural=True;grounded=True;claims=2;cited=3;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;kept=2;prose_uncovered=1;veto_codes=-,-"
+  ],
+  "provider": "groq",
+  "model": "openai/gpt-oss-20b"
+ }
+}

@@ -1,0 +1,62 @@
+{
+ "source": "evaluation/output/live_query_result_2.json (2026-10-13 19:07Z) + full cited passages read from Qdrant during that run",
+ "question": "Which languages have multilingual prompt injection defenses been evaluated on, and what limitations do the papers report about language coverage?",
+ "draft": {
+  "answer": "The only multilingual prompt‑injection defense that has been empirically evaluated on more than one language is MIPIAD, which was tested on English and Bangla.  Other studies either evaluate only English or note that their evaluations are limited to a single language or a narrow set of models, and they point out that coverage for low‑resource or non‑English languages is missing.",
+  "claims": [
+   {
+    "text": "MIPIAD was empirically validated on English and Bangla.",
+    "evidence_ids": [
+     "dcac6746-ea9b-5eb9-b440-97742d854e33"
+    ]
+   },
+   {
+    "text": "Other papers report limitations such as evaluation restricted to a single language (often English), a single conference or LLM, fixed injection strategies, and a lack of coverage for low‑resource or non‑English languages.",
+    "evidence_ids": [
+     "dbf268c7-8edf-55bd-97a2-302d530b1db7",
+     "5e5af377-b434-54a4-bdf0-0fb8b56be74c",
+     "04c841dc-d96e-54d7-b040-e07c3c1aaadf"
+    ]
+   }
+  ]
+ },
+ "evidence": [
+  {
+   "id": "dcac6746-ea9b-5eb9-b440-97742d854e33",
+   "paper_id": 2,
+   "title": "MIPIAD: Multilingual Indirect Prompt Injection Attack Defense with Qwen -- TF-IDF Hybrid and Meta-Ensemble Learning",
+   "text": "That setting is still underexplored once the input stream is multilingual.In practice, systems see a mix of languages, domains, and formatting styles, so a defense that works only in one language or one surface is not enough.This paper studies that more realistic setting and presents MIPIAD (Multilingual Indirect Prompt Injection Attack Defense), a full pipeline for cross-lingual detection and evaluation.MIPIAD is empirically validated on English and Bangla; the underlying components-NLLB-200 translation and a multilingual LLM backboneare designed to extend to additional languages without architectural modification.",
+   "year": 2026,
+   "source_type": "paragraph",
+   "score": 0.95
+  },
+  {
+   "id": "dbf268c7-8edf-55bd-97a2-302d530b1db7",
+   "paper_id": 1,
+   "title": "Multilingual Hidden Prompt Injection Attacks on LLM-Based Academic Reviewing",
+   "text": "This study has several limitations.Our evaluation is restricted to papers from a single conference and a single open-weight LLM, and results may differ for other venues, disciplines, or models.Each paper was reviewed once per condition under deterministic inference, and we consider a fixed injection instruction and placement, leaving broader attack strategies unexplored.In addition, only the first 6,000 characters of each paper were provided to the model, which may cause some injected prompts to fall outside the model's input and lead to conservative estimates of vulnerability.Future work includes extending this analysis to additional conferences and LLMs, exploring diverse injection strategies and placements, and investigating mitigation techniques to improve robustness against document-based multilingual prompt injection attacks.",
+   "year": 2025,
+   "source_type": "paragraph",
+   "score": 0.95
+  },
+  {
+   "id": "04c841dc-d96e-54d7-b040-e07c3c1aaadf",
+   "paper_id": 2,
+   "title": "MIPIAD: Multilingual Indirect Prompt Injection Attack Defense with Qwen -- TF-IDF Hybrid and Meta-Ensemble Learning",
+   "text": "Most existing literature still assumes an English-heavy setting.Crosslingual transfer is less understood for promptinjection defense, where translations and domain shifts can dilute injection signatures and increase the false negative rate.To our knowledge, prior work has not united the multilingual and indirect axes into a generalized detection framework.",
+   "year": 2026,
+   "source_type": "paragraph",
+   "score": 0.95
+  },
+  {
+   "id": "5e5af377-b434-54a4-bdf0-0fb8b56be74c",
+   "paper_id": 3,
+   "title": "An Empirical Evaluation of Prompt Injection Vulnerabilities in Large Language Models Across Multilingual and Obfuscated Attack Scenarios",
+   "text": "Existing safety mechanisms attempt to mitigate this risk through alignment training, safety policies, and prompt filtering.However, most publicly documented evaluations focus on English prompts and relatively simple, directly malicious requests.In practice, motivated adversaries are free to vary both the linguistic form and the technical encoding of their prompts.For instance, adversaries may request the same payload in Turkish or Russian, or conceal the malicious component of the instruction using character encodings such as Base64, ROT13, or hexadecimal in an attempt to bypass superficial filtering mechanisms.Today, there is remarkably little systematic evidence on how such choices of language and encoding affect the likelihood that a model will comply with malicious requests.This gap is particularly concerning given the global deployment of LLMs and the increasing availability of locally deployable models that operate outside tightly controlled platforms.",
+   "year": 2026,
+   "source_type": "paragraph",
+   "score": 0.95
+  }
+ ],
+ "review": "evaluation/output/live_query_result_2_review.md"
+}

@@ -20,6 +20,16 @@ from app.ingestion.corpus import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _public_dns(monkeypatch):
+    """`download_pdf` checks that a host resolves to public addresses before
+    fetching (D-FULLTEXT-01); these tests are about HTTP behaviour, so every
+    host resolves to a public documentation address instead of real DNS."""
+    monkeypatch.setattr(
+        "app.ingestion.fulltext.resolve_host", lambda host: ["93.184.216.34"]
+    )
+
+
 @pytest.fixture()
 def session():
     engine = create_engine("sqlite:///:memory:")

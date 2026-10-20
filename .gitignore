@@ -25,3 +25,6 @@ frontend/dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Regenerable intermediate (701 KB); see analysis/encode_and_retrieve.py
+evaluation/output/mode_b_eval/run-20261019-v3/analysis/cosine-top100.json

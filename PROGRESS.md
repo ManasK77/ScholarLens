@@ -3222,3 +3222,1017 @@ S2-S9 untouched; corpus not reset or recollected.
 * **Offline evaluation (50 docs, real cross-encoder):** ON 12/12 admitted;
   PARTIAL 2 admitted / 2 rejected; NEIGHBOR 2 admitted (both explicitly
   discuss prompt injection) / 15 rejected; OFF 0 / 17.
+
+## 2026-10-09 -- S2-S5 audit on the 17-paper "multilingual prompt injection" corpus
+
+Scope: S2-S5 only. Corpus not reset or recollected; S1 and S6-S9 code
+untouched. S2-S5 were run checkpointed (same functions and order as
+`/pipeline/run`), stopping before S6.
+
+### D-S3-PRIOR-01 -- a section prior needs a heading that names the section
+
+S2's SciBERT fallback maps any heading its keywords miss onto the nearest of
+seven labels, and S3 then labelled *every* sentence in a `Limitations` /
+`Future Work` section as that type (confidence 1.0, method `rule`). Measured on
+this corpus: 48 of 239 gap statements (20%) existed only because of a guessed
+prior -- "Ethics Statement" (papers 2, 16, 17), "Prompts" (17), a jailbreak
+related-work section "LLMs misuse & Jailbreak prompts" (6), a method section
+"Prompts: Two sides." (6), "Potential Mitigations" (9), and raw table rows
+under a table header (6, typed `future_work`). Paper 6 (jailbreak-adjacent)
+alone contributed 25. Example stored as a *limitation*: "In this work, we
+investigate the vulnerability of LLMs to Prompt Injection Attacks."
+
+Fix (`app/extraction/service.py`): the prior is withheld when a heading exists
+and its keyword match does not name that section type; such sentences go to
+the cue rules and the semantic classifier like any other. Heading-less
+sections keep the old behaviour (S2 never types them as a gap section).
+`EXTRACTION_VERSION` bumped to `...-prior-keyword-v1` so the S3 checkpoint
+re-runs. Result: guessed-prior statements 48 -> 0; gap statements 239 -> 191;
+Qdrant points 977 -> 929 (0 re-embedded -- surviving facts keep their
+deterministic ids). Unaffected papers are unchanged.
+
+### D-S2-LOG-01 -- GROBID failures and empty parses are logged per paper
+
+`grobid_client` now logs the endpoint and HTTP status or transport error class
+(never the service URL); `parse_and_store` logs `s2 paper=<id> GROBID unusable
+(<reason>); using fallback` and `s2 paper=<id> parsed document has no text`.
+Behaviour is unchanged; previously the stage summary gave only counts.
+
+### Verified, not changed
+
+* **Orphan Entity nodes (S4).** Replacing a paper's projection deletes its
+  edges but not entities it alone mentioned; the S3 fix's S4 re-run left 30
+  orphans (0 before). Not fixed: `test_empty_graph_replaces_previous_edges_
+  without_deleting_shared_entities` and `core/maintenance.py` record keeping
+  entities as deliberate. Owner decision. A safe fix is to delete, in the same
+  write, only entities this paper previously mentioned that now have no
+  relationships. Orphans appear only in `GET /graph`; S6-S9 do not read Neo4j.
+* **SPECTER2 adapter is active.** Re-encoding stored texts reproduces stored
+  vectors (cosine 1.000); the same texts without the adapter differ (mean
+  cosine 0.960).
+* **Entity normalization** is casefold + whitespace only: 35 near-duplicate
+  groups (`llm`/`llms`, `gpt-4`/`gpt4`, `llama 2`/`llama2`/`llama-2`) and
+  model typing errors ("Figure 8" as dataset). All 842 entities and 20
+  relations occur verbatim in S4's input text. Only Mode B consumes the graph.
+* **Table rows in body text.** GROBID leaves some tables as `<p>`; paper 16
+  has ~47 numeric `metric` facts. Not gap types, so S6 never clusters them.
+* **Abstracts are not parsed into sections**, so S3 never reads them.
+
+### Stages that must be rerun
+
+S6 -> S7 -> S8 -> S9. Stored clusters/rankings/reports predate this change.
+
+
+## 2026-10-10 -- S1 collection quality: gate v2, quota counting, identifiers
+
+The S1 audit of collection run 1 ("Multilingual prompt injection", 17 papers)
+found the caps respected but the corpus weak: 7 of 16 judged admissions were
+not CORE, and relevant candidates were capped. Every defect below was first
+reproduced by a failing test. No corpus row was touched; no API was called.
+
+### Labelled regression set
+
+`backend/tests/ingestion/data/s1_relevance_regression.json`: run 1's 17
+admitted papers plus its 3 rejected ACL candidates, labelled CORE (9) /
+PARTIAL (3) / ADJACENT (4) / IRRELEVANT (3) / INSUFFICIENT_EVIDENCE (1). The
+labels are one reviewer's human judgments, not ground truth. Each item carries
+the production cross-encoder's score (recomputed in the backend container; equal
+to run 1's), which `tests/ingestion/relevance_eval.py` replays so the
+evaluation needs no model. Run: `python -m tests.ingestion.relevance_eval`.
+
+| metric (19 judged items)      | gate v1 | gate v2 |
+|-------------------------------|---------|---------|
+| admitted                      | 16      | 10      |
+| precision, CORE               | 0.562   | 0.900   |
+| precision, CORE or PARTIAL    | 0.688   | 0.900   |
+| recall, CORE                  | 1.000   | 1.000   |
+| CORE ranked above non-CORE    | 0.762   | 1.000   |
+| title-only item (paper 12)    | strong  | title_only tier |
+
+Remaining false admission: paper 7 (Sentra-Guard, ADJACENT), whose
+multilinguality is real but shallow. No rule was written for it.
+
+### D-S1-GATE-02 -- meaningful facet evidence (gate v2, lexicon 2026-10-10.1)
+
+An occurrence of a facet form no longer counts inside a future-work sentence
+or when it names a tool ("multilingual BERT"); a facet with only such
+occurrences is rejected `future_work_only:<facet>` /
+`incidental_mention:<facet>`. A concept used with a technique context and no
+threat context is `benign_sense:<facet>`; a text whose title names a distinct
+neighbour (jailbreak) and not the facet, and mentions it at least as often, is
+`adjacent_topic:<neighbour>`. All rule vocabularies live in
+`concept_lexicon.json`. Held-out check (71 ACL Anthology prompt-injection
+records, topic "prompt injection"): 1 rejection,
+"Proxy Barrier" (`adjacent_topic:jailbreak`, borderline). For "multilingual
+prompt injection" the admitted ACL set is unchanged.
+
+Title-only candidates are admitted only in tier `title_only`. `rank_key`
+orders admitted candidates: abstract before title-only, then facets evidenced
+in the title, then semantic score.
+
+### D-CAP-03 -- a source's quota counts the papers it contributes (supersedes D-CAP-01's cross-source rule)
+
+A candidate that merges onto a paper an earlier source collected *in the same
+run* is merged, recorded as admitted with `cross_source_duplicate_of`, counted
+in `source_stats[...]["cross_source_duplicates"]`, and uses no slot. A paper
+stored by an earlier run still uses a slot (otherwise each re-run could add
+another full quota). So one run stores at most 10 new papers per source, 30 in
+all -- an upper bound, not a target. No PDF is fetched for a copy of a paper
+that already has full text. Under D-CAP-01, Semantic Scholar spent 5 of its 10
+run-1 slots on arXiv papers and capped 9 relevant candidates.
+`test_collect_cross_source_duplicates_still_merge_under_the_caps` now expects
+20 papers, not 19, because of this rule change.
+
+### D-DEDUP-02 -- identifiers compared normalized
+
+Semantic Scholar now keeps `externalIds.ArXiv`/`ACL`. Dedup compares DOIs case-
+and resolver-insensitively, arXiv IDs without version suffix or `arXiv:`
+prefix, maps arXiv DataCite DOIs (`10.48550/arXiv.<id>`) and ACL DOIs
+(`10.18653/v1/<id>`) onto those IDs, reads punctuation in titles as spaces,
+and lets a title of 6+ words match across adjacent years. Stored values are not
+rewritten.
+
+### D-QUERY-03 -- arXiv queries use the gate's validated facet synonyms
+
+`/collect` passes `gate.query_groups()`: a concept facet's `query_forms` are
+OR'd (multilingual, multi-lingual, cross-lingual, crosslingual, code-switching,
+code-mixed, low-resource language, machine translation); facets stay AND'd.
+Topics without query forms keep D-QUERY-02's query. The candidate pool is
+unchanged (30). Live yield is unverified: no live call was made.
+
+### Not changed / open
+
+* Semantic Scholar's query is unchanged (its search tokenizes the topic).
+* The semantic floor and strong threshold are unchanged; the original 50-doc
+  calibration pool is still not in the repo.
+* The ACL export cache (2026-09-21) still has no refresh policy.
+* The existing corpus was collected by gate v1. A fresh `/collect` is needed
+  for v2 to apply; it is the owner's call.
+
+## 2026-10-12 -- S1 audit follow-ups (dedup titles/DOIs, component followers)
+
+Defects from the S1 audit, each reproduced by a failing test first. No S1
+design, cap, query or S2-S5 change; no corpus touched, no API called.
+
+* **D-DEDUP-03 -- title key.** `normalize_title` is now the title's words with
+  every separator dropped, so "Pre-training"/"Pretraining" and
+  "Don't"/"Don’t"/"Dont" agree (D-DEDUP-02's punctuation-as-space had broken
+  both) while "Qwen -- X"/"Qwen--X" still agree. A title match across
+  *different years* now also needs a shared author surname (yearly shared-task
+  overviews share a title); same-year matching is unchanged.
+* **Stored DOIs** carrying `doi:` / `(dx.)doi.org` prefixes now match bare DOIs.
+* **D-S1-GATE-03 -- component followers (lexicon 2026-10-12.1).** `encoder`,
+  `embedding`, `tokenizer`, `sentence transformer`, `backbone` moved from
+  `incidental_followers` to `component_followers`: they are incidental unless an
+  attack cue stem (`component_target_cues`) occurs in the five words before the
+  form ("attacks on multilingual embedding models"). Model names (BERT, XLM...)
+  stay unconditionally incidental. Regression-set metrics unchanged.
+
+## 2026-10-12 -- Phase 1 closeout: evidence history, audit evidence, outcomes, paper language
+
+Code audit and fixes only. No external API called, no `/collect` run, corpus
+and PDFs untouched (the live DB was only read, to confirm the defects). Every
+change was first a failing test.
+
+* **D-AUDIT-01 -- decision history (gate v3).** Promoting a rejected copy
+  (`duplicate_of_admitted`) and then capping it replaced `evidence["gate"]`
+  with the promotion; run 2's capped records 78/86/89/93/122/126 kept the
+  gate's verdict only inside a reason string. `RelevanceDecision._then` now
+  keeps `evidence["gate"]` = the gate's own verdict (never overwritten) and
+  appends every transition to `evidence["gate_history"]` (steps `gate`,
+  `duplicate_promotion`, `source_cap`). `GET /collections/{id}/decisions`
+  adds `gate_history` + `gate_history_source` (`recorded`, or
+  `reconstructed` for older rows; a capped promotion's original verdict is
+  recovered from its reason text and marked `recovered_from`).
+* **D-AUDIT-02 -- bounded text evidence.** Rejected and capped decisions carry
+  `evidence["text_audit"]`: SHA-256 and length of `relevance.normalize(title +
+  ' ' + abstract)`, and at most `RELEVANCE_AUDIT_EXCERPT_CHARS` (default 400;
+  0 = none) of the abstract. Admitted records unchanged. No sentence-level
+  evidence was added: the gate does not keep match positions, and the facet
+  evidence (matched / discounted forms) is already recorded.
+* **D-UNPAYWALL-02 -- outcomes.** `unpaywall.lookup_oa_pdf` names each result
+  (`oa_location_found`, `no_oa_copy`, `doi_not_found`, `http_error`,
+  `invalid_response`, `timeout`, `network_error`); `enrich(outcomes=...)`
+  counts one per row looked up, plus `oa_pdf_stored` / `download_failed`.
+  `resolve_oa_pdf` and `enrich`'s return value are unchanged. Transport
+  errors are never logged with their message (it can contain the email).
+* **D-COUNT-01 -- counters.** `source_stats` adds `already_in_corpus`
+  (papers), `duplicate_promotions`, `language_unverified` (candidates). The
+  response and `run.counts` add `full_text` (unique papers touched / added:
+  with full text, metadata-only, metadata-only without DOI, coverage),
+  `unpaywall` (scope, completed, looked_up, outcomes) and `paper_language`.
+  `RunLedger`'s docstring defines every counter's unit.
+* **D-S1-LANG-01 -- paper language (gate step 1b).** New
+  `app/ingestion/paper_language.py`, no new dependency. Judged on the
+  abstract only, never the title: Latin share of letters (Greek and
+  mathematical alphanumerics neutral) >= 0.5, else
+  `paper_language:non_latin_script`; share of distinctively English function
+  words >= 0.10, else `paper_language:not_english`. Fewer than 40 letters / 20
+  words, or no abstract: `unverified` -- not rejected, recorded in
+  `evidence["language"]` and counted. On the 26-paper corpus and the
+  regression set every English abstract measured 100% Latin and a marker
+  ratio of 0.18-0.29; regression metrics unchanged (precision 0.9/0.9, CORE
+  recall 1.0, ranking 1.0).
+* **XRXNet** (run 2, decision 117) pinned in
+  `tests/ingestion/data/s1_known_borderline.json` as a known borderline
+  `relevant:conceptual` admission. Unlabelled, not claimed CORE; no rule
+  written for it.
+
+### Verified, not changed
+
+* Thresholds (floor -1.0, strong 3.5), caps (10/source), candidate pools,
+  dedup order and `rank_key` are unchanged. Promotion and slot rules are
+  unchanged: an earlier run's paper that a source re-finds still uses a slot,
+  and a promoted copy of a v1-era admission (score None, tier None) ranks
+  above title-only candidates -- in run 2, S2 spent a slot on paper 4 (gate
+  verdict `incidental_mention:multilingual`) while a title-only candidate was
+  capped. On a clean corpus this cannot occur in the first run: promotions
+  then only match papers collected earlier in the same run, which are
+  cross-source merges and use no slot.
+* Unpaywall looks up every corpus row with a DOI and no full text, not only
+  this run's; its counts are scoped accordingly.
+* `GET /collections/{id}/decisions` stays behind `X-API-Key`; excerpts are
+  exposed only there.
+
+### Settings added
+
+`RELEVANCE_AUDIT_EXCERPT_CHARS`, `PAPER_LANGUAGE_MIN_LATIN_FRACTION`,
+`PAPER_LANGUAGE_MIN_ENGLISH_RATIO`, `PAPER_LANGUAGE_MIN_WORDS`,
+`PAPER_LANGUAGE_MIN_LETTERS` (documented in `.env.example`).
+
+## 2026-10-12 -- S1 hardening: retrieval, full text, ACL cache, run audit (final S1 pass)
+
+Owner-authorized final S1 pass. Every behaviour change below was first a
+failing test. Read-only probes made: arXiv x4, Semantic Scholar x2 (one
+rate-limited without a key), all search/metadata only; no collection was run.
+
+* **Test network guard.** `tests/conftest.py` makes any non-local name lookup
+  fail (except `integration` tests). It caught a live arXiv request during
+  this refactor. `tests/api/conftest.py` makes every full-text provider
+  answer instantly as offline.
+* **D-S1-RETRIEVAL-01 -- paged retrieval with an honest report.** Sources
+  return `retrieval.Candidates` (a list plus a `retrieval` report: reported
+  total, pages requested/succeeded, records fetched/dropped, stop reason,
+  `complete`, query + fingerprint). arXiv pages to its reported total or
+  `ARXIV_CANDIDATE_POOL` (now 200, page 100); Semantic Scholar follows `next`
+  until `SEMANTIC_SCHOLAR_REQUEST_LIMIT` research records (now 100; API max
+  1,000), backfilling dropped records, bounded by `SEMANTIC_SCHOLAR_MAX_PAGES`
+  (3). Both de-duplicate across pages; a failed later page keeps what was read
+  and is reported incomplete; a failed first page still fails the source.
+* **D-QUERY-04 -- prompt-injection phrases (lexicon 2026-10-12.2).** The
+  facet's `query_forms` replace the separate words `prompt` AND `injection`.
+  Live check: 59 -> 28 arXiv matches, all 20 gate-passing records kept, none
+  new. Every query form is a gate form (test).
+* **D-CAP-04 -- the cap counts new papers only (supersedes D-CAP-03).** Owner
+  rule: at most 10 *new* papers per source per run. Any merge onto an
+  existing paper (same run or earlier run, including promoted copies) uses no
+  slot; `source_stats` adds `cap` and `slots_used` (= `added`). A promoted
+  copy can no longer be capped; the promote-then-cap history stays pinned at
+  unit level.
+* **D-FULLTEXT-01 -- full-text acquisition with a per-paper trail.** New
+  `fulltext_attempts` table (append-only: provider, stage
+  discovery/enrichment, outcome, HTTP status, retryable, location host+path
+  without query, pdf path). After discovery, each paper without full text is
+  tried: Semantic Scholar `openAccessPdf` -> arXiv id -> ACL id -> Unpaywall
+  (DOI). `papers` gains `openaccess_pdf_url` and `source_url`. All non-arXiv
+  downloads go through `fulltext.safe_download` (public HTTP(S) hosts only,
+  redirects re-checked, size limit, timeouts, bounded retries); every body
+  through `pdf_store.store` (PDF signature, not HTML, size, atomic replace).
+  The arXiv downloader validates the same way. Step budget 600 s; papers not
+  reached are `not_attempted`. Residual risk: DNS rebinding between the
+  address check and the connection is not excluded.
+* **D-ACL-CACHE-01 -- export freshness.** `.meta.json` beside the export
+  (fetched_at, source URL, records, SHA-256, last refresh result). Refreshed
+  by /collect when older than `ACL_ANTHOLOGY_MAX_AGE_DAYS` (7); validated
+  (gzip, BibTeX, UTF-8, >= min records and >= 90% of the cached count) before
+  an atomic replace under a lock; failure keeps the last known-good file and
+  the run gets a `stale_cache` warning. On demand:
+  `python -m app.ingestion.sources.acl_anthology --refresh`.
+* **D-AUDIT-02 -- the run is auditable on its own.** `collection_runs` gains
+  `status` (running -> completed / completed_with_warnings / partial /
+  failed), `finished_at`, `summary` (the response minus `ids`, including
+  `warnings`, `reconciliation`, `units`, retrieval reports, full-text and ACL
+  cache status). The run row is committed before any source runs; failures
+  and defects still close it. New read-only, API-key-protected endpoints:
+  `GET /collections/{id}` and `/collections/{id}/fulltext`.
+  `gate_history_source` is now `recorded`, `no_transition` (72 of 75 rows in
+  the previous audit were mislabelled `reconstructed`) or `reconstructed`.
+* **Relevance evidence.** Facets record `evidenced_by` (`surface_form` or
+  `language_names`); language verdicts record the deciding `rule`. No gate
+  threshold, order or rule changed. Language-name lists were checked against
+  the real cross-encoder: three off-topic candidates scored -11.05 / -7.13 /
+  -2.78 (rejected by the floor) while a relevant Tamil/Tanglish study depends
+  on language names -- so the rule was not tightened. Fixtures:
+  `s1_known_borderline.json` (the six flagged admissions, `needs_review`, no
+  labels), `s1_language_list_cases.json`, `language_gate_cases.json` (20
+  synthetic labelled cases; not real-world validation).
+* **Frontend.** The collect panel shows the run status, its warnings and
+  full-text coverage; types extended; existing contract unchanged.
+* **Reset.** `reset_corpus` also clears `fulltext_attempts`.
+
+## 2026-10-13 -- S2-S5 audit, repair and validation on the 20-paper corpus
+
+Scope: S2-S5, plus a read-only audit of the graph view, clusters, trends,
+gaps and reports. S1 code, the corpus rows and the collection run were not
+touched; no `/collect` call; no S6-S9 rerun. Every behaviour change below was
+reproduced by a failing test first, except the S3 tests (characterization:
+S3 had no defect) and the reconciler (new tool).
+
+Initial state: 20 papers -- 11 full text (all GROBID-parsed, 714 statements,
+632 Qdrant points), 9 Semantic Scholar metadata-only (abstract-only S4
+projections, no S2/S3/S5 artifacts by design). One pipeline run (1fcb0754)
+through S9; stores consistent per `app.core.reconcile`.
+
+* **D-S2-STATUS-01 -- S2 outcomes are explicit.** `grobid_client.fulltext`
+  returns `ok` / `rejected` (non-200 other than 502-504: the PDF) /
+  `unavailable` (transport error, timeout, 502-504: the service).
+  `parser_used` gains `fallback_grobid_unavailable` and `none`. (a) GROBID TEI
+  with headings but no paragraph text now falls back (it used to be stored as
+  a text-less GROBID parse). (b) A PDF no parser reads is stored empty as
+  `none`, not as a `fallback` parse. (c) A fallback made during a GROBID outage
+  is not accepted by the S2 checkpoint, so GROBID is retried on the next run;
+  a PDF GROBID rejected is not re-sent. `/parse` and `/pipeline/run` add
+  `no_text_pdfs` and `grobid_unavailable` (additive).
+* **D-S4-PROV-01 -- graph provenance.** S4 input units carry stable refs
+  (`abstract`, `statement:<section>.<paragraph>.<sentence>`). MENTIONS edges
+  store `evidence` (<=25 refs) + `evidence_count`; relation edges store
+  `evidence` + `cross_sentence`; Paper nodes store `nerre_model`,
+  `nerre_model_revision` (resolved cache commit), `nerre_input_basis`,
+  `nerre_units_used/total` (exposes the chunk cap), `nerre_provenance`. An
+  entity whose text occurs in no input unit (word-boundary match) is dropped
+  with its relations. `paper_graph_current` requires the provenance version,
+  so pre-provenance projections are rewritten once under an unchanged input
+  hash (S6-S9 fingerprints unaffected). A failing chunk now fails the paper in
+  every context instead of writing a partial projection.
+* **D-GRAPH-VIEW-01 -- `/graph` is a coherent subgraph.** Papers first, then
+  entities by degree, edges only between returned nodes; adds `total_nodes`,
+  `total_edges`, `truncated`. Live before/after for the dashboard's 180 drawn
+  nodes: papers 3 -> 20, drawn edges 139 -> 289, isolated nodes 49 -> 1,
+  dangling edges 29 -> 0. The UI states "Showing N of M nodes".
+* **D-S5-REV-01 -- adapter revision.** `EMBEDDING_MODEL_REVISION` was also
+  passed to the SPECTER2 *adapter* repo, whose commits differ, so pinning the
+  base model made the adapter unloadable. The adapter is now pinned with
+  `EMBEDDING_ADAPTER=org/repo@<rev>`; resolved commits are logged at load.
+  Current deployment unchanged (neither is set). Both repos still float.
+* **D-RECON-01 -- `python -m app.core.reconcile --papers`.** Per-paper S2-S5
+  status (`completed`/`failed`/`pending`/`not_started`/`not_applicable`),
+  counts, and checks: S3 statement == sentence at its location; S4 mentions in
+  source and evidence valid; S5 expected vs stored points.
+
+### Applied to the live corpus (run 06f1b886, checkpointed S2-S5, no S6)
+
+Dry run first: all 20 S4 and 20 S5 digests unchanged by the new code. Result:
+S2/S3 skipped (11/11), S4 re-projected 20 papers, S5 re-embedded 0 points.
+19/20 papers identical entity and relation sets; paper 20 lost one entity,
+`30.6% FPR` (a span GLiNER read across two packed statements -- not in the
+paper), and its `ACHIEVES` relation. Mentions 708 -> 707, relations 13 -> 12,
+all with evidence; 1 relation cross-sentence. Reconciliation: 0 warnings,
+0 statement-location mismatches (714), 632/632 points. `s6-s8` and `s9`
+derived state still current; clusters, trends, rankings, reports unchanged.
+
+### Verified, not changed (limitations)
+
+* GLiNER `main` has moved (two cached snapshots); now recorded per paper.
+  SPECTER2 base/adapter also unpinned. Pinning re-embeds and rebuilds S6-S9.
+* 5/632 points exceed 512 tokens (max 2278): the vector covers a prefix; the
+  payload holds the full (<=4000-char) text.
+* 4 sentences are typed both `limitation` and `future_work`, so indexed twice;
+  clusters 3 and 5 `member_count` +1 each. Distinct-paper signals unaffected.
+* S3 has no cited-claim type; cited limitations are stored verbatim.
+* Entities merge across papers on exact (casefold name, type) only. The
+  `30.6% fpr` Entity node is now an orphan (orphans retained by design).
+* Trends: 1-4 papers per year, and 2026 is a partial year; slopes are
+  descriptive of this sample, not of the field.
+* Report cluster 3's `justification.conflicting_evidence` is an LLM judgment
+  citing 2 passages from 2 papers; S6 NLI flagged no contradiction. It is
+  stored only in `justification` and not shown in the UI.
+
+## 2026-10-13 -- Final quality pass (clusters, report claims, orphan, citations, models)
+
+Owner-requested. S1, corpus rows, PDFs and S2-S5 artifacts untouched (paper
+rows hash-identical; 632/632 points; reconcile 0 warnings). Derived tables were
+backed up before the change (scratchpad export).
+
+* **D-06-14 -- one statement per sentence in S6.** A sentence typed both
+  `limitation` and `future_work` is indexed twice with the same vector; both
+  copies were clustered. A copy at distance 0 shrinks HDBSCAN core distances:
+  clusters 3 ("diverse ensembles includes") and 5 ("adversarial templates
+  threshold") existed only because of such copies. S6 now clusters one
+  representative per (paper, text) and stores the other label rows with the
+  same cluster; `member_count` counts distinct statements; NLI and labels use
+  distinct statements; S9 queries use distinct texts. `/clusters` lists one
+  member per sentence with `source_types`, `point_ids` (additive).
+  `_DERIVED_VERSION` = 2 so older S6-S8 state is recomputed.
+  Live: 6 clusters -> 4. Old 1 -> 11 (23 statements, 9 papers, new label),
+  2 -> 12, 4 -> 13, 6 -> 14 identical; 3 and 5 dissolved.
+* **Report carry-over.** `report_inputs` / `carry_over_reports` keep a report
+  across a rebuild when its generation inputs (label, distinct member texts,
+  member papers, five signals) are identical. Live: reports for old 2 and 6
+  carried byte-identical to 12 and 14; 11 and 13 generated (2 Groq calls);
+  old reports archived in `report_snapshots`.
+* **D-09-13 -- conflict claims verified.** Cluster 3's report claimed
+  conflicting evidence citing paper 8 (its detector, >96% detection) and
+  paper 7 (LLM judge false positives under cross-lingual injection):
+  different systems, tasks, metrics; DeBERTa-MNLI 0.0066/0.0047. A conflict
+  claim is now `supported` only if two cited passages from different papers
+  contradict in both NLI directions (threshold 0.7); the LLM's view is kept as
+  `llm_supported`, with `verification`. Every claim has `basis`
+  (`llm_cited`, `not_supported`, `nli_verified`, `llm_unverified`,
+  `not_claimed`). UI labels the gap text as a model-written summary, evidence
+  as verbatim passages, and shows a conflict pill only for `nli_verified`.
+* **Orphan `30.6% FPR`** (metric) removed with the guarded
+  `remove_orphan_entity` (exact key, no edges, never detaches). It was the
+  cross-statement span dropped by D-S4-PROV-01. Orphan policy otherwise
+  unchanged.
+* **D-S3-CITE-01 -- citation markers.** 7 of 113 gap statements carry numeric
+  markers; 1 of 7 is the paper's own limitation citing a term, so no
+  "cited claim" label. `/clusters` members and `/reports` evidence expose
+  `citation_markers` (derived from text); UI shows "cites [n]".
+* **Long passages.** 5/632 points exceed 512 tokens: all Results paragraphs,
+  4 tables (papers 8, 4, 10, 3) and 1 method paragraph (paper 10, 632 tokens,
+  ~82% of characters covered). None is a gap point, cluster member or report
+  evidence. Not regenerated: a fix means splitting paragraphs, which changes
+  S5 record ids and invalidates S6-S9 for no measured benefit.
+* **D-S4-REV-01 -- GLiNER pinning.** `NERRE_MODEL=org/repo@<commit>` is passed
+  to gliner2 as `revision`. Not configured.
+
+### Model versions in use (verified at runtime, NOT pinned in configuration)
+
+* GLiNER `fastino/gliner2.5-base-v1` main = `54785d51df8d86a0d8f2eb212fec15871aad2c4d`
+  (recorded on all 20 Paper nodes). The other cached snapshot `1a8bc24` has
+  byte-identical weights/tokenizer; only config.json format differs.
+* SPECTER2 base `allenai/specter2_base` main = `3447645e1def9117997203454fa4495937bfbd83`
+  (`pytorch_model.bin` is what loads; the cached `refs/pr/10` safetensors is
+  tensor-identical, 200/200). Adapter `allenai/specter2` = `2081559630a80fc5851d8f798a05ba81e9468089`.
+* Proof: loading exactly those commits offline reproduces stored outputs --
+  SPECTER2 cosine 1.0000000 on 24 sampled points; GLiNER entity and relation
+  sets identical for papers 7 and 13.
+
+## 2026-10-13 -- S6-S9 verification and presentation (no recomputation needed)
+
+S1, corpus, PDFs, S2-S5 outputs, the 632 vectors and model versions untouched.
+No pipeline run, no Groq call, no model load beyond read-only checks.
+
+### What ran (all read-only or rolled back)
+
+* S6: re-clustering the current gap points (one statement per sentence)
+  reproduces the stored partition (clusters 11-14). 39 member rows: every
+  one resolves point -> Qdrant payload -> S3 fact (same paper, text, type);
+  every label row of each clustered sentence is stored (4 multi-label
+  sentences of 109); no table references a dissolved cluster id.
+* S7/S8: rebuilt inside a rolled-back transaction; identical to stored.
+  `mention_frequency` = distinct member papers for every cluster.
+* S9: derived markers `s6-s8` (e2e241cc60) and `s9` (917e22a057) current,
+  so no report was invalidated or regenerated. All report evidence resolves
+  to its Qdrant point and paper; every claim has a `basis`; no report claims
+  a conflict.
+
+### Changes (presentation only; stored artifacts unchanged)
+
+* **D-08-12 -- single-paper themes are exploratory.** `/gaps` and `/clusters`
+  add `paper_count`, `evidence_scope` (`single_paper` | `corroborated`, at
+  `CORROBORATION_MIN_PAPERS` = 2) and `exploratory` (gaps). Ranking and scores
+  unchanged; cluster 13 (1 paper, 4 statements) is kept and labelled
+  "Exploratory · single paper" on its report and cluster cards.
+* **D-07-08 -- trend caveats.** `/trends` adds `qualifiers` (papers, years,
+  max papers per year, `small_sample` below 5 per year, `partial_years` for
+  the current calendar year onward, `single_year`). The Trends view states
+  that slopes describe this corpus and that 2026 is partial; rows say
+  "N papers" (the series counts distinct papers, not mentions).
+* **Claim statuses in the UI.** Each report shows its four claims with their
+  basis (model judgment with cited passages / not supported / NLI-verified /
+  model-asserted but unconfirmed / not claimed).
+* Frozen API contract tests for `/gaps` and `/trends` extended with the
+  additive keys (exact sets, not loosened).
+
+### Live state
+
+Gaps: 11 (-0.37, 9 papers), 12 (-1.73, 6), 14 (-5.63, 3), 13 (-24.0,
+1 paper, exploratory). Hashes: papers 333469c83c7a6c28, PDFs 6ddd25f830b79b7a,
+parsed_documents 394537883c102d18, extracted_facts 1e8f3f26b8821d8a, Qdrant
+payload+vectors c41050e2a4e38cdd (632). Reconcile: consistent, 0 warnings.
+
+## 2026-10-13 -- Final S6-S9 release-gate audit (presentation fixes only)
+
+S1, corpus rows, PDFs, S2-S5 outputs, vectors, graph, model versions and every
+stored S6-S9 artifact untouched: a 45-value read-only snapshot (counts and
+content hashes of papers, collection run, PDFs, parsed documents, facts, stage
+states, Qdrant payload+vectors, Neo4j entities/edges, clusters, members,
+trends, rankings, reports, snapshots, NLI cache, derived markers) is identical
+before and after. No pipeline run, no Groq call, no model load. The prior
+checkpoint's 16-hex hashes could not be reproduced (definition not recorded);
+this audit's own baseline is the comparison point.
+
+### Verified on the live evidence base (read-only / rolled back)
+
+* S6: re-clustering the 90 eligible points (87 sentences) reproduces clusters
+  11-14 exactly, also from shuffled input; NLI re-run from the cache alone (model
+  call forbidden) finds 0 contradictions, 0 cache misses; all 39 member rows
+  resolve point -> payload -> fact -> paper; 0 dangling cluster references in
+  5 dependent tables; 0 label rows lost.
+* S7/S8 rebuilt in a rolled-back transaction: identical. Per cluster, distinct
+  papers = trend total = `mention_frequency` (9, 6, 1, 3); one year per paper.
+* S9: 19 quotes match their Qdrant passage under the stored rule
+  (`strip()[:MAX_EVIDENCE_CHARS]`), paper ids and titles correct; every claim
+  has a valid `basis`; no claim cites a passage absent from the report.
+  `s6-s8` / `s9` markers current.
+
+### Changes
+
+* **D-09-14 -- quotes cut at the length cap are marked.** 4 of 19 report
+  passages (reports for 11 and 13) are the first 1200 characters of a longer
+  passage, shown under "quoted verbatim" with nothing saying so. `/reports`
+  evidence adds a derived `truncated` (text reached `MAX_EVIDENCE_CHARS`);
+  the UI appends "…" and "the passage may continue". Stored rows unchanged.
+* **D-07-09 -- the trend series is papers, not mentions.** Chart axis and
+  hover said "mentions"; the series counts distinct papers. The Trends title
+  ("where the field is moving") and "Fastest rising" heading contradicted the
+  corpus-only caveat; now "See how this corpus changes over time" and
+  "Highest slope first / Change in this corpus".
+* **Conflict claim with no `basis`** (a pre-D-09-13 report or archived
+  snapshot, e.g. snapshot abc6c6f9d99d's old cluster 3) now reads "Asserted by
+  the model, not confirmed by NLI", not "Model judgment, cites retrieved
+  passages". Never "verified".
+* **"Ranked reports" counts current reports only**, not archived (`stale`)
+  snapshot rows.
+
+### Not changed / limitations
+
+* `carry_over_reports` / `report_inputs` are not wired into `/pipeline/run`;
+  a Stage 6 rebuild there regenerates every report.
+* NLI cache key covers `nli_*` settings only; with `NLI_MODEL_REVISION`
+  unset, a moved upstream checkpoint would reuse cached scores. Same unpinned
+  model policy as GLiNER/SPECTER2.
+* `ruff format --check` flags pre-existing lines in
+  `tests/api/test_cluster_members_payload.py` (not part of the README gate).
+* 10 `integration` tests (real models/services) not run.
+
+## 2026-10-13 -- Phase 10-13 acceptance audit (before Phase 14)
+
+Read-only on the corpus: the 45-value snapshot (S1-S9 counts and content
+hashes, derived markers, 19 pipeline runs) is identical before and after;
+reconcile consistent, 632/632, 0 warnings. No Groq call, no model load, no
+pipeline run. Phase 14 not started; deployment config untouched.
+
+### Findings
+
+* **D-10-05 -- graph rows no longer count towards Mode B sufficiency.** Graph
+  neighbourhood rows carry a fixed score 0.5, so two low-similarity vector
+  hits plus their papers' entity rows were judged "sufficient" and generation
+  ran on weak evidence (every live paper has entity edges). `assess` now counts
+  only similarity-scored vector passages. Regression test first (failed: an
+  answer call on 0.1-similarity hits).
+* **Open, needs an owner decision -- `RETRIEVAL_MIN_SCORE` is not calibrated.**
+  Querying Qdrant with 40 stored SPECTER2 vectors: the lowest cosine to any of
+  the other 631 points is 0.741 (median 0.774); the 12th-best is >= 0.885;
+  0 of 25,240 pairs fall below 0.2. The relevance gate never rejects, so on
+  this corpus "weak retrieval" is never detected and the retry loop cannot
+  fire live (inferred from stored vectors; a real query embedding was not
+  measured). Recalibrating needs real-query measurements (SPECTER2 load).
+* **Phase 10 Done-when still not demonstrated live**: no grounded `POST /query`
+  has ever run on a populated corpus (needs Groq + SPECTER2 + cross-encoder).
+* **D-13-02 -- expert validity normalized to 0-1 as documented.** The index
+  used `mean_validity / 5` (rating 1 "unsupported or false" earned 0.2); now
+  `(mean - 1) / 4`. Example report regenerated with the documented command:
+  validity_index 0.7222 -> 0.7083; nothing else changed. Before the fix the
+  documented command reproduced the committed report exactly.
+* Phase 13 runs only on the hand-written example corpus; there is no export
+  from stored gap reports to `gaps.json`, so ScholarLens's own gaps have never
+  been evaluated.
+* Phase 12: dashboard served by Vite reaches every endpoint it loads through
+  the `/api` proxy against the live backend (200s, 401 without key). The Ask
+  view is tested only against a mocked `/query`.
+
+## 2026-10-13 -- Phase 10-13 remediation: calibration, live-query harness, real-report evaluation
+
+Owner-scoped to items 1-3. No live `/query`, no Groq call, no model load, no
+pipeline run; `RETRIEVAL_MIN_SCORE` unchanged (0.2). 45-value snapshot
+identical before/after; reconcile consistent; NLI cache unchanged (335).
+
+* **D-10-06 -- one sufficiency rule.** `workflow.assess_sufficiency` is what
+  `assess` and the calibration harness both call: vector passages only,
+  `score >= min_score` on the raw Qdrant cosine, missing/non-finite scores
+  never count. Boundary tests at 0.2 / 0.19999.
+* **Calibration (`app/interactive/calibration.py`, read-only).** Stored mode
+  (no model): all 398,792 passage pairs have cosine >= 0.716; 0.2 rejects
+  nothing; in-corpus proxy queries are first rejected above ~0.88 (90.2% pass
+  at 0.90, 15.7% at 0.95); 7.9% fail on the two-paper rule at any threshold.
+  No false-accept evidence is possible without embedding real off-topic
+  questions: `--mode embed --allow-model-load` (SPECTER2, local, no LLM) is
+  prepared, not run. No threshold recommended. Report:
+  `evaluation/output/mode_b_calibration/`.
+* **Live query check (`app/interactive/live_check.py`).** Dry run by default;
+  `--confirm-live` sends exactly one `POST /query` (no client retry) and checks
+  schema, citation structure, claim->citation links, citation text vs Qdrant
+  payload, titles vs corpus, graph citations vs Neo4j MENTIONS, loop bounds;
+  classifies grounded answer vs safe non-answer. Dry run verified live.
+  Cost per run: 2-6 Groq calls (<=4 retries each), SPECTER2 + cross-encoder
+  loaded locally from cache.
+* **D-13-03 -- unavailable is not zero.** `run_evaluation` takes optional
+  later papers / surveys / expert ratings, reports each method `computed` or
+  `unavailable` (with what it needs), and averages the validity index over
+  computed methods only (`null` if none). Blank template rows are skipped;
+  partly filled rating rows fail. Example scores unchanged (0.7083, pinned by
+  a test); the committed example report lacks the new `availability` keys.
+* **Real-report evaluation.** `app/explanation/export.py` (read-only,
+  deterministic, schema `scholarlens-gap-export/1`) -> `evaluation/scholarlens.py`
+  (stable gap ids `scholarlens:cluster-N:report-M`, provenance, rating
+  template). Live: 4 reports exported (byte-identical twice); validity index
+  not computable -- no later papers (cutoff 2026), surveys or expert ratings
+  exist. Model confidence and claim judgments stay under `generated`, unused.
+* **Calibration, real questions (owner-approved, offline).** 14 synthetic
+  queries embedded with the cached SPECTER2 commits (HF offline). 2nd-best
+  cosine: relevant 0.945-0.961, partial 0.926-0.938, weak 0.923-0.933,
+  unrelated 0.869-0.889. Relevant/unrelated separable in (0.889, 0.945];
+  weak/partial not separable. 0.90 = candidate only (margin 0.011 on 4
+  unrelated queries); threshold unchanged at 0.2. Details:
+  `evaluation/output/mode_b_calibration/README.md`.
+* **Live `POST /query` (owner-approved, one request, 2026-10-13 12:49Z).**
+  Upstream HF `main` checked first (metadata only) = cached commits for
+  SPECTER2 base/adapter and the cross-encoder, so no download/version change.
+  Result: **safe non-answer** (`grounding_failed`), HTTP 200, 195 s. Trace:
+  1 retrieval round (sufficient: 12 relevant / 7 papers at 0.2), no
+  reformulation, reranked, 2 generations (1 strict regeneration), both drafts
+  structurally grounded but rejected by the LLM grounding check. 4 Groq calls
+  (7,442 prompt / 5,518 completion tokens), no rate-limit retries logged,
+  60 s pacing. All 9 checks passed; 4 returned citations (papers 2, 2, 3, 8)
+  match their Qdrant passages exactly. Phase 10 Done-when therefore still not
+  shown: the grounded-answer path did not complete, and retry cannot fire at
+  0.2. Corpus snapshot unchanged. Output: `evaluation/output/live_query_result.json`.
+
+## 2026-10-13 -- Mode B weak-retrieval and refusal verification (offline)
+
+No live query, no LLM call, no model load, no pipeline run; threshold 0.2
+unchanged; 45-value snapshot identical; reconcile consistent.
+
+* `tests/interactive/test_weak_retrieval.py` drives the compiled graph with
+  production `Settings` defaults (0.2, 2 chunks, 2 papers, 3 rounds, 1
+  regeneration; caps hard-clamped in `run_query`). Six weak cases (zero
+  passages, one qualifying, one paper only, below threshold, graph rows beside
+  sub-threshold or single hits) each reformulate and retry, and end in the
+  insufficient-evidence refusal after 3 rounds with no generation call; two
+  qualifying papers take the normal path; graph rows never count; raised caps
+  are clamped; verifier-rejected and invented-citation drafts end in the
+  grounding-failure refusal after one regeneration, with no reformulation.
+  These are mocked: they prove control flow, not live model behaviour.
+* **D-10-07 -- a grounding-failure refusal carries no citations.** The live
+  run returned the rejected draft's 4 citations beside the refusal
+  (`grounding_failed` never cleared them) and the UI listed them as "Sources".
+  Now cleared; `/query` adds `outcome` (`grounded_answer` /
+  `no_indexed_evidence` / `insufficient_evidence` / `grounding_failed`); the
+  Ask view labels by outcome and lists sources only for a grounded answer.
+  Grounded answers keep their cited evidence (tests). The live check fails a
+  refusal that still lists citations.
+
+## 2026-10-14 -- Phase 10 deep audit and hardening (offline)
+
+No live query, no LLM call, no model load, no pipeline run; threshold 0.2 and
+model versions unchanged; 45-value snapshot identical; reconcile consistent.
+Phase 10 remains NOT RESOLVED: no grounded answer has been produced live.
+
+Proven defects fixed (each red first, `tests/interactive/test_mode_b_hardening.py`):
+
+* **D-10-08 -- refusals cite nothing.** The insufficient-evidence refusal
+  returned every retrieved passage as `citations`; now `[]` like every
+  refusal. `/query` gets a `QueryResponse` model (OpenAPI documents the
+  `outcome` enum; an unknown outcome is not served).
+* **D-10-09 -- answer prose is verified.** The grounding prompt only asked
+  whether each claim was supported; it now also fails an answer that states
+  anything not in a supported claim.
+* **D-10-10 -- unusable model output ends in a defined outcome.** A draft that
+  does not fit the schema (e.g. a decline with no claims -- the prompt allowed
+  it, the schema forbade it: HTTP 502) or a malformed/contradictory verdict now
+  ends in `grounding_failed`; an invalid rewrite keeps the previous query.
+  Provider errors (`LLMError`, retrieval exceptions) still raise -- never a
+  success.
+* **D-10-11 -- untrusted text cannot close an evidence block.** Section
+  markers inside passages, titles, the question or a draft are defused.
+* **D-10-12 -- duplicates and impossible scores do not count.** Sufficiency
+  counts one passage per (paper, text) and ignores |score| > 1. No effect at
+  the configured 2/2 (stored calibration identical).
+* **D-10-13 -- grounding diagnostics and feedback.** Each check records counts
+  and a reason code (trace + server log, no text); the strict regeneration is
+  told which claims / citation IDs failed (bounded, never returned).
+
+Live failure (2026-10-13): root cause not established -- both drafts were
+structurally valid, cited passages untruncated and verbatim; the verifier's
+reasons were never recorded. Calibration: leave-one-out on the 14 saved
+queries 8/8 (thresholds 0.913-0.919); labelling template and procedure added;
+no threshold recommended. Plan: `evaluation/output/mode_b_live_plan.md`.
+
+## 2026-10-14 -- Phase 10 fix verification and independent-label protocol (offline)
+
+No live query, no LLM, no model load, no pipeline run; threshold/models
+unchanged; 45-value snapshot identical; reconcile consistent.
+
+* Mutation check (scratch copies only; working tree untouched): each of the
+  six fixes (D-10-07..13) plus D-10-05 reintroduced one at a time -- 15
+  backend and 2 frontend mutations, all killed by a regression test; the
+  unmutated controls pass. New: `test_regeneration_feedback_is_bounded` (the
+  feedback bounds had no test). D-10-09 is a prompt instruction: its test
+  proves the instruction is sent, not that the model obeys it.
+* Calibration tooling (offline): Cohen's kappa, hash-based tune/test split,
+  threshold chosen on tune only, held-out false-accept / false-reject / retry
+  frequency / paper and passage recall@12 / distinct papers; `--questions`
+  (independent set, embed mode, approval needed) and `--evaluate-labels`
+  (offline). Protocol, templates, paper list and passage catalogue (no
+  scores): `evaluation/output/mode_b_calibration/independent/`.
+* Live plan: preflight checklist added (three named external actions, new
+  output file, secret scan, before/after snapshot). Not executed.
+
+## 2026-10-14 -- Phase 10 live validation #2 (owner-approved, one request)
+
+Preflight passed (baseline, parity, dry run, 3 HF metadata checks: upstream =
+cache for SPECTER2 base/adapter and the cross-encoder). One `POST /query`:
+**exit 0, `grounded_answer`**, 74 s, all automated checks passed; 1 round, no
+reformulation, no regeneration, grounding `reason=ok`; 2 Groq calls (3,629
+prompt / 3,011 completion tokens), no retries. Secret scan 0 hits; log held
+counts/codes only. 45-value snapshot identical; reconcile consistent.
+
+Claim review (`evaluation/output/live_query_result_2_review.md`): claim 0
+supported verbatim; claim 1 partly supported (two items verbatim, English
+focus misattributed, "low-resource" absent); the answer's "the only ... is
+MIPIAD" is unsupported. Only expected paper 2 was cited. The same-model
+grounding check passed text that overreaches its evidence: the Done-when
+("claims trace back to specific retrieved papers") is met for citations but
+not for content. Retry behaviour still not observable at 0.2.
+
+## 2026-10-17 -- D-10-14 claim-to-passage vetoes (offline)
+
+No live query, no LLM, no model load, no Hugging Face access, no pipeline
+run; threshold/models unchanged; live results and review unchanged (md5);
+45-value snapshot identical to the end of live run #2; reconcile consistent.
+Docker was down at the start, so the pre-change snapshot could not be taken;
+the comparison is against the last recorded one.
+
+* **Defect.** Live run #2 returned `grounded_answer` with prose the claims did
+  not contain ("the only ... is MIPIAD") and a claim asserting "low-resource"
+  coverage no cited passage mentions. Two bypasses: the user saw the draft's
+  free `answer` text, checked only by the same LLM; and a claim needed only a
+  valid citation id plus that LLM verdict.
+* **Fix.** `app/interactive/claim_check.py`: deterministic vetoes on each
+  claim against *its own* cited passages -- `unsupported_absolute`,
+  `unsupported_term` (languages, resource levels, numbers),
+  `misattributed` (literature-level sentence attributed to studies),
+  `low_overlap` (heuristic). Vetoes can only reject; acceptance still needs
+  the LLM verdict; a veto skips the verification call and takes the existing
+  regenerate-then-refuse path, with the reasons in the feedback. A grounded
+  answer's text is now its checked claims (`answer_from_claims`); trace adds
+  `vetoed=` and `prose_uncovered=`. The UI says the check is automatic, not
+  human-verified, and heads citations "Cited passages".
+* **Tests.** `tests/interactive/test_claim_grounding.py` replays the live
+  draft and passages (`tests/fixtures/mode_b_live_run_2.json`): refused, no
+  claims/citations, no verify call. 23/23 backend mutations and the frontend
+  caveat mutation killed. Old fakes whose claims their passages did not state
+  were made content-consistent; three assertions updated to the new contract.
+* **Limits.** Pattern vetoes can over-reject (e.g. "the first" stated in other
+  words) and cannot prove entailment; a paraphrase that changes meaning while
+  keeping the terms passes them. Live behaviour of the new layer is untested.
+
+## 2026-10-18 -- PHASE 10 CLOSED -- WITH DOCUMENTED LIMITATIONS
+
+Final closeout (owner closure rule). No code changed. Verification: backend
+1992 passed (10 integration deselected), focused 190, evaluation 20, frontend
+38, ruff/oxlint/type-check/build clean, 23/23 mutations killed. One authorized
+live run on the final code (`live_query_result_3.json`): `grounded_answer`,
+9/9 checks, `vetoed=0`, `prose_uncovered=2` dropped, 2 Groq calls; developer
+review: claim 0 supported, claim 1 mostly supported with one unstated
+inference. Preservation: 45/45 identical, 19 runs, 632/632, reconcile
+consistent. Accepted limitations: no independent human review, uncalibrated
+threshold, live retry unobserved, thin retrieval coverage. Reports:
+`PHASE10_CLOSEOUT.md`, `PHASE11_HANDOFF.md`. Phase 11 not started.
+
+## 2026-10-18 -- Phase 11 closed: API integration, auth hardening, verification
+
+Decision: PHASE 11 COMPLETE -- WITH DOCUMENTED LIMITATIONS (`PHASE11_CLOSEOUT.md`).
+Audited the real surface: 23 operations, `/health` the only public API route
+(plus FastAPI's generated docs), `require_api_key` on all 22 others. Fixed:
+pre-auth body buffering (FastAPI reads bodies before dependencies) with
+`app/api/body_limit.py` (`MAX_REQUEST_BODY_KB`, `MAX_UPLOAD_FILES`, `/upload`
+key checked before reading); 422s on `/collect`/`/upload` clearing
+`derived_state` (now `exclusive_lock` + `invalidate_derived` after
+validation); `.env.example` placeholder key accepted (now fails closed);
+duplicate `X-API-Key` headers (now 401); unbounded `/collect` topic and upload
+file count; plain-text 500s (now sanitized JSON); `/query` rate limit 503 ->
+429 + Retry-After; typed `/papers`, `/trends`, `/gaps`; `api.ts` 422-list,
+network-failure and non-JSON handling. Decisions: no CORS (same-origin via the
+Vite proxy); no auth middleware duplicate (the dependency stays the boundary;
+the middleware only pre-checks `/upload`); `/query` deadline deferred (Mode B
+behaviour). Tests: backend 2276 passed / 10 deselected, evaluation 20,
+frontend 51; ruff/oxlint/tsc/build clean; 8/8 mutations killed. Runtime 20/20
+plus Vite proxy check. Incident: a query-string probe put the key into the
+backend's local access log (22 lines, all 401); the container was recreated,
+and its log now has 0 hits. Preservation: 45/45 identical, 19 runs, 632
+vectors, reconcile consistent. Handoff: `PHASE12_HANDOFF.md`. Phase 12 not
+started.
+
+## 2026-10-18 -- Phase 11 hardening addendum (four targeted fixes)
+
+`PHASE11_HARDENING_ADDENDUM.md`. (1) Access and error logs: uvicorn.access
+filter strips query strings; uvicorn.error and the 500 handler log the
+exception type only. Verified on a real uvicorn server in tests and in the
+rebuilt container (0 dummy-secret hits). (2) `/query` overall deadline
+`QUERY_DEADLINE_SECONDS=180`: worker thread + guarded services, so the caller
+gets 504 and no further retrieval or model call starts; a call already in
+flight is not interrupted (accepted). `workflow.py` untouched. Runtime not run
+(would need a live query). (3) Failed-auth throttle `AUTH_FAILURE_LIMIT=20` /
+`AUTH_FAILURE_WINDOW_SECONDS=60`, sliding window per peer address; 429 +
+Retry-After; a throttled source gets 429 even with the valid key (no oracle);
+refused requests are not counted (no extended lockout). Process-local; in
+Docker every host client shares the gateway address (accepted). (4) Typed
+`/clusters`, `/reports` (exclude_unset; snapshot fallback modelled), `/graph`;
+live responses byte-identical before and after. Two route tests' unrealistic
+stubs were updated, not the models loosened. Tests: 2324 passed / 10
+deselected, evaluation 20, ruff clean, 10/10 mutations killed. Preservation:
+45/45, 19 runs, 632 vectors, reconcile consistent.
+
+## 2026-10-18 -- Phase 12 closed: frontend dashboard audit, fixes, real-browser verification
+
+Decision: PHASE 12 COMPLETE -- WITH DOCUMENTED LIMITATIONS (`PHASE12_CLOSEOUT.md`).
+Most of the dashboard already existed. A real-browser audit found one broken
+flow: saving a valid key after a rejected one left "Connection needed" on
+screen until a reload. It also found three partly built features. The graph
+overflowed its canvas, its legend covered the truncation note, and a selected
+node showed no relationships. Mode B citations were not tied to their claims.
+Cluster contradiction pairs were typed but never shown. Fixed in place with
+the existing design system: four CSS rules, no new dependencies. Smaller
+fixes: missing-key wording, 429 "Try again in about N s" (new
+`ApiError.retryAfter`), 401 wording in Ask, pluralised retries, an in-flight
+query guard, graph Space key and accessible names. No backend, contract or
+`types.ts` change. Tests: frontend 62 (51 before; 11 new, each red first);
+tsc, oxlint and build clean. Real browser (headless Chrome over CDP, zero
+dependencies): 96/96 checks. Read-only GETs hit the live backend, `/query`
+was always mocked, and every write was blocked (none attempted). Secrets: 0
+key hits in dist, src or the backend log. Preservation: 0 non-GET requests in
+the backend log, reconcile consistent (632 points), Phase 10/11 artefacts
+untouched. Corrected two stale handoff notes (the `/query` 504 deadline now
+exists; `/clusters`, `/reports` and `/graph` are typed). Handoff:
+`PHASE13_HANDOFF.md`. Phase 13 not started.
+
+## 2026-10-18 -- Phase 13 closed; Mode B quality hardening (owner mission brief)
+
+Decision: MODE B COMPLETE WITH LIMITATIONS (one requirement NOT COMPLETE in
+the current deployment: the pacing/deadline conflict below); PHASE 13
+COMPLETE WITH LIMITATIONS (`PHASE13_CLOSEOUT.md`, run report
+`evaluation/output/mode_b_eval/run-20261018-v1/REPORT.md`).
+
+* **Dataset** `evaluation/datasets/mode_b_v1`: 130 questions (41 relevant,
+  28 partial, 31 weak, 30 unrelated) plus 60 labelled claims. Agent-authored,
+  provisional, frozen with SHA-256 before scoring; passage ids validated
+  against the catalogue, which matches the live index 632/632.
+* **Harness** `evaluation/mode_b.py`: dataset validation, gate metrics with
+  Wilson CIs, threshold chosen on the calibration split only and reported
+  once on held-out, ranking, claim-veto, live and review summaries, and a
+  manifest. `--reproduce` was verified on the run.
+* **Calibration:** at 0.2 the gate accepts 12/12 unrelated and 13/13 weak
+  (held out). 0.9153 (chosen on calibration) accepts 0/12 unrelated and 7/13
+  weak. Relevant-vs-unrelated AUROC 0.951; partial-vs-weak 0.742. Espresso
+  question 0.9131 vs lowest partial 0.9133. **Threshold unchanged**
+  (agent labels, ~0.005 margin); the two-paper rule refuses single-paper
+  questions (p031, p032) at any threshold.
+* **Fixes (each red first; 25/25 mutations killed):**
+  * D-B-01: % and thousands separators falsely vetoed (11/30 → 1/30 false
+    rejection).
+  * D-B-02: inflection, compound and acronym overlap; titles only vouch for
+    names.
+  * D-B-03: generation sees only gated evidence (graph rows by seed).
+  * D-B-04: a pacing-queued Groq call was sent after the 504; now a wait
+    budget refuses it.
+  * D-B-05: `veto_codes=` in the trace.
+  * D-B-06: regeneration feedback explains the codes.
+  * D-B-07: duplicate claims removed.
+  * D-B-08: the calibration run no longer says "independent".
+  * New vetoes: `polarity_mismatch`, `unsupported_name`, `unsupported_cause`.
+  * D-13-04: time-shift scored unlabelled gaps as negatives; the adapter
+    wrote `[]` (now `null`).
+* **Live (brief-authorised): 6 requests, 14 Groq calls.**
+  * LV-1: 504 (found D-B-04).
+  * LV-1b: grounded, 9/9 checks, expected passage.
+  * LV-3: correct abstention.
+  * LV-2, 2b, 2c (synthesis): refused by the pre-existing `unsupported_term`
+    and `misattributed` vetoes; correctness unverifiable (no draft text).
+* **Owner action:** `GROQ_MIN_INTERVAL_SECONDS=60` with
+  `QUERY_DEADLINE_SECONDS=180` makes every Mode B path of 4 or more calls end
+  in a 504.
+* **Phase 13 audit:** export byte-identical to 2026-10-13; corrected adapter
+  re-run in `output/scholarlens/run-20261018/`.
+* **Tests:** backend 2385 passed / 10 deselected, evaluation 48, frontend 63
+  (including the live LV-1b response); ruff, tsc, oxlint and build clean.
+* **Preservation:** snapshot identical, reconcile identical, no
+  pipeline/collect/reset, 4 backend rebuilds (volumes kept), no commit.
+  Handoff: `PHASE14_HANDOFF.md`. Phase 14 not started.
+
+## 2026-10-18 -- Mode B quality mission (retrieval, grounding, synthesis, refusal)
+
+Decision: COMPLETE WITH LIMITATIONS (`MODE_B_QUALITY_CLOSEOUT.md`; metrics
+`evaluation/output/mode_b_eval/run-20261018-v2/REPORT.md`). Phase 14 not
+started; no commit.
+
+* **D-B-09 -- scope-aware paper minimum.** `app/interactive/intent.py` reads
+  the question: a "the ... paper/study" question needs
+  `RETRIEVAL_MIN_PAPERS_PAPER_SPECIFIC=1` paper (new setting). Synthesis,
+  comparison and unclassifiable questions keep `RETRIEVAL_MIN_PAPERS=2`, and a
+  comparison needs each named system in the evidence. Held-out at 0.2:
+  relevant 25/27 -> 26/27 (p031); no weak or unrelated change; none of the 13
+  two-paper questions is read as single-paper. p032 stays refused.
+* **D-B-10 -- withheld claims.** Vetoed or verifier-named claims are withheld.
+  The rest stand if at least half survive, with `removed_claim_count`
+  (additive API field, shown in the Ask view). The verifier now checks the
+  composed claims and the question, not the draft prose.
+* **D-B-11 -- the cross-paper (LV-2) refusal, root cause.** Replayed on the
+  real passages (`tests/fixtures/mode_b_cross_paper.json`). "Paper N" was read
+  as a number the passage must state (live LV-Q2 confirms the model writes it,
+  which fits LV-2b's `unsupported_term` on every claim). Correct claims were
+  also falsely vetoed: ", and"-joined clauses, "none of" vs "all ... not", and
+  a missed split at "[15].Since" (44/632 passages). Paper 1's prior-work claim
+  was a correct veto.
+* **D-B-12 -- live defects, both fixed and replayed as tests:**
+  * LV-Q2 showed paper 1's "Prior studies have observed ..." as paper 1's own
+    finding (the attribution subject was lost when "Paper 1" was stripped,
+    and "observes" was not an attribution verb);
+  * LV-Q3 answered an unanswerable question with a supported but off-question
+    claim from a phishing paper. An answer whose claims and passages mention
+    none of the question's subjects is now refused (`off_question`).
+* **New vetoes:**
+  * `wrong_paper`;
+  * `unsupported_absence` (gap inferred from absence);
+  * `future_as_done` (only when the passage states a plan: Stage 3 types some
+    result sentences `future_work`);
+  * "all LLMs";
+  * digits inside a title-stated name are not numbers.
+* **Claim sets** (development, agent-authored):
+  * v1: false rejection 1/30, catch 22/30 (unchanged);
+  * new `mode_b_claims_s2` (34): false rejection 0/15, catch 13/19.
+* **Threshold 0.2 kept.** A cross-encoder top-1 floor (-5.74, calibration
+  only) accepts 27/27 relevant and 0/12 unrelated on held-out, but its margin
+  is 0.38: candidate only.
+* **Live (owner brief):** 6 requests, 13 Groq calls, 20,751 prompt + 9,234
+  completion tokens; 0 secrets; 0 retries.
+  * LV-Q1 grounded; claim 1 gives a subset count.
+  * LV-Q2 grounded, with the misattribution.
+  * LV-Q2b partial and correct.
+  * LV-Q3 wrong (off-question).
+  * LV-Q3b refused, via `unsupported_term`, not the new rule.
+  * LV-Q1b grounded.
+* **Tests:** backend 2385 -> 2508 passed / 10 deselected; evaluation 48 -> 54;
+  frontend 63 -> 71; mutation check 34/35 killed (1 equivalent).
+* **Preservation:** snapshot 23/23 identical (before, after deploy, after
+  live); reconcile identical; 0 write requests; 5 backend rebuilds (volumes
+  kept); no collect/pipeline/reset.
+
+## 2026-10-19 -- Mode B focused mission (threshold, three quality gaps, three bugs)
+
+Decision: COMPLETE WITH LIMITATIONS (`MODE_B_QUALITY_CLOSEOUT.md`, Part 2;
+artifacts `evaluation/output/mode_b_eval/run-20261019-v3/`). Phase 14 not
+started; no commit, push, stash or discard.
+
+* **D-B-13 -- threshold not locked.** `RETRIEVAL_MIN_SCORE=0.2` (Qdrant cosine,
+  `>=`) stays. The cross-encoder floor (-5.74, a logit, not in production) loses
+  no answerable question and accepts no unrelated one in either cross-fit
+  direction, but labels are agent-authored, the halves' floors differ by 0.58
+  (more than the 0.38 margin), 11/13 held-out weak questions still pass, and it
+  needs a gate after the rerank. `evaluation/threshold_policy.py` encodes the
+  criteria (`lock_verdict`, always `defer` with agent labels).
+* **D-B-14 -- `answers_question`.** The verifier returns whether the cited
+  evidence answers any part of the question; false refuses without
+  regeneration (reason `not_answerable`); the trace has `answers=1|0|-`. Lexical
+  coverage cannot decide it (relevant 0.50-1.00, weak 0.29-1.00). **Not shown
+  to trigger live:** LV-R2 refused by `low_overlap`; LV-R3/R4 (p099) were
+  grounded answers with doubtful claims.
+* **D-B-15 -- `partial_total` veto.** A whole-study claim giving a figure that
+  is a component of a labelled total (components sum to it) is withheld unless
+  scoped or stating the total. Prompts ask for scope, denominators and
+  uncertainty. Fixes the 3,630-versus-7,892 class; LV-R1 gave 7,892.
+* **D-B-16 -- candidate pool.** `RETRIEVAL_POOL_FACTOR=3`: the cross-encoder
+  picks the twelve shown passages from 36 cosine hits; the gate and graph
+  expansion still see twelve. Offline: 30 to 40 of 69 answerable questions get a
+  labelled passage into the twelve; required papers 31 to 32 of 42.
+* **Paper 10 (p035/LV-Q2) is unresolved:** its labelled passages rank 270 and
+  397 of 632 by cosine; the reachable ones (ranks 29, 30) are method text the
+  cross-encoder rightly rejects. Strict xfail
+  `test_paper_10_evidence_reaches_the_model_for_the_p035_question` marks it.
+* **Bugs fixed:** the Trends test used literal backspace characters for `\b`
+  (the repaired assertion exposed "1 papers in corpus" and "at most 1 papers");
+  `/reports` raised `ResponseValidationError` for archived rows missing
+  `justification` or evidence keys; the Library view was unmounted, and its
+  pipeline request aborted, when the dashboard errored.
+* **New:** `backend/tests/interactive/{test_retrieval_threshold_policy,
+  test_answerability,test_partial_total,test_candidate_pool}.py`,
+  `backend/tests/fixtures/{mode_b_study_results,mode_b_p035_pool}.json`,
+  `evaluation/threshold_policy.py`, `evaluation/tests/test_threshold_policy.py`,
+  `run-20261019-v3/` (results, manifest, threshold-policy, analysis scripts and
+  data, live results, review, pre-registered expectations).
+  **Changed:** `claim_check.py`, `workflow.py`, `routes_backend.py`, `config.py`,
+  `.env.example`, `App.tsx`, `App.test.tsx`, tests pinning the diagnostics
+  string, route arguments and fake settings, `evaluation/README.md`.
+* **Live:** 4 requests, 8 Groq calls (LV-R4 tokens 3,843 + 2,394; R1-R3 usage
+  lost when the container was replaced); 6 Hugging Face metadata requests; 2
+  backend rebuilds (volumes kept); 0 secret hits.
+* **Tests:** backend 2508 -> 2550 passed / 10 deselected / 1 strict xfail;
+  evaluation 54 -> 65; frontend 71 -> 74; ruff, tsc, oxlint, build clean;
+  mutation check 10/10 killed.
+* **Preservation:** snapshot (17 tables, Neo4j, 632 Qdrant points, 11 PDFs)
+  identical before, after each rebuild and at the end; reconcile identical and
+  consistent; no collect/upload/pipeline/reset/re-embedding.
+* **Process note:** capture the `groq usage` log lines before rebuilding the
+  backend; replacing the container discards its log.

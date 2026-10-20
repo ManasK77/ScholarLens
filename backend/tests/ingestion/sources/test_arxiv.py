@@ -82,6 +82,38 @@ def make_result(**overrides):
     )
 
 
+class _Header:
+    def __init__(self, total):
+        self.total_results = total
+
+
+class _Feed:
+    """Stand-in for the arxiv library's ParsedFeed: one page of results."""
+
+    def __init__(self, results, total, malformed=False):
+        self.results = list(results)
+        self.header = _Header(total)
+        self.malformed = malformed
+
+
+def _serve_pages(monkeypatch, *pages):
+    """Answer each page request with the next queued `_Feed` (or raise it).
+
+    Returns the query parameters of every page requested, in order.
+    """
+    requested: list[dict] = []
+
+    def fake_parse_feed(self, url, first_page=True, _try_index=0):
+        requested.append(parse_qs(urlparse(url).query))
+        page = pages[len(requested) - 1]
+        if isinstance(page, BaseException):
+            raise page
+        return page
+
+    monkeypatch.setattr(arxiv_source.arxiv.Client, "_parse_feed", fake_parse_feed)
+    return requested
+
+
 def test_search_topic_returns_corpus_shaped_dicts(monkeypatch):
     results = [
         make_result(),
@@ -95,11 +127,7 @@ def test_search_topic_returns_corpus_shaped_dicts(monkeypatch):
             pdf_url="https://arxiv.org/pdf/1810.04805",
         ),
     ]
-
-    def fake_results(self, search):
-        yield from results
-
-    monkeypatch.setattr(arxiv_source.arxiv.Client, "results", fake_results)
+    _serve_pages(monkeypatch, _Feed(results, total=2))
 
     out = arxiv_source.search_topic("transformer models")
 
@@ -121,12 +149,7 @@ def test_search_topic_returns_corpus_shaped_dicts(monkeypatch):
 
 
 def test_search_topic_handles_missing_doi(monkeypatch):
-    results = [make_result(doi=None)]
-
-    def fake_results(self, search):
-        yield from results
-
-    monkeypatch.setattr(arxiv_source.arxiv.Client, "results", fake_results)
+    _serve_pages(monkeypatch, _Feed([make_result(doi=None)], total=1))
 
     out = arxiv_source.search_topic("transformer models")
 
@@ -135,37 +158,33 @@ def test_search_topic_handles_missing_doi(monkeypatch):
     assert out[0]["arxiv_id"] == "1706.03762"
 
 
-class RecordingClient:
-    """Stand-in for arxiv.Client that records how it was configured."""
+class RecordingClient(arxiv.Client):
+    """The real arxiv.Client, recording how it was configured."""
 
     last: ClassVar["RecordingClient | None"] = None
 
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.kwargs = kwargs
-        self.search_max_results = None
         RecordingClient.last = self
 
-    def results(self, search):
-        self.search_max_results = search.max_results
-        return iter(())
 
-
-def test_search_topic_sizes_the_request_page_to_max_results(monkeypatch):
-    """arxiv.Client puts `page_size` (library default 100), not `max_results`,
-    into the request URL — so an unsized client asks arXiv for 100 entries
-    to keep 10."""
+def test_the_page_size_defaults_to_the_ceiling(monkeypatch):
+    """arxiv.Client's own page size (100) is never what is requested: one
+    request asks for the whole ceiling unless a page size is configured."""
     monkeypatch.setattr(arxiv_source.arxiv, "Client", RecordingClient)
+    adapter = FakeAdapter([ok()])
 
-    arxiv_source.search_topic("anything", max_results=7)
+    _search(adapter, max_results=7)
 
     assert RecordingClient.last.kwargs["page_size"] == 7
-    assert RecordingClient.last.search_max_results == 7
+    assert parse_qs(urlparse(adapter.sent[0].url).query)["max_results"] == ["7"]
 
 
 def test_search_topic_defaults_to_ten_results(monkeypatch):
     monkeypatch.setattr(arxiv_source.arxiv, "Client", RecordingClient)
 
-    arxiv_source.search_topic("anything")
+    _search(FakeAdapter([ok()]))
 
     assert RecordingClient.last.kwargs["page_size"] == 10
 
@@ -176,7 +195,7 @@ def test_the_library_retry_and_delay_layers_are_switched_off(monkeypatch):
     new Client, so it paces nothing across calls."""
     monkeypatch.setattr(arxiv_source.arxiv, "Client", RecordingClient)
 
-    arxiv_source.search_topic("anything", num_retries=3)
+    _search(FakeAdapter([ok()]), num_retries=3)
 
     client = RecordingClient.last
     assert client.kwargs["num_retries"] == 0
@@ -225,17 +244,187 @@ def test_search_topic_never_calls_download_pdf_or_download_source_on_result(
                 )
             raise AttributeError(name)
 
-    bare = BareResult()
-
-    def fake_results(self, search):
-        yield bare
-
-    monkeypatch.setattr(arxiv_source.arxiv.Client, "results", fake_results)
+    _serve_pages(monkeypatch, _Feed([BareResult()], total=1))
 
     out = arxiv_source.search_topic("anything")
 
     assert len(out) == 1
     assert out[0]["arxiv_id"] == "9999.99999"
+
+
+# ---------------------------------------------------------------------------
+# Paging (D-S1-RETRIEVAL-01, 2026-10-12)
+#
+# Production read one page of 30 from a query arXiv said matched 59. The
+# search now pages until arXiv's own total is exhausted or the retrieval
+# ceiling is reached, and reports which -- never presenting a partial read as
+# exhaustive.
+# ---------------------------------------------------------------------------
+
+
+def _results(*ids):
+    return [make_result(short_id=i, title=f"Paper {i}") for i in ids]
+
+
+def test_results_beyond_the_first_page_are_returned(monkeypatch):
+    requested = _serve_pages(
+        monkeypatch,
+        _Feed(_results("1", "2"), total=5),
+        _Feed(_results("3", "4"), total=5),
+        _Feed(_results("5"), total=5),
+    )
+
+    out = arxiv_source.search_topic("t", max_results=10, page_size=2)
+
+    assert [c["arxiv_id"] for c in out] == ["1", "2", "3", "4", "5"]
+    assert [r["start"] for r in requested] == [["0"], ["2"], ["4"]]
+    assert out.retrieval["total_reported"] == 5
+    assert out.retrieval["pages_requested"] == 3
+    assert out.retrieval["records_fetched"] == 5
+    assert out.retrieval["complete"] is True
+    assert out.retrieval["stop_reason"] == "exhausted"
+
+
+def test_no_page_is_requested_after_the_reported_total(monkeypatch):
+    requested = _serve_pages(monkeypatch, _Feed(_results("1", "2"), total=2))
+
+    out = arxiv_source.search_topic("t", max_results=10, page_size=2)
+
+    assert len(requested) == 1
+    assert out.retrieval["complete"] is True
+
+
+def test_the_ceiling_stops_the_read_and_is_reported_incomplete(monkeypatch):
+    requested = _serve_pages(
+        monkeypatch,
+        _Feed(_results("1", "2"), total=50),
+        _Feed(_results("3", "4"), total=50),
+    )
+
+    out = arxiv_source.search_topic("t", max_results=4, page_size=2)
+
+    assert len(out) == 4
+    assert len(requested) == 2
+    assert out.retrieval["stop_reason"] == "ceiling"
+    assert out.retrieval["complete"] is False
+    assert out.retrieval["total_reported"] == 50
+
+
+def test_a_paper_repeated_on_a_later_page_is_kept_once(monkeypatch):
+    """arXiv's relevance order can shift between page requests; the same paper
+    (any version) must not become two candidates."""
+    _serve_pages(
+        monkeypatch,
+        _Feed(_results("2401.00001v1", "2401.00002v1"), total=4),
+        _Feed(_results("2401.00001v2", "2401.00003v1"), total=4),
+    )
+
+    out = arxiv_source.search_topic("t", max_results=10, page_size=2)
+
+    assert [c["arxiv_id"] for c in out] == [
+        "2401.00001v1",
+        "2401.00002v1",
+        "2401.00003v1",
+    ]
+    assert out.retrieval["records_fetched"] == 4
+    assert out.retrieval["records_dropped"] == {"duplicate_across_pages": 1}
+
+
+def test_a_failed_later_page_keeps_earlier_results_and_is_visible(monkeypatch):
+    _serve_pages(
+        monkeypatch,
+        _Feed(_results("1", "2"), total=6),
+        arxiv.HTTPError("https://export.arxiv.org/api/query", 0, 503),
+    )
+
+    out = arxiv_source.search_topic("t", max_results=10, page_size=2)
+
+    assert [c["arxiv_id"] for c in out] == ["1", "2"]
+    assert out.retrieval["stop_reason"] == "page_error"
+    assert out.retrieval["error"] == "http_503"
+    assert out.retrieval["pages_requested"] == 2
+    assert out.retrieval["pages_succeeded"] == 1
+    assert out.retrieval["complete"] is False
+
+
+def test_an_empty_later_page_is_reported_incomplete(monkeypatch):
+    _serve_pages(
+        monkeypatch,
+        _Feed(_results("1", "2"), total=6),
+        arxiv.UnexpectedEmptyPageError("u", 0, _Feed([], total=6)),
+    )
+
+    out = arxiv_source.search_topic("t", max_results=10, page_size=2)
+
+    assert len(out) == 2
+    assert out.retrieval["stop_reason"] == "empty_page"
+    assert out.retrieval["complete"] is False
+
+
+def test_a_malformed_later_page_is_reported_incomplete(monkeypatch):
+    _serve_pages(
+        monkeypatch,
+        _Feed(_results("1", "2"), total=6),
+        _Feed([], total=0, malformed=True),
+    )
+
+    out = arxiv_source.search_topic("t", max_results=10, page_size=2)
+
+    assert len(out) == 2
+    assert out.retrieval["error"] == "malformed_feed"
+    assert out.retrieval["complete"] is False
+
+
+def test_a_failed_first_page_still_fails_the_source(monkeypatch):
+    _serve_pages(monkeypatch, arxiv.HTTPError("u", 0, 503))
+
+    with pytest.raises(arxiv.HTTPError):
+        arxiv_source.search_topic("t", max_results=10, page_size=2)
+
+
+def test_a_malformed_first_page_fails_the_source(monkeypatch):
+    _serve_pages(monkeypatch, _Feed([], total=0, malformed=True))
+
+    with pytest.raises(ValueError, match="malformed"):
+        arxiv_source.search_topic("t")
+
+
+def test_no_results_is_a_complete_empty_read(monkeypatch):
+    _serve_pages(monkeypatch, _Feed([], total=0))
+
+    out = arxiv_source.search_topic("t")
+
+    assert out == []
+    assert out.retrieval["complete"] is True
+    assert out.retrieval["total_reported"] == 0
+
+
+def test_the_report_records_the_query_and_a_stable_fingerprint(monkeypatch):
+    _serve_pages(monkeypatch, _Feed([], total=0), _Feed([], total=0))
+
+    first = arxiv_source.search_topic("prompt injection").retrieval
+    second = arxiv_source.search_topic("prompt injection").retrieval
+
+    assert first["query"] == 'all:"prompt" AND all:"injection"'
+    assert first["query_fingerprint"] == second["query_fingerprint"]
+    assert first["params"] == {"ceiling": 10, "page_size": 10}
+
+
+def test_every_page_request_waits_its_turn_on_the_limiter():
+    fake = FakeClock()
+    page = (
+        FEED_HEAD
+        + b"<opensearch:totalResults>2</opensearch:totalResults>"
+        + ONE_RESULT_FEED.split(b"</opensearch:totalResults>", 1)[1]
+    )
+    second = page.replace(b"2401.00001", b"2401.00002")
+    adapter = FakeAdapter([ok(page), ok(second)])
+
+    out = _search(adapter, fake=fake, max_results=10, page_size=1)
+
+    assert len(out) == 2
+    assert len(adapter.sent) == 2
+    assert fake.sleeps == [3.0]
 
 
 # ---------------------------------------------------------------------------
@@ -993,3 +1182,118 @@ def test_fetch_pdf_accepts_a_configured_downloader(monkeypatch):
 
     assert seen == [(PDF_URL, "/tmp/pdfs/1706.03762.pdf")]
     assert dest == "/tmp/pdfs/1706.03762.pdf"
+
+
+# ---------------------------------------------------------------------------
+# Facet synonyms (S1 audit, 2026-10-10)
+#
+# The relevance gate knows that "cross-lingual" and "code-mixed" evidence the
+# same facet as "multilingual", but the arXiv query still demanded the literal
+# word, so such papers never became candidates. `/collect` now passes the
+# gate's query groups: each group is one facet, its alternatives are OR'd, and
+# the groups are still AND'd -- every facet still constrains the search.
+# ---------------------------------------------------------------------------
+
+
+def test_query_groups_or_a_facets_synonyms_and_and_the_facets():
+    adapter = FakeAdapter([ok()])
+
+    _search(
+        adapter,
+        topic="Multilingual prompt injection",
+        query_groups=[["multilingual", "cross-lingual"], ["prompt"], ["injection"]],
+    )
+
+    assert _sent_query(adapter) == (
+        '(all:"multilingual" OR all:"cross-lingual") AND all:"prompt" AND all:"injection"'
+    )
+
+
+def test_without_query_groups_the_topic_query_is_unchanged():
+    adapter = FakeAdapter([ok()])
+
+    _search(adapter, topic="Multilingual prompt injection", query_groups=None)
+
+    assert _sent_query(adapter) == (
+        'all:"Multilingual" AND all:"prompt" AND all:"injection"'
+    )
+
+
+def test_query_group_terms_lose_double_quotes():
+    adapter = FakeAdapter([ok()])
+
+    _search(adapter, query_groups=[['say "hi"']])
+
+    assert _sent_query(adapter) == 'all:"say hi"'
+
+
+# ---------------------------------------------------------------------------
+# A 200 is not a PDF (D-FULLTEXT-01): the arXiv path validates like every other
+# ---------------------------------------------------------------------------
+
+
+def _download_result(adapter, dest, **kwargs):
+    options = {
+        "min_interval_seconds": 3.0,
+        "num_retries": 0,
+        "limiter": FakeClock().limiter(),
+        "adapter": adapter,
+    } | kwargs
+    return arxiv_source.download_pdf_result(PDF_URL, str(dest), **options)
+
+
+def test_an_html_answer_is_not_stored_as_a_pdf(tmp_path):
+    dest = tmp_path / "p.pdf"
+    adapter = FakeAdapter(
+        [(200, b"<html>captcha</html>", {"Content-Type": "text/html; charset=utf-8"})]
+    )
+
+    result = _download_result(adapter, dest)
+
+    assert result.status == "not_pdf"
+    assert not dest.exists()
+
+
+def test_a_body_without_the_pdf_signature_is_rejected(tmp_path):
+    dest = tmp_path / "p.pdf"
+    adapter = FakeAdapter(
+        [(200, b"not a pdf at all", {"Content-Type": "application/pdf"})]
+    )
+
+    result = _download_result(adapter, dest)
+
+    assert result.status == "file_validation_failed"
+    assert not dest.exists()
+
+
+def test_an_oversized_pdf_is_not_stored(tmp_path):
+    dest = tmp_path / "p.pdf"
+
+    result = _download_result(FakeAdapter([pdf_ok()]), dest, max_bytes=8)
+
+    assert result.status == "too_large"
+    assert not dest.exists()
+    assert not list(tmp_path.iterdir())  # no partial file left behind
+
+
+def test_a_failed_download_never_replaces_a_stored_pdf(tmp_path):
+    dest = tmp_path / "p.pdf"
+    dest.write_bytes(PDF_BYTES)
+    adapter = FakeAdapter([(200, b"<html></html>", {"Content-Type": "text/html"})])
+
+    _download_result(adapter, dest)
+
+    assert dest.read_bytes() == PDF_BYTES
+
+
+def test_a_throttled_pdf_is_reported_as_rate_limited(tmp_path):
+    result = _download_result(FakeAdapter([throttled()]), tmp_path / "p.pdf")
+
+    assert result.status == "rate_limited"
+    assert result.retryable
+
+
+def test_the_boolean_downloader_keeps_its_contract(tmp_path):
+    assert _download(FakeAdapter([pdf_ok()]), tmp_path / "a.pdf") is True
+    html = (200, b"<html></html>", {"Content-Type": "text/html"})
+    assert _download(FakeAdapter([html]), tmp_path / "b.pdf") is False

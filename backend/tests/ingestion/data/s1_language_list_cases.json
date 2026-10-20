@@ -1,0 +1,65 @@
+{
+  "about": "Candidates whose multilingual facet is evidenced only by a list of language names (2026-10-12). Retrieved read-only from the arXiv API (query: prompt-injection phrases AND any of 18 language names) and scored offline with the production cross-encoder (cross-encoder/ms-marco-MiniLM-L-6-v2, raw logits) in the backend container. Unlabelled: the expected reason codes pin current gate behaviour, not ground truth. They show the language-name rule is not a relevance shortcut -- off-topic lists are rejected by the semantic floor -- and that tightening it would cost a relevant paper.",
+  "topic": "Multilingual prompt injection",
+  "items": [
+    {
+      "title": "Visible Reasoning and Indirect Prompt-Injection Monitorability Across English, Tamil, and Tanglish",
+      "abstract": "Chain-of-thought monitoring is a potentially useful safety signal, but its reliability across languages and behavioral settings remains uncertain. In a small case study of eight manually verified synthetic scenarios, one model, one annotator, and one deterministic generation seed, I study API-visible reasoning during indirect prompt injection in Sarvam-105B across English, Tamil, and Tanglish. A four scenario pilot found 5/12 injected attack successes without reasoning and 1/11 with reasoning. A preregistered four-scenario follow-up reversed that direction, finding 2/12 attacks without reasoning and 3/12 with reasoning. With only four scenarios per phase, this design cannot distinguish a real reasoning-mode effect from prompt-specific variation or sampling noise. Across 20 non-empty injected-thinking traces, all 17 benign-correct outputs stated an intent to ignore the injection, while all three attack successes stated an intent to follow it. These descriptive observations provide a reproducible case study of behaviorally informative visible reasoning when it is available; they do not establish that reasoning mode improves safety, that visible reasoning is mechanistically faithful, or that the findings generalize beyond this configuration.",
+      "cross_encoder_score": -0.26794320344924927,
+      "multilingual_forms": [],
+      "language_names": [
+        "english",
+        "tamil",
+        "tanglish"
+      ],
+      "expected_reason_code": "relevant:conceptual",
+      "status": "needs_review",
+      "note": "A Tamil/Tanglish indirect prompt-injection study (2026-10-12 corpus paper 6). Its multilingual facet is evidenced only by language names (english, tamil, tanglish): a rule requiring a multilingual keyword would reject it."
+    },
+    {
+      "title": "HiveTraceGuard-Pro: A Compact Generative Guardrail for Prompt Injection, Jailbreaks, and Adversarial Obfuscation",
+      "abstract": "Production LLMs must handle inputs that attempt to override system instructions, bypass safety policies or elicit harmful responses. A common mitigation is a separate guardrail model. Existing reports, however, provide little evidence on Russian prompt injection or Russian surface obfuscation. We present HiveTraceGuard-Pro, a 0.6B generative guardrail LoRA-tuned from Qwen3-0.6B. It is trained on Russian and English and uses one binary scoring rule (safe/unsafe) for the final target turn. Its training corpus pairs harmful examples, where a counterpart exists, with benign examples from the same domain and applies eight obfuscation transforms to both labels. In one harness, we compare HiveTraceGuard-Pro with thirty-four other guards on nineteen benchmark groups, sixteen of which are public. Its aggregate key is 0.7432, behind 0.7641 and 0.7552 for the two higher-scoring guards. Over the sixteen public groups alone, its key is 0.7153 and four of the thirty-four other suite guards score higher. In a fifteen-model comparison, HiveTraceGuard-Pro has the highest clean Russian robustness combined-F1 (0.88) and Russian prompt-injection recall (0.999). Both results use Russian sets assembled by our team, and at least 27.1% of the prompt-injection set overlaps the training corpus. Its 14.3 ms median latency is the lowest among those fifteen models in that run. Across the suite, FPR is 0.268 and FNR is 0.156. All reported response results use a legacy standalone-reply serialization rather than the natural assistant-role path of the shipped chat template. We release the merged weights on Hugging Face under Apache-2.0. The corpus, evaluation sets and evaluation code remain internal.",
+      "cross_encoder_score": -2.783282518386841,
+      "multilingual_forms": [],
+      "language_names": [
+        "english",
+        "russian"
+      ],
+      "expected_reason_code": "low_semantic_relevance",
+      "status": "needs_review",
+      "note": "A prompt-injection guardrail evaluated in Russian and English; multilingual only through two language names."
+    },
+    {
+      "title": "Copyright Is the Headline; Capability Is the Blind Spot: AI Technology in the Book-Publishing Trade Press, November 2025--August 2026",
+      "abstract": "This rapid evidence review examines 89 articles about artificial intelligence (AI) and book publishing published from November 1, 2025 through August 1, 2026. The purposive corpus spans English-, Chinese-, German-, French-, Spanish-, Portuguese-, Italian-, and Japanese-language publishing coverage; major-newspaper book coverage; and specialist technology commentators. Each item was coded for topic, stance, technical depth, and dominant voice. The press is neither silent nor simply hostile: 30% of items are risk-framed, 42% mixed, and 28% opportunity-framed. Chinese coverage is markedly operational and opportunity-oriented; specialist commentary is substantially deeper than trade reporting. Yet the corpus still clusters around rights, licensing, governance, reader trust, workflow adoption, and product announcements. Only ten items offer sustained technical scrutiny, and none centers a direct interview with a frontier-lab researcher or evaluation engineer. The central gap is reporting that connects model architecture and evaluation to publishing decisions: capability elicitation, RAG, prompt injection, agent reliability, inference economics, model drift, provenance, reader research, and reproducible workflow evaluation. The report recommends a standing AI beat, recurring lab interviews, a claims ledger, shared test protocols, reader panels, and technical columnists. The supplement supplies the full coded corpus, claim ledger, glossary, and BibTeX database.",
+      "cross_encoder_score": -11.046181678771973,
+      "multilingual_forms": [],
+      "language_names": [
+        "chinese",
+        "english",
+        "french",
+        "german",
+        "italian",
+        "japanese",
+        "portuguese",
+        "spanish"
+      ],
+      "expected_reason_code": "low_semantic_relevance",
+      "status": "needs_review",
+      "note": "About AI technology and copyright; lists eight languages. Off-topic: the language list alone satisfies the lexical multilingual facet."
+    },
+    {
+      "title": "FCMBench-Video: Benchmarking Document Video Intelligence",
+      "abstract": "Document understanding is a critical capability in financial credit review, onboarding, and remote verification, where both decision accuracy and evidence traceability matter. Compared with static document images, document videos present a temporally redundant and sequentially unfolding evidence stream, require evidence integration across frames, and preserve acquisition-process cues relevant to authenticity-sensitive and anti-fraud review. We introduce FCMBench-Video, a benchmark for document-video intelligence that evaluates document perception, temporal grounding, and evidence-grounded reasoning under realistic capture conditions. For privacy-compliant yet realistic data at scale, we organize construction as an atomic-acquisition and composition workflow that records reusable single-document clips, applies controlled degradations, and assembles long-form multi-document videos with prescribed temporal spans. FCMBench-Video is built from 495 atomic videos composed into 1,200 long-form videos paired with 11,322 expert-annotated question--answer instances, covering 28 document types over 20s--60s duration tiers and 5,960 Chinese / 5,362 English instances. Evaluations on nine recent Video-MLLMs show that FCMBench-Video provides meaningful separation across systems and capabilities: counting is the most duration-sensitive task, Cross-Document Validation and Evidence-Grounded Selection probe higher-level evidence integration, and Visual Prompt Injection provides a complementary robustness dimension. The overall score distribution is broad and approximately bell-shaped, indicating a benchmark that is neither saturated nor dominated by trivial cases. Together, these results position FCMBench-Video as a reproducible benchmark for tracking Video-MLLM progress on document-video understanding and probing capability boundaries in authenticity-sensitive credit-domain applications.",
+      "cross_encoder_score": -7.13436222076416,
+      "multilingual_forms": [],
+      "language_names": [
+        "chinese",
+        "english"
+      ],
+      "expected_reason_code": "low_semantic_relevance",
+      "status": "needs_review",
+      "note": "A document-video benchmark that lists Chinese and English. Off-topic."
+    }
+  ]
+}

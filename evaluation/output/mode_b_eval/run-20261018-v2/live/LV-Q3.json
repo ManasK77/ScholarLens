@@ -1,0 +1,137 @@
+{
+ "mode": "live",
+ "sent": true,
+ "test_id": "LV-Q3",
+ "question": "What accuracy does the Turkish prompt injection benchmark report for GPT-4 on Turkish prompts?",
+ "started_at": "2026-10-18T17:33:33Z",
+ "http_status": 200,
+ "elapsed_seconds": 162.31,
+ "outcome": "grounded_answer",
+ "expected_outcome": "grounding_failed",
+ "outcome_as_expected": false,
+ "verdict": "PASS",
+ "checks": {
+  "http_200": {
+   "ok": true,
+   "detail": 200
+  },
+  "response_schema": {
+   "ok": true,
+   "detail": null
+  },
+  "answer_non_empty": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_structure": {
+   "ok": true,
+   "detail": null
+  },
+  "claims_cite_returned_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "citations_cited_by_claims": {
+   "ok": true,
+   "detail": null
+  },
+  "removed_claim_count_valid": {
+   "ok": true,
+   "detail": 0
+  },
+  "citations_match_stored_sources": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_titles_match_corpus": {
+   "ok": true,
+   "detail": null
+  },
+  "grounded_answer_has_claims_and_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "loop_bounds": {
+   "ok": true,
+   "detail": {
+    "retrieval_rounds": 1,
+    "retry_count": 0,
+    "regeneration_count": 1
+   }
+  }
+ },
+ "workflow": {
+  "retrieval_rounds": 1,
+  "assessments": [
+   "sufficient=True;relevant=12;papers=7;scope=single_paper;required_papers=1;uncovered_subjects=0"
+  ],
+  "reformulations": 0,
+  "invalid_reformulations": 0,
+  "grounding_reasons": [
+   "claim_check_failed",
+   "ok"
+  ],
+  "veto_codes": [
+   [
+    [
+     "unsupported_term",
+     "low_overlap"
+    ]
+   ],
+   [
+    []
+   ]
+  ],
+  "llm_calls": 3,
+  "reranked": true,
+  "generations": 2,
+  "regenerations": 1,
+  "grounding_checks": [
+   "structural=True;grounded=False;claims=1;cited=1;invalid_citations=0;unsupported=1;reason=claim_check_failed;vetoed=1;kept=0;prose_uncovered=0;veto_codes=unsupported_term+low_overlap",
+   "structural=True;grounded=True;claims=1;cited=1;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;kept=1;prose_uncovered=1;veto_codes=-"
+  ],
+  "terminal": "grounding:structural=True;grounded=True;claims=1;cited=1;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;kept=1;prose_uncovered=1;veto_codes=-"
+ },
+ "llm_calls": 3,
+ "expected_paper_ids": [],
+ "expected_paper_overlap": [],
+ "response": {
+  "answer": "GPT‑4o has an accuracy of 95%, Claude Sonnet 4 reaches 94%, and Grok-3 records the lowest accuracy at 88%.",
+  "claims": [
+   {
+    "text": "GPT‑4o has an accuracy of 95%, Claude Sonnet 4 reaches 94%, and Grok-3 records the lowest accuracy at 88%.",
+    "evidence_ids": [
+     "3322a841-f7cd-510c-a407-95b61ee21650"
+    ]
+   }
+  ],
+  "citations": [
+   {
+    "id": "3322a841-f7cd-510c-a407-95b61ee21650",
+    "paper_id": 20,
+    "title": "Phishing Email Detection Using Large Language Models",
+    "year": 2025,
+    "source_type": "paragraph",
+    "text_chars": 202,
+    "text_start": "We evaluate the balanced dataset using the Universal Structured Prompt illustrated in Figure 2. GPT-4o has an accuracy of 95%, Claude Sonnet 4 reaches 94%, and "
+   }
+  ],
+  "grounded": true,
+  "retrieval_rounds": 1,
+  "retry_count": 0,
+  "regeneration_count": 1,
+  "removed_claim_count": 0,
+  "trace": [
+   "retrieve:round=1;vector=12;graph=4;total=16",
+   "assess:sufficient=True;relevant=12;papers=7;scope=single_paper;required_papers=1;uncovered_subjects=0",
+   "rerank",
+   "generate:strict=False",
+   "grounding:structural=True;grounded=False;claims=1;cited=1;invalid_citations=0;unsupported=1;reason=claim_check_failed;vetoed=1;kept=0;prose_uncovered=0;veto_codes=unsupported_term+low_overlap",
+   "regenerate:1",
+   "generate:strict=True",
+   "grounding:structural=True;grounded=True;claims=1;cited=1;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;kept=1;prose_uncovered=1;veto_codes=-"
+  ],
+  "provider": "groq",
+  "model": "openai/gpt-oss-20b"
+ }
+}

@@ -129,6 +129,7 @@ def replace_clusters(session: Session, clusters: list[StatementCluster]) -> list
     members would silently inflate the next rebuild's `/clusters` payload.
     """
     from app.explanation.storage import archive_reports
+
     archive_reports(session)
     for table in _dependent_tables():
         session.execute(delete(table))

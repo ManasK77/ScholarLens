@@ -64,11 +64,17 @@ def _require_text(value: str, label: str) -> None:
 
 @dataclass(frozen=True, slots=True)
 class EntityMention:
-    """One typed entity mention. Positional: text, entity_type, confidence."""
+    """One typed entity mention. Positional: text, entity_type, confidence.
+
+    `evidence` names the Stage 4 input units the mention occurs in (`abstract`
+    or `statement:<section>.<paragraph>.<sentence>`); empty until the service
+    attaches it (D-S4-PROV-01).
+    """
 
     text: str
     entity_type: str
     confidence: float
+    evidence: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _require_text(self.text, "EntityMention.text")
@@ -85,12 +91,18 @@ class RelationMention:
 
     `head`/`tail` carry entity **text**, not ids — `graph.py` casefolds them to
     build the `normalized_name` it MATCHes on.
+
+    `evidence` names the input units holding *both* endpoints; when no single
+    unit does, `cross_sentence` is set and `evidence` names the units holding
+    either one, so a reader can see the model linked them across sentences.
     """
 
     head: str
     relation_type: str
     tail: str
     confidence: float
+    evidence: tuple[str, ...] = ()
+    cross_sentence: bool = False
 
     def __post_init__(self) -> None:
         _require_text(self.head, "RelationMention.head")

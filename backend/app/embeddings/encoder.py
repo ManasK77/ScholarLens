@@ -25,6 +25,7 @@ from collections.abc import Callable, Sequence
 from functools import lru_cache
 
 from app.core.config import Settings, get_settings
+from app.core.model_revision import resolved_revision, split_revision
 
 logger = logging.getLogger(__name__)
 
@@ -135,21 +136,28 @@ def load_specter2(settings: Settings) -> tuple[EmbedFn, int]:
     model = AutoAdapterModel.from_pretrained(
         settings.embedding_model, revision=revision
     )
+    # The adapter is a different repository with its own commits, so the base
+    # model's revision must never be sent to it (D-S5-REV-01). It is pinned
+    # with an `EMBEDDING_ADAPTER=org/repo@<revision>` suffix instead, which
+    # changes `embed_version` exactly as a pinned base revision does.
+    adapter, adapter_revision = split_revision(settings.embedding_adapter)
     model.load_adapter(
-        settings.embedding_adapter,
+        adapter,
         source="hf",
         load_as="specter2",
         set_active=True,
-        revision=revision,
+        revision=adapter_revision,
     )
     model.eval()
 
     dimension = int(model.config.hidden_size)
     max_tokens = settings.embedding_max_tokens
     logger.info(
-        "Loaded SPECTER2 %s + adapter %s (%d-d)",
+        "Loaded SPECTER2 %s@%s + adapter %s@%s (%d-d)",
         settings.embedding_model,
-        settings.embedding_adapter,
+        resolved_revision(settings.embedding_model, revision) or revision,
+        adapter,
+        resolved_revision(adapter, adapter_revision) or adapter_revision,
         dimension,
     )
 

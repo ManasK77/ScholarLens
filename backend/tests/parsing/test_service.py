@@ -7,8 +7,10 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from app.core.pipeline import pipeline_run
 from app.ingestion import corpus
 from app.parsing import service, storage
+from app.parsing.grobid_client import GrobidOutcome
 
 FULLTEXT_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "grobid_sample_fulltext.tei.xml"
@@ -21,6 +23,160 @@ def session():
     corpus.Base.metadata.create_all(engine)
     with Session(engine) as active:
         yield active
+
+
+def _grobid_returns(monkeypatch, tei, status=None):
+    """Patch GROBID's full-text call. `None` alone means it rejected the PDF."""
+    outcome = GrobidOutcome(tei, status or ("ok" if tei is not None else "rejected"))
+    fake = Mock(return_value=outcome)
+    monkeypatch.setattr(service.grobid_client, "fulltext", fake)
+    return fake
+
+
+def _headings_only(monkeypatch):
+    monkeypatch.setattr(
+        service.section_classifier,
+        "classify_sections",
+        lambda headings: ["Introduction"] * len(headings),
+    )
+
+
+# GROBID's answer for a scanned or image-only PDF: section heads, no text.
+HEADS_WITHOUT_TEXT_TEI = (
+    '<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body>'
+    "<div><head>1 Introduction</head></div>"
+    "<div><head>2 Method</head><p> </p></div>"
+    "</body></text></TEI>"
+)
+FALLBACK_WITH_TEXT = [
+    {"heading": None, "type": None, "paragraphs": [{"text": "Recovered body."}]}
+]
+
+
+def test_grobid_structure_without_text_falls_back(session, tmp_path, monkeypatch):
+    """Headings alone are not a parse: the fallback must get its chance."""
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"pdf")
+    _grobid_returns(monkeypatch, HEADS_WITHOUT_TEXT_TEI)
+    fallback = Mock(return_value=FALLBACK_WITH_TEXT)
+    monkeypatch.setattr(service.fallback, "extract_fallback_sections", fallback)
+    _headings_only(monkeypatch)
+
+    document = service.parse_and_store(
+        session, _paper(session, "arxiv", str(pdf)), "url"
+    )
+
+    fallback.assert_called_once_with(b"pdf")
+    assert document.parser_used == "fallback"
+    assert document.sections[0]["paragraphs"][0]["text"] == "Recovered body."
+
+
+def test_no_text_from_any_parser_is_recorded_as_none(session, tmp_path, monkeypatch):
+    """A PDF neither parser can read is a visible failure, not a fallback parse."""
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"pdf")
+    _grobid_returns(monkeypatch, HEADS_WITHOUT_TEXT_TEI)
+    monkeypatch.setattr(
+        service.fallback, "extract_fallback_sections", Mock(return_value=None)
+    )
+    _headings_only(monkeypatch)
+
+    document = service.parse_and_store(
+        session, _paper(session, "arxiv", str(pdf)), "url"
+    )
+
+    assert document.parser_used == "none"
+    # No text was recovered, so no structure is stored as if it were evidence.
+    assert document.sections == []
+
+
+def test_fallback_while_grobid_unavailable_is_marked_provisional(
+    session, tmp_path, monkeypatch
+):
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"pdf")
+    _grobid_returns(monkeypatch, None, "unavailable")
+    monkeypatch.setattr(
+        service.fallback,
+        "extract_fallback_sections",
+        Mock(return_value=FALLBACK_WITH_TEXT),
+    )
+    _headings_only(monkeypatch)
+
+    document = service.parse_and_store(
+        session, _paper(session, "arxiv", str(pdf)), "url"
+    )
+
+    assert document.parser_used == "fallback_grobid_unavailable"
+
+
+def test_checkpointed_s2_retries_grobid_only_for_provisional_fallbacks(
+    session, tmp_path, monkeypatch
+):
+    """A GROBID outage must not permanently downgrade a paper to the fallback.
+
+    The PDF bytes do not change, so the input hash alone would call the
+    outage-time parse current forever. A document GROBID itself rejected is
+    final, though: re-sending it every run would only repeat the same 500.
+    """
+    rejected_pdf, outage_pdf = tmp_path / "a.pdf", tmp_path / "b.pdf"
+    rejected_pdf.write_bytes(b"rejected")
+    outage_pdf.write_bytes(b"outage")
+    rejected = _paper(session, "arxiv", str(rejected_pdf))
+    outage = _paper(session, "arxiv", str(outage_pdf))
+    session.commit()
+    monkeypatch.setattr(
+        service.fallback,
+        "extract_fallback_sections",
+        Mock(return_value=FALLBACK_WITH_TEXT),
+    )
+    _headings_only(monkeypatch)
+    xml = FULLTEXT_FIXTURE.read_text(encoding="utf-8")
+
+    monkeypatch.setattr(
+        service.grobid_client,
+        "fulltext",
+        lambda pdf, url: GrobidOutcome(
+            None, "rejected" if pdf == b"rejected" else "unavailable"
+        ),
+    )
+    with pipeline_run(session, {}):
+        first = service.parse_all_pending(
+            session, "url", "e@example.org", str(tmp_path)
+        )
+    assert first.processed == [rejected.id, outage.id]
+    assert first.grobid_unavailable == [outage.id]
+
+    grobid_back = _grobid_returns(monkeypatch, xml)
+    with pipeline_run(session, {}):
+        second = service.parse_all_pending(
+            session, "url", "e@example.org", str(tmp_path)
+        )
+
+    assert second.processed == [outage.id]
+    grobid_back.assert_called_once_with(b"outage", "url")
+    assert storage.get_parsed_document(session, outage.id).parser_used == "grobid"
+    assert storage.get_parsed_document(session, rejected.id).parser_used == "fallback"
+
+
+def test_parse_batch_reports_documents_with_no_text(session, tmp_path, monkeypatch):
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"pdf")
+    paper = _paper(session, "arxiv", str(pdf))
+    session.commit()
+    _grobid_returns(monkeypatch, None)
+    monkeypatch.setattr(
+        service.fallback, "extract_fallback_sections", Mock(return_value=None)
+    )
+    _headings_only(monkeypatch)
+
+    with pipeline_run(session, {}):
+        batch = service.parse_all_pending(
+            session, "url", "e@example.org", str(tmp_path)
+        )
+
+    assert batch.processed == [paper.id]
+    assert batch.no_text == [paper.id]
 
 
 def _paper(session: Session, source: str, pdf_path: str, title="Paper"):
@@ -46,9 +202,11 @@ def test_parse_and_store_is_source_agnostic(session, tmp_path, monkeypatch) -> N
     pdf = tmp_path / "same.pdf"
     pdf.write_bytes(b"same")
     xml = FULLTEXT_FIXTURE.read_text(encoding="utf-8")
-    monkeypatch.setattr(service.grobid_client, "parse_fulltext", Mock(return_value=xml))
+    _grobid_returns(monkeypatch, xml)
     monkeypatch.setattr(
-        service.section_classifier, "classify_sections", lambda headings: ["Introduction"] * len(headings)
+        service.section_classifier,
+        "classify_sections",
+        lambda headings: ["Introduction"] * len(headings),
     )
 
     outputs = []
@@ -70,14 +228,20 @@ def test_parse_and_store_uses_fallback_on_grobid_failure(
 ) -> None:
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"pdf")
-    raw = [{"heading": "Conclusion", "type": None, "paragraphs": []}]
-    monkeypatch.setattr(
-        service.grobid_client, "parse_fulltext", Mock(return_value=None)
-    )
+    raw = [
+        {
+            "heading": "Conclusion",
+            "type": None,
+            "paragraphs": [{"text": "We conclude."}],
+        }
+    ]
+    _grobid_returns(monkeypatch, None)
     fallback = Mock(return_value=raw)
     monkeypatch.setattr(service.fallback, "extract_fallback_sections", fallback)
     monkeypatch.setattr(
-        service.section_classifier, "classify_sections", lambda headings: ["Conclusion"] * len(headings)
+        service.section_classifier,
+        "classify_sections",
+        lambda headings: ["Conclusion"] * len(headings),
     )
 
     document = service.parse_and_store(
@@ -94,13 +258,13 @@ def test_parse_and_store_uses_fallback_on_malformed_tei(
 ) -> None:
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"pdf")
-    monkeypatch.setattr(
-        service.grobid_client, "parse_fulltext", Mock(return_value="<not-closed")
-    )
-    fallback = Mock(return_value=[{"heading": None, "type": None, "paragraphs": []}])
+    _grobid_returns(monkeypatch, "<not-closed")
+    fallback = Mock(return_value=FALLBACK_WITH_TEXT)
     monkeypatch.setattr(service.fallback, "extract_fallback_sections", fallback)
     monkeypatch.setattr(
-        service.section_classifier, "classify_sections", lambda headings: ["Introduction"] * len(headings)
+        service.section_classifier,
+        "classify_sections",
+        lambda headings: ["Introduction"] * len(headings),
     )
 
     document = service.parse_and_store(
@@ -117,13 +281,13 @@ def test_parse_and_store_uses_fallback_when_tei_has_no_body_sections(
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"pdf")
     empty_tei = '<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body /></text></TEI>'
-    monkeypatch.setattr(
-        service.grobid_client, "parse_fulltext", Mock(return_value=empty_tei)
-    )
-    fallback = Mock(return_value=[{"heading": None, "type": None, "paragraphs": []}])
+    _grobid_returns(monkeypatch, empty_tei)
+    fallback = Mock(return_value=FALLBACK_WITH_TEXT)
     monkeypatch.setattr(service.fallback, "extract_fallback_sections", fallback)
     monkeypatch.setattr(
-        service.section_classifier, "classify_sections", lambda headings: ["Introduction"] * len(headings)
+        service.section_classifier,
+        "classify_sections",
+        lambda headings: ["Introduction"] * len(headings),
     )
 
     document = service.parse_and_store(
@@ -134,15 +298,78 @@ def test_parse_and_store_uses_fallback_when_tei_has_no_body_sections(
     fallback.assert_called_once_with(b"pdf")
 
 
+@pytest.mark.parametrize(
+    ("tei", "reason"),
+    [
+        (None, "no GROBID response"),
+        ("<not-closed", "unparseable TEI"),
+        (
+            '<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body /></text></TEI>',
+            "no body sections",
+        ),
+    ],
+)
+def test_fallback_is_logged_with_paper_and_reason(
+    session, tmp_path, monkeypatch, caplog, tei, reason
+) -> None:
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"pdf")
+    _grobid_returns(monkeypatch, tei)
+    monkeypatch.setattr(
+        service.fallback,
+        "extract_fallback_sections",
+        Mock(
+            return_value=[
+                {"heading": None, "type": None, "paragraphs": [{"text": "Body."}]}
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        service.section_classifier,
+        "classify_sections",
+        lambda headings: ["Introduction"] * len(headings),
+    )
+    paper = _paper(session, "arxiv", str(pdf))
+
+    with caplog.at_level("WARNING", logger="app.parsing.service"):
+        service.parse_and_store(session, paper, "url")
+
+    assert f"paper={paper.id}" in caplog.text
+    assert reason in caplog.text
+    assert "no text" not in caplog.text
+
+
+def test_document_with_no_text_is_logged(session, tmp_path, monkeypatch, caplog):
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"pdf")
+    _grobid_returns(monkeypatch, None)
+    monkeypatch.setattr(
+        service.fallback, "extract_fallback_sections", Mock(return_value=None)
+    )
+    monkeypatch.setattr(
+        service.section_classifier, "classify_sections", lambda headings: []
+    )
+    paper = _paper(session, "arxiv", str(pdf))
+
+    with caplog.at_level("WARNING", logger="app.parsing.service"):
+        document = service.parse_and_store(session, paper, "url")
+
+    assert document.sections == []
+    assert f"paper={paper.id}" in caplog.text
+    assert "no text" in caplog.text
+
+
 def test_parse_and_store_classifies_grobid_sections(
     session, tmp_path, monkeypatch
 ) -> None:
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(b"pdf")
     xml = FULLTEXT_FIXTURE.read_text(encoding="utf-8")
-    monkeypatch.setattr(service.grobid_client, "parse_fulltext", Mock(return_value=xml))
+    _grobid_returns(monkeypatch, xml)
     monkeypatch.setattr(
-        service.section_classifier, "classify_sections", lambda headings: ["Discussion"] * len(headings)
+        service.section_classifier,
+        "classify_sections",
+        lambda headings: ["Discussion"] * len(headings),
     )
 
     document = service.parse_and_store(

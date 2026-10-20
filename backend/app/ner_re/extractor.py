@@ -27,6 +27,7 @@ from time import perf_counter
 from typing import Any, Protocol
 
 from app.core.config import Settings, get_settings
+from app.core.model_revision import resolved_revision, split_revision
 from app.ner_re.schema import (
     ENTITY_DESCRIPTIONS,
     ENTITY_TYPES,
@@ -97,6 +98,9 @@ class JointEntityRelationExtractor:
             raise ValueError("batch_size must be between 1 and 32")
         self._batch_size = batch_size
         self._schema: Any = None
+        # The checkpoint's resolved commit, recorded on each Paper node it
+        # projects. `NERRE_MODEL` names a branch, and that branch has moved.
+        self.model_revision: str | None = None
 
     def _joint_schema(self) -> Any:
         if self._schema is None:
@@ -155,16 +159,11 @@ class JointEntityRelationExtractor:
                 yield from self._extract_one(chunk)
 
     def _extract_one(self, chunk):
-        try:
-            raw = self._model.extract(chunk, self._joint_schema(), config=self._config)
-        except Exception:
-            from app.core.pipeline import current_run
-
-            if current_run():
-                raise
-            logger.exception("Joint extraction failed for one chunk; skipping it")
-            return
-        yield raw
+        # A failure propagates in every context. Skipping the chunk used to let
+        # the caller replace the paper's whole projection with what the other
+        # chunks produced; `extract_all` fails just that paper instead and
+        # leaves its previous projection in place.
+        yield self._model.extract(chunk, self._joint_schema(), config=self._config)
 
     def _merge(
         self,
@@ -282,8 +281,13 @@ def load_joint_model(settings: Settings) -> JointIEModel:
     """
     from gliner2.joint_ie import JointIE
 
+    # `NERRE_MODEL=org/repo@<commit>` pins the checkpoint (D-S4-REV-01); a bare
+    # name loads exactly as before, following the repo's default branch.
+    repo, revision = split_revision(settings.nerre_model)
     started = perf_counter()
-    model = JointIE.from_pretrained(settings.nerre_model)
+    model = JointIE.from_pretrained(
+        repo, **({"revision": revision} if revision else {})
+    )
     logger.info(
         "Loaded GLiNER2 %s in %.1fs (batch_size=%d)",
         settings.nerre_model,
@@ -297,12 +301,14 @@ def load_joint_model(settings: Settings) -> JointIEModel:
 def get_joint_extractor() -> JointEntityRelationExtractor:
     """Process-wide extractor so the checkpoint is loaded at most once."""
     settings = get_settings()
-    return JointEntityRelationExtractor(
+    extractor = JointEntityRelationExtractor(
         load_joint_model(settings),
         entity_threshold=settings.nerre_entity_threshold,
         relation_threshold=settings.nerre_relation_threshold,
         batch_size=settings.nerre_batch_size,
     )
+    extractor.model_revision = resolved_revision(*split_revision(settings.nerre_model))
+    return extractor
 
 
 class SupportsExtractMany(Protocol):

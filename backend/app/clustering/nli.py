@@ -251,6 +251,19 @@ class ContradictionDetector:
             return []
         return found
 
+    def score_pairs(self, pairs: list[tuple[str, str]]) -> list[float]:
+        """P(contradiction) for each `(premise, hypothesis)`, truncated as above.
+
+        Used by Stage 9 to check a report's own conflict claim (D-09-13); the
+        same model and cache as Stage 6.
+        """
+        return self._score(
+            [
+                (left[: self._max_chars], right[: self._max_chars])
+                for left, right in pairs
+            ]
+        )
+
     def _score(self, inputs: list[tuple[str, str]]) -> list[float]:
         self.pairs_scored += len(inputs)
         run = current_run()

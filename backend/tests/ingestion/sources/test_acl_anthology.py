@@ -320,3 +320,12 @@ def test_a_single_word_topic_still_matches_as_a_plain_substring():
     out = acl_anthology.search_topic(FIXTURE_PATH, "multilingual")
 
     assert len(out) == 6
+
+
+def test_a_candidate_carries_its_anthology_page_as_provenance():
+    out = acl_anthology.search_topic(FIXTURE_PATH, "multilingual")
+
+    assert out
+    assert all(c["source_url"].startswith("https://aclanthology.org/") for c in out)
+    old = next(c for c in out if c["acl_id"] == "E91-1001")
+    assert old["source_url"] == "https://aclanthology.org/E91-1001/"

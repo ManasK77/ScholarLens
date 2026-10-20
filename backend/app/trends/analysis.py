@@ -18,6 +18,7 @@ reasoning):
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -153,3 +154,29 @@ def analyze_cluster(
         slope=trend_slope(yearly_counts),
         undated_mentions=undated,
     )
+
+
+# Below this many papers in every year, a slope describes this corpus's sample
+# and nothing wider (D-07-08). Display only: the stored series and slope are
+# unchanged.
+SMALL_SAMPLE_PAPERS_PER_YEAR = 5
+
+
+def trend_qualifiers(yearly_counts: Mapping[str, int] | None, today: date) -> dict:
+    """What a stored trend can claim: sample size, partial years, one-year series.
+
+    `yearly_counts` holds distinct papers per year and a paper has one year,
+    so the values sum to the distinct dated papers. A year at or after
+    `today`'s is still being published into and is reported as partial.
+    """
+    counts = {int(year): int(count) for year, count in (yearly_counts or {}).items()}
+    observed = [year for year, count in counts.items() if count]
+    max_per_year = max(counts.values(), default=0)
+    return {
+        "papers": sum(counts.values()),
+        "years": len(counts),
+        "max_papers_per_year": max_per_year,
+        "small_sample": max_per_year < SMALL_SAMPLE_PAPERS_PER_YEAR,
+        "partial_years": [str(year) for year in sorted(observed) if year >= today.year],
+        "single_year": len(counts) < 2,
+    }

@@ -23,7 +23,8 @@ export default function TrendChart({ trends, clusters }: TrendChartProps) {
       name: clusterNames.get(trend.cluster_id),
       line: { width: 3, color: colors[index % colors.length] },
       marker: { size: 7 },
-      hovertemplate: '%{y} mentions in %{x}<extra>%{fullData.name}</extra>',
+      // The series counts distinct papers per year, not sentences or mentions.
+      hovertemplate: '%{y} papers in %{x}<extra>%{fullData.name}</extra>',
     }
   })
 
@@ -40,7 +41,7 @@ export default function TrendChart({ trends, clusters }: TrendChartProps) {
         plot_bgcolor: 'transparent',
         font: { family: 'Manrope, sans-serif', color: '#50615b', size: 12 },
         xaxis: { title: { text: 'Publication year' }, gridcolor: '#e6e7df', zeroline: false, dtick: 1 },
-        yaxis: { title: { text: 'Evidence mentions' }, gridcolor: '#e6e7df', zeroline: false, rangemode: 'tozero' },
+        yaxis: { title: { text: 'Papers per year' }, gridcolor: '#e6e7df', zeroline: false, rangemode: 'tozero' },
         legend: { orientation: 'h', y: -0.22, x: 0 },
         hoverlabel: { bgcolor: '#102b27', bordercolor: '#102b27', font: { color: '#fff' } },
       }}

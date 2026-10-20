@@ -1,0 +1,131 @@
+question_id,question
+p001,Which languages were used for the hidden prompt injection in the LLM-based academic reviewing study?
+p002,How many ICML papers were used in the hidden prompt injection reviewing experiment?
+p003,Why did Arabic hidden prompt injection have weaker effects on the LLM reviewer than English injection?
+p004,What limitations do the authors of the hidden prompt injection academic reviewing study acknowledge?
+p005,Which languages does the MIPIAD indirect prompt injection dataset cover?
+p006,"How were the Bangla attack samples in MIPIAD created, and what limitation does that introduce?"
+p007,Does combining the XLPID detector with TF-IDF features improve prompt injection detection F1?
+p008,Which attack categories remained the hardest for the MIPIAD defense to reduce?
+p009,Why is the stacking ensemble in MIPIAD considered unsuitable for a security tool?
+p010,What future work do the MIPIAD authors propose?
+p011,What share of malicious requests resulted in full compliance across the six LLMs tested with phishing and keylogger prompts?
+p012,Which natural language had the highest full compliance rate for malicious prompts in the multilingual and obfuscated attack evaluation?
+p013,"Do Base64, ROT13 and Hex encodings prevent LLMs from producing malicious outputs?"
+p014,How do elaborate prompts compare with direct prompts in eliciting malicious compliance from LLMs?
+p015,Which model was the most conservative in full compliance in the malicious prompt compliance study?
+p016,What limitations do the authors of the WMT prompt injection test suite for machine translation acknowledge?
+p017,Which machine translation systems were the most robust to prompt injection in the WMT 2024 test suite?
+p018,Is robustness to prompt injection related to clean translation quality in the WMT test suite?
+p019,How does model size affect prompt injection success in prompt-based machine translation?
+p020,Which mitigations does the scaling-behaviour paper suggest against inverse scaling under prompt injection?
+p021,Into which languages were the TruthfulQA questions translated for the machine translation scaling study?
+p022,Does visible reasoning in Sarvam-105B reveal whether the model will follow an indirect prompt injection?
+p023,"What are the limitations of the Sarvam-105B case study on English, Tamil and Tanglish prompt injection?"
+p024,"What attack success counts were observed for English, Tamil and Tanglish prompts in the Sarvam study?"
+p025,Does PromptArmor protect LLM relevance judges against multilingual content-based injections?
+p026,What accuracy and latency does Sentra-Guard report on HarmBench-28K?
+p027,Which languages was Sentra-Guard evaluated on for cross-lingual jailbreak detection?
+p028,What limitations does Sentra-Guard acknowledge regarding Unicode obfuscation and low-resource languages?
+p029,What guardrails did the Hsinchu smart tourism chatbot use to resist prompt injection?
+p030,What similarity threshold did the Hsinchu tourism RAG chatbot use for its relevance check?
+p031,How many languages and how many question-answer data points were covered in the ChatGPT multilingual fuzzing study?
+p032,Does prompt injection increase the probability of ChatGPT jailbreaks for multilingual questions?
+p033,Which model had the highest attack success rate under the instruction override attack in the phishing email detection study?
+p034,"How does translating emails into Bangla, Chinese and Hindi affect the false positive rates of LLM phishing detectors?"
+p035,Which papers report that LLM safety or instruction compliance is weaker for non-English prompts?
+p036,What evaluation limitations caused by machine-translated attack prompts are reported across the papers?
+p037,How have prompt injection attacks on machine translation systems been constructed and evaluated?
+p038,"Which papers evaluate defenses against prompt injection or jailbreaks, and what limitations do they report about those defenses?"
+p039,How reliable are LLM judges such as GPT-4 for deciding whether a prompt injection succeeded?
+p040,Did the LLM phishing detection study assess vulnerability to Cyrillic homoglyph substitution in domain names?
+p041,What kind of human annotation or manual inspection was used to label model outputs in these prompt injection and jailbreak studies?
+p042,How does the MIPIAD detector perform on Hindi and Tamil prompt injections?
+p043,How does Sentra-Guard compare with MIPIAD when both are evaluated on the same benchmark?
+p044,What false positive rates do multilingual prompt injection detectors show on real production traffic?
+p045,Which languages cause the highest ChatGPT jailbreak rate and what explains the difference?
+p046,Do multilingual prompt injection defenses generalize to code-mixed inputs such as Hinglish?
+p047,How effective are content-based injections against LLM relevance judges for Hindi passages specifically?
+p048,"Which datasets are used for multilingual prompt injection evaluation, and which of them contain human-written non-English attacks?"
+p049,How does GPT-4 compare with Claude 3 in resisting prompt injection in both machine translation and jailbreak detection?
+p050,"What mitigation strategies are proposed for multilingual safety gaps in LLMs, and have they been shown to work?"
+p051,Does instruction tuning improve robustness against prompt injection in both machine translation and phishing email detection?
+p052,What false positive rate does Sentra-Guard's human-in-the-loop update mechanism achieve in a live deployment?
+p053,"What accuracy do LLMs reach when detecting phishing emails in Bangla compared with Hindi, and which defenses mitigate the drop?"
+p054,How do reasoning-enabled models compare with non-reasoning models in resisting indirect prompt injection across languages?
+p055,How often did the relevance gate of the tourism chatbot fail to block prompt injection attempts?
+p056,Which LLMs are the most vulnerable to multilingual jailbreaks across all the studies in the corpus?
+p057,Does hidden prompt injection change acceptance decisions for papers submitted to venues other than ICML?
+p058,What energy and latency costs do multilingual prompt injection defenses add?
+p059,"Why are commercial online machine translation systems more robust to prompt injection than LLM-based translation systems?"
+p060,"What proportion of LLM responses to malicious prompts include warnings, and do those warnings reduce real-world harm?"
+p061,How do encoding attacks such as Base64 compare with low-resource language attacks for bypassing LLM safety?
+p062,How does hidden prompt injection affect review scores for Japanese versus Korean injected instructions?
+p063,What future research directions are proposed for multilingual prompt injection in retrieval-augmented generation systems?
+p064,What is the success rate of hidden prompt injection against GPT-4 based paper reviewers?
+p065,"Which prompt injection detectors use LoRA adapters, and how do they compare with full fine-tuning?"
+p066,"How do English versus source-language prompt injections differ for Czech-Ukrainian and Japanese-Chinese translation, and how do Arabic-source attacks compare?"
+p067,What are the recommended practices for calibrating decision thresholds in multilingual prompt injection detectors?
+p068,How does the size of the victim LLMs affect the attack success rate reduction achieved by MIPIAD?
+p069,What fraction of adversarial prompts did each defense variant of the tourism chatbot block?
+p070,What do the papers conclude about multilingual prompt injection risk in agentic LLM systems that call external tools?
+p071,What accuracy does the Turkish prompt injection benchmark report for GPT-4 on Turkish prompts?
+p072,How does federated learning with XLM-RoBERTa preserve privacy in multilingual prompt injection defense for educational platforms?
+p073,What detection results are reported for prompt injection in Indian languages such as Marathi and Telugu?
+p074,How does cross-lingual indirect prompt injection propagate through the reranking stage of a multilingual RAG pipeline?
+p075,How does SemGuard's triple-anchor semantic security gateway detect prompt attacks?
+p076,How does the XRXNet model classify multilingual legal texts?
+p077,How is confidential computing used to protect edge LLM serving for multilingual chatbots?
+p078,Which tokenizers work best for low-resource language modelling?
+p079,How effective is RLHF at reducing hallucinations in multilingual LLMs?
+p080,Which watermarking methods detect LLM-generated text across different languages?
+p081,How do membership inference attacks extract training data from large language models?
+p082,What are the main approaches to backdoor attacks on pretrained language models?
+p083,How do image-based prompt injections affect multimodal vision-language models?
+p084,What is the inference throughput of GPU servers hosting 70B parameter LLMs?
+p085,How do retrieval-augmented generation systems handle outdated documents in their knowledge bases?
+p086,Which tokenization strategies reduce jailbreak success for Arabic prompts?
+p087,What differential privacy guarantees exist for fine-tuning LLMs on multilingual data?
+p088,How does chain-of-thought prompting improve mathematical reasoning in multilingual LLMs?
+p089,What legal regulations govern the use of LLMs in academic peer review?
+p090,How accurately do human reviewers detect hidden white text in submitted papers?
+p091,How do voice assistants defend against audio-based prompt injection?
+p092,What methods detect deepfake videos used in phishing campaigns?
+p093,How often do code LLMs such as Codex introduce security vulnerabilities into generated code?
+p094,What is the carbon footprint of training multilingual translation models such as NLLB-200?
+p095,How well does BERTScore correlate with human judgments of translation quality?
+p096,Which sentiment analysis models work best for Tamil social media text?
+p097,How do naive Bayes spam filters compare with deep learning models for SMS spam detection?
+p098,Which datasets exist for detecting toxic content in Bangla?
+p099,"Which sandboxing defenses protect browsing agents with tool access from prompt injection, and how effective are they?"
+p100,What inter-annotator agreement was reached when labelling jailbreak responses in Armenian?
+p101,How do diffusion models generate protein backbone structures?
+p102,What factors determine the shelf life of pasteurized milk?
+p103,How do coral reefs respond to ocean acidification?
+p104,Which approximation algorithms solve the travelling salesman problem?
+p105,How is the Hubble constant measured using Cepheid variable stars?
+p106,What causes the seasonal migration of monarch butterflies?
+p107,How do lithium-sulfur batteries compare with lithium-ion batteries in energy density?
+p108,What are the side effects of statin therapy in elderly patients?
+p109,How do convolutional neural networks segment tumors in MRI scans?
+p110,Which reinforcement learning algorithms are used for autonomous drone racing?
+p111,How does soil salinity affect rice yield?
+p112,What role does the Higgs boson play in giving particles mass?
+p113,How do SLAM algorithms localize mobile robots indoors?
+p114,What determines the tensile strength of carbon fiber composites?
+p115,How do graph neural networks predict molecular properties?
+p116,What are the economic effects of minimum wage increases?
+p117,How is CRISPR-Cas9 used to edit plant genomes?
+p118,Which compression algorithms are used in HTTP/3?
+p119,How do recommender systems use matrix factorization for movie ratings?
+p120,What causes earthquakes along subduction zones?
+p121,How do quantum error correction codes protect qubits?
+p122,What methods estimate traffic flow from inductive loop detectors?
+p123,How are transformer models used to forecast electricity demand?
+p124,What is the best way to brew espresso at home?
+p125,How does Byzantine fault tolerance work in blockchain consensus?
+p126,Which features predict customer churn in telecom datasets?
+p127,How do glaciers contribute to sea level rise?
+p128,What are the principles of ray tracing in computer graphics?
+p129,How do vaccines induce long-term immune memory?
+p130,Which optimization methods are used to train spiking neural networks?

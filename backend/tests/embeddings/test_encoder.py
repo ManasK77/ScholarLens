@@ -13,6 +13,7 @@ ordering, bounds and determinism are asserted against the real
 
 import math
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
@@ -222,6 +223,77 @@ def test_get_encoder_is_lazy_and_cached(monkeypatch: pytest.MonkeyPatch) -> None
     assert first is second
     assert calls == ["allenai/specter2_base"]
     assert first.dimension == 8
+
+
+class _FakeAdapterModel:
+    calls: ClassVar[list] = []
+
+    def __init__(self):
+        self.config = SimpleNamespace(hidden_size=8)
+
+    @classmethod
+    def from_pretrained(cls, name, revision=None):
+        cls.calls.append(("model", name, revision))
+        return cls()
+
+    def load_adapter(self, name, source, load_as, set_active, revision=None):
+        type(self).calls.append(("adapter", name, revision))
+
+    def eval(self):
+        return self
+
+
+def _load_with_fakes(monkeypatch, **settings):
+    import sys
+    import types
+
+    import transformers
+
+    _FakeAdapterModel.calls = []
+    monkeypatch.setitem(
+        sys.modules,
+        "adapters",
+        types.SimpleNamespace(AutoAdapterModel=_FakeAdapterModel),
+    )
+    monkeypatch.setattr(
+        transformers.AutoTokenizer,
+        "from_pretrained",
+        lambda name, revision=None: _FakeAdapterModel.calls.append(
+            ("tokenizer", name, revision)
+        ),
+    )
+    from app.embeddings.encoder import load_specter2
+
+    defaults = {
+        "embedding_model": "allenai/specter2_base",
+        "embedding_adapter": "allenai/specter2",
+        "embedding_model_revision": None,
+        "embedding_max_tokens": 512,
+    }
+    _, dimension = load_specter2(SimpleNamespace(**{**defaults, **settings}))
+    assert dimension == 8
+    return _FakeAdapterModel.calls
+
+
+def test_the_base_model_revision_is_never_sent_to_the_adapter_repository(monkeypatch):
+    """The two repos have unrelated commit histories (D-S5-REV-01).
+
+    Passing `EMBEDDING_MODEL_REVISION` to `load_adapter` as well meant that
+    pinning the base model to a commit made the adapter impossible to load,
+    so the deployment could only ever follow both repos' moving `main`.
+    """
+    calls = _load_with_fakes(monkeypatch, embedding_model_revision="base-sha")
+    assert ("tokenizer", "allenai/specter2_base", "base-sha") in calls
+    assert ("model", "allenai/specter2_base", "base-sha") in calls
+    assert ("adapter", "allenai/specter2", None) in calls
+
+
+def test_the_adapter_can_be_pinned_with_a_repo_at_revision_suffix(monkeypatch):
+    calls = _load_with_fakes(
+        monkeypatch, embedding_adapter="allenai/specter2@adapter-sha"
+    )
+    assert ("adapter", "allenai/specter2", "adapter-sha") in calls
+    assert ("model", "allenai/specter2_base", None) in calls
 
 
 @pytest.mark.integration

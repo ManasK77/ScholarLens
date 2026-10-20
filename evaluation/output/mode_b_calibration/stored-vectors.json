@@ -1,0 +1,71 @@
+{
+ "mode": "stored",
+ "proxy": "each stored vector used as a query, itself excluded",
+ "points": 632,
+ "all_pairs_cosine": {
+  "n": 398792,
+  "min": 0.7159,
+  "p10": 0.8295,
+  "p25": 0.8504,
+  "median": 0.8724,
+  "p75": 0.8932,
+  "p90": 0.9106,
+  "max": 1.0
+ },
+ "nearest_neighbour_cosine": {
+  "n": 632,
+  "min": 0.8929,
+  "p10": 0.9285,
+  "p25": 0.9409,
+  "median": 0.9525,
+  "p75": 0.9627,
+  "p90": 0.9748,
+  "max": 1.0
+ },
+ "top12_cosine": {
+  "n": 632,
+  "min": 0.8648,
+  "p10": 0.9066,
+  "p25": 0.9167,
+  "median": 0.9272,
+  "p75": 0.9368,
+  "p90": 0.9441,
+  "max": 0.9526
+ },
+ "kth_best_cosine_k2": {
+  "n": 632,
+  "min": 0.8887,
+  "p10": 0.9229,
+  "p25": 0.9338,
+  "median": 0.945,
+  "p75": 0.954,
+  "p90": 0.9616,
+  "max": 1.0
+ },
+ "sufficient_fraction_by_threshold": {
+  "0.2": 0.9209,
+  "0.5": 0.9209,
+  "0.6": 0.9209,
+  "0.7": 0.9209,
+  "0.75": 0.9209,
+  "0.8": 0.9209,
+  "0.82": 0.9209,
+  "0.84": 0.9209,
+  "0.86": 0.9209,
+  "0.88": 0.9193,
+  "0.9": 0.9019,
+  "0.92": 0.8149,
+  "0.95": 0.1566
+ },
+ "score": {
+  "definition": "Qdrant cosine similarity (Distance.COSINE), passed through untransformed",
+  "direction": "higher is more similar; relevant when score >= RETRIEVAL_MIN_SCORE",
+  "graph_rows": "fixed 0.5, not a similarity; excluded from sufficiency"
+ },
+ "current_settings": {
+  "retrieval_min_score": 0.2,
+  "retrieval_min_chunks": 2,
+  "retrieval_min_papers": 2,
+  "retrieval_top_n": 12
+ }
+}

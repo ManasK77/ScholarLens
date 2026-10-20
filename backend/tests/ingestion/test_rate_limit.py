@@ -570,3 +570,55 @@ def test_a_retryable_exception_honours_the_minimum_interval():
     )
 
     assert fake.sleeps == [5.0]
+
+
+# ---------------------------------------------------------------------------
+# send_with_retries: a caller's wait budget (Mode B's query deadline, D-B-04)
+# ---------------------------------------------------------------------------
+
+
+def test_a_wait_longer_than_the_budget_sends_nothing_and_reserves_nothing():
+    fake = FakeClock()
+    limiter = CountingLimiter(fake, interval=60.0)
+    limiter.acquire()  # the previous call took the slot at t=0
+    fake.now = 10.0  # next slot at t=60: a 50 s wait
+    with pytest.raises(rate_limit.WaitBudgetExceeded) as raised:
+        _retry(limiter, [FakeResponse(200)], wait_budget=lambda: 40.0)
+    assert raised.value.wait_seconds == pytest.approx(50.0)
+    assert fake.sleeps == []
+    # Nothing was reserved: the next caller still gets the t=60 slot.
+    assert limiter.acquire() == pytest.approx(50.0)
+
+
+def test_a_wait_within_the_budget_proceeds_normally():
+    fake = FakeClock()
+    limiter = CountingLimiter(fake, interval=60.0)
+    limiter.acquire()
+    fake.now = 10.0
+    response, sent = _retry(limiter, [FakeResponse(200)], wait_budget=lambda: 55.0)
+    assert response.status_code == 200 and sent == [0]
+    assert fake.sleeps == [pytest.approx(50.0)]
+
+
+def test_a_spent_budget_sends_nothing_even_without_pacing():
+    limiter = CountingLimiter(FakeClock())
+    with pytest.raises(rate_limit.WaitBudgetExceeded):
+        _retry(limiter, [FakeResponse(200)], wait_budget=lambda: 0.0)
+
+
+def test_a_retry_whose_backoff_outlasts_the_budget_is_not_sent():
+    fake = FakeClock()
+    limiter = CountingLimiter(fake)
+    remaining = {"t": 5.0}
+    responses = [FakeResponse(429, {"Retry-After": "30"}), FakeResponse(200)]
+    with pytest.raises(rate_limit.WaitBudgetExceeded):
+        _retry(limiter, responses, wait_budget=lambda: remaining["t"])
+    assert limiter.acquired == 2  # the retry asked for a slot and was refused
+
+
+def test_a_server_cooldown_beyond_the_ceiling_is_still_a_cooldown_not_a_budget():
+    fake = FakeClock()
+    limiter = CountingLimiter(fake)
+    limiter.defer(500.0)
+    with pytest.raises(CooldownActive):
+        _retry(limiter, [FakeResponse(200)], wait_budget=lambda: 100.0)

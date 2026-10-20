@@ -16,6 +16,8 @@ Two properties this module is responsible for:
 """
 
 import logging
+import re
+from dataclasses import dataclass, replace
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -26,7 +28,12 @@ from app.core.pipeline import current_run, fingerprint, settings_fingerprint
 from app.extraction.storage import ExtractedFact
 from app.ingestion.corpus import Paper
 from app.ner_re.extractor import SupportsExtractMany, get_joint_extractor
-from app.ner_re.graph import ensure_graph_schema, paper_graph_current, write_paper_graph
+from app.ner_re.graph import (
+    NERRE_PROVENANCE_VERSION,
+    ensure_graph_schema,
+    paper_graph_current,
+    write_paper_graph,
+)
 from app.ner_re.schema import (
     ENTITY_DESCRIPTIONS,
     RELATION_ENDPOINTS,
@@ -35,12 +42,28 @@ from app.ner_re.schema import (
 
 logger = logging.getLogger(__name__)
 
+ABSTRACT_REF = "abstract"
 
-def _sentences_for_paper(session: Session, paper: Paper) -> list[str]:
+
+@dataclass(frozen=True, slots=True)
+class SourceUnit:
+    """One piece of Stage 4 input and where it came from (D-S4-PROV-01).
+
+    `ref` is `abstract`, or `statement:<section>.<paragraph>.<sentence>` -- the
+    location of a Stage 3 statement in the paper's parsed document, which is
+    also the location part of `extracted_facts`' evidence key. Never a
+    surrogate id: those change whenever Stage 3 re-runs.
+    """
+
+    ref: str
+    text: str
+
+
+def source_units(session: Session, paper: Paper) -> list[SourceUnit]:
     """The paper's abstract followed by its Phase 3 statements, deduplicated."""
-    candidates: list[str] = []
+    candidates: list[tuple[str, str | None]] = []
     if paper.abstract:
-        candidates.append(paper.abstract)
+        candidates.append((ABSTRACT_REF, paper.abstract))
 
     facts = session.scalars(
         select(ExtractedFact)
@@ -52,11 +75,20 @@ def _sentences_for_paper(session: Session, paper: Paper) -> list[str]:
             ExtractedFact.id,
         )
     )
-    candidates.extend(fact.text for fact in facts)
+    candidates.extend(
+        (
+            (
+                f"statement:{fact.section_index}.{fact.paragraph_index}"
+                f".{fact.sentence_index}"
+            ),
+            fact.text,
+        )
+        for fact in facts
+    )
 
     seen: set[str] = set()
-    sentences: list[str] = []
-    for candidate in candidates:
+    units: list[SourceUnit] = []
+    for ref, candidate in candidates:
         if not candidate:
             continue
         normalized = " ".join(candidate.split())
@@ -66,8 +98,40 @@ def _sentences_for_paper(session: Session, paper: Paper) -> list[str]:
         if key in seen:
             continue
         seen.add(key)
-        sentences.append(normalized)
-    return sentences
+        units.append(SourceUnit(ref, normalized))
+    return units
+
+
+def _sentences_for_paper(session: Session, paper: Paper) -> list[str]:
+    """The paper's abstract followed by its Phase 3 statements, deduplicated."""
+    return [unit.text for unit in source_units(session, paper)]
+
+
+def _pack(
+    units: list[SourceUnit], max_chars_per_chunk: int, max_chunks: int
+) -> list[list[SourceUnit]]:
+    """Group units into at most `max_chunks` chunks of bounded joined length."""
+    chunks: list[list[SourceUnit]] = []
+    current: list[SourceUnit] = []
+    length = 0
+
+    for unit in units:
+        if not current:
+            # A single over-long sentence still becomes its own chunk rather
+            # than being dropped; the model truncates it instead.
+            current, length = [unit], len(unit.text)
+        elif length + 1 + len(unit.text) <= max_chars_per_chunk:
+            current.append(unit)
+            length += 1 + len(unit.text)
+        else:
+            chunks.append(current)
+            if len(chunks) >= max_chunks:
+                return chunks
+            current, length = [unit], len(unit.text)
+
+    if current:
+        chunks.append(current)
+    return chunks[:max_chunks]
 
 
 def collect_paper_text(
@@ -77,25 +141,113 @@ def collect_paper_text(
     max_chunks: int = 12,
 ) -> list[str]:
     """Pack the paper's sentences into at most `max_chunks` bounded chunks."""
-    chunks: list[str] = []
-    current = ""
+    return [
+        " ".join(unit.text for unit in chunk)
+        for chunk in _pack(
+            source_units(session, paper), max_chars_per_chunk, max_chunks
+        )
+    ]
 
-    for sentence in _sentences_for_paper(session, paper):
-        if not current:
-            # A single over-long sentence still becomes its own chunk rather
-            # than being dropped; the model truncates it instead.
-            current = sentence
-        elif len(current) + 1 + len(sentence) <= max_chars_per_chunk:
-            current = f"{current} {sentence}"
-        else:
-            chunks.append(current)
-            if len(chunks) >= max_chunks:
-                return chunks
-            current = sentence
 
-    if current:
-        chunks.append(current)
-    return chunks[:max_chunks]
+def _mention_pattern(text: str) -> re.Pattern:
+    # Word boundaries, so "BERT" is not found inside "RoBERTa".
+    return re.compile(
+        r"(?<!\w)" + re.escape(" ".join(text.casefold().split())) + r"(?!\w)"
+    )
+
+
+def attach_evidence(
+    result: JointExtractionResult,
+    units: list[SourceUnit],
+    stats: dict[str, int] | None = None,
+) -> JointExtractionResult:
+    """Tie every entity and relation to the input units it was read from.
+
+    An entity whose text occurs in none of the units the model was shown is
+    dropped, with any relation that needs it: it is not something this paper
+    says. Relations need only their endpoints: the evidence names the units
+    holding both, or -- marked `cross_sentence` -- the units holding either.
+    """
+    counts = stats if stats is not None else {}
+    folded = [(unit.ref, unit.text.casefold()) for unit in units]
+
+    def refs(text: str) -> tuple[str, ...]:
+        pattern = _mention_pattern(text)
+        return tuple(ref for ref, body in folded if pattern.search(body))
+
+    entities, kept = [], {}
+    for entity in result.entities:
+        evidence = refs(entity.text)
+        if not evidence:
+            counts["entities_not_in_source"] = (
+                counts.get("entities_not_in_source", 0) + 1
+            )
+            continue
+        entities.append(replace(entity, evidence=evidence))
+        kept[(" ".join(entity.text.casefold().split()), entity.entity_type)] = evidence
+
+    relations = []
+    for relation in result.relations:
+        head_type, tail_type = RELATION_ENDPOINTS[relation.relation_type]
+        head = kept.get((" ".join(relation.head.casefold().split()), head_type))
+        tail = kept.get((" ".join(relation.tail.casefold().split()), tail_type))
+        if head is None or tail is None:
+            counts["relations_unsupported"] = counts.get("relations_unsupported", 0) + 1
+            continue
+        both = tuple(ref for ref in head if ref in tail)
+        either = tuple(ref for ref, _ in folded if ref in head or ref in tail)
+        relations.append(
+            replace(relation, evidence=both or either, cross_sentence=not both)
+        )
+    return JointExtractionResult(entities=entities, relations=relations)
+
+
+def _input_basis(units: list[SourceUnit]) -> str:
+    has_abstract = any(unit.ref == ABSTRACT_REF for unit in units)
+    has_statements = any(unit.ref != ABSTRACT_REF for unit in units)
+    if has_abstract and has_statements:
+        return "abstract_and_statements"
+    if has_abstract:
+        return "abstract_only"
+    return "statements_only" if has_statements else "none"
+
+
+def _provenance(
+    extractor, used: list[SourceUnit], total: int, settings: Settings | None
+) -> dict:
+    """What the Paper node records about the projection's own origin."""
+    return {
+        "nerre_provenance": NERRE_PROVENANCE_VERSION,
+        "nerre_model": (settings or get_settings()).nerre_model,
+        "nerre_model_revision": getattr(extractor, "model_revision", None),
+        "nerre_input_basis": _input_basis(used),
+        "nerre_units_used": len(used),
+        "nerre_units_total": total,
+    }
+
+
+def _project(
+    session: Session,
+    paper: Paper,
+    extractor: SupportsExtractMany,
+    max_chars_per_chunk: int,
+    max_chunks: int,
+    stats: dict[str, int] | None,
+    settings: Settings | None = None,
+) -> tuple[JointExtractionResult, dict]:
+    """One paper's extraction with evidence attached, and its provenance."""
+    units = source_units(session, paper)
+    packed = _pack(units, max_chars_per_chunk, max_chunks)
+    used = [unit for chunk in packed for unit in chunk]
+    if packed:
+        raw = extractor.extract_many(
+            [" ".join(u.text for u in chunk) for chunk in packed]
+        )
+        result = attach_evidence(raw, used, stats)
+    else:
+        result = JointExtractionResult([], [])
+    _count_result(result, stats)
+    return result, _provenance(extractor, used, len(units), settings)
 
 
 def extract_paper(
@@ -108,14 +260,14 @@ def extract_paper(
     stats: dict[str, int] | None = None,
 ) -> bool:
     """Extract and persist one paper's graph. Returns False when it was skipped."""
-    chunks = collect_paper_text(session, paper, max_chars_per_chunk, max_chunks)
-    if not chunks:
+    if not collect_paper_text(session, paper, max_chars_per_chunk, max_chunks):
         logger.debug("Paper %s has no usable text for joint extraction", paper.id)
         return False
 
-    result = extractor.extract_many(chunks)
-    _count_result(result, stats)
-    write_paper_graph(neo4j, paper, result)
+    result, provenance = _project(
+        session, paper, extractor, max_chars_per_chunk, max_chunks, stats
+    )
+    write_paper_graph(neo4j, paper, result, provenance=provenance)
     return True
 
 
@@ -183,11 +335,18 @@ def extract_all(
                     nonlocal extractor
                     if chunks:
                         extractor = extractor or get_joint_extractor()
-                        result = extractor.extract_many(chunks)
-                    else:
-                        result = JointExtractionResult([], [])
-                    _count_result(result, stats)
-                    write_paper_graph(neo4j, paper, result, input_hash=digest)
+                    result, provenance = _project(
+                        session,
+                        paper,
+                        extractor,
+                        max_chars_per_chunk,
+                        max_chunks,
+                        stats,
+                        settings,
+                    )
+                    write_paper_graph(
+                        neo4j, paper, result, input_hash=digest, provenance=provenance
+                    )
 
                 def graph_is_current(paper_id=paper.id, digest=digest):
                     return paper_graph_current(neo4j, paper_id, digest)
@@ -210,11 +369,14 @@ def extract_all(
         finally:
             progress.update(position)
     logger.info(
-        "s4 complete processed=%d skipped_no_text=%d failed=%d entities=%d relations=%d",
+        "s4 complete processed=%d skipped_no_text=%d failed=%d entities=%d "
+        "relations=%d entities_not_in_source=%d relations_unsupported=%d",
         len(processed),
         skipped_no_text,
         failed,
         stats.get("entities", 0),
         stats.get("relations", 0),
+        stats.get("entities_not_in_source", 0),
+        stats.get("relations_unsupported", 0),
     )
     return processed

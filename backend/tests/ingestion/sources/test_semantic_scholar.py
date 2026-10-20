@@ -454,3 +454,266 @@ def test_the_api_key_never_reaches_logs_or_errors(monkeypatch, caplog):
     assert "retry" in caplog.text.lower()  # the retry was logged...
     assert secret not in caplog.text  # ...without the key
     assert secret not in str(excinfo.value)
+
+
+def test_search_topic_keeps_arxiv_and_acl_identifiers_for_dedup(monkeypatch):
+    """S1 audit: Semantic Scholar's copy of an arXiv paper was not recognised
+    because only `externalIds.DOI` survived the mapping."""
+    body = {
+        "data": [
+            {
+                "title": "T",
+                "authors": [],
+                "externalIds": {
+                    "DOI": "10.18653/v1/2024.wmt-1.30",
+                    "ArXiv": "2410.00001",
+                    "ACL": "2024.wmt-1.30",
+                },
+            },
+            {"title": "U", "authors": [], "externalIds": {"DOI": "10.1/x"}},
+        ]
+    }
+
+    class FakeClient:
+        def __init__(self, transport=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, params=None, headers=None, timeout=None):
+            return FakeResponse(body)
+
+    monkeypatch.setattr(httpx, "Client", FakeClient)
+
+    first, second = semantic_scholar.search_topic("t", api_key=None)
+
+    assert first["arxiv_id"] == "2410.00001"
+    assert first["acl_id"] == "2024.wmt-1.30"
+    assert second["arxiv_id"] is None and second["acl_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# Paging, backfill and provenance (D-S1-RETRIEVAL-01, 2026-10-12)
+#
+# Production read one page of 40 from a search Semantic Scholar said matched
+# 16,451, ignored `total`, and dropped `openAccessPdf`. The search now follows
+# `next` within a bounded pool and page budget, backfills dropped records,
+# reports how far it read, and keeps the open-access link and provenance.
+# ---------------------------------------------------------------------------
+
+
+def _paper(n, **extra):
+    return {
+        "paperId": f"p{n}",
+        "url": f"https://www.semanticscholar.org/paper/p{n}",
+        "title": f"Paper {n}",
+        "authors": [{"name": "A"}],
+        "externalIds": {"DOI": f"10.1/{n}"},
+        "abstract": "Abstract.",
+        **extra,
+    }
+
+
+def _page(papers, *, offset, total, next_offset=None):
+    body = {"total": total, "offset": offset, "data": papers}
+    if next_offset is not None:
+        body["next"] = next_offset
+    return FakeResponse(body)
+
+
+def _paged(monkeypatch, responses, **kwargs):
+    out, calls, _ = _search(monkeypatch, responses, **kwargs)
+    return out, [c["params"] for c in calls]
+
+
+def test_results_beyond_the_first_page_are_returned(monkeypatch):
+    out, params = _paged(
+        monkeypatch,
+        [
+            _page([_paper(1), _paper(2)], offset=0, total=5, next_offset=2),
+            _page([_paper(3), _paper(4)], offset=2, total=5, next_offset=4),
+            _page([_paper(5)], offset=4, total=5),
+        ],
+        limit=10,
+        page_size=2,
+        max_pages=5,
+    )
+
+    assert [c["title"] for c in out] == [f"Paper {n}" for n in range(1, 6)]
+    assert [p["offset"] for p in params] == [0, 2, 4]
+    assert all(p["limit"] == 2 for p in params)
+    assert out.retrieval["total_reported"] == 5
+    assert out.retrieval["pages_requested"] == 3
+    assert out.retrieval["complete"] is True
+
+
+def test_dropped_records_are_backfilled_from_the_next_page(monkeypatch):
+    editorial = _paper(2, publicationTypes=["Editorial"])
+    out, params = _paged(
+        monkeypatch,
+        [
+            _page([_paper(1), editorial], offset=0, total=10, next_offset=2),
+            _page([_paper(3), _paper(4)], offset=2, total=10, next_offset=4),
+        ],
+        limit=3,
+        page_size=2,
+        max_pages=5,
+    )
+
+    assert [c["title"] for c in out] == ["Paper 1", "Paper 3", "Paper 4"]
+    assert len(params) == 2
+    assert out.retrieval["records_dropped"] == {"non_research": 1}
+
+
+def test_reaching_the_pool_before_the_total_is_reported_incomplete(monkeypatch):
+    out, params = _paged(
+        monkeypatch,
+        [_page([_paper(1), _paper(2)], offset=0, total=16451, next_offset=2)],
+        limit=2,
+        page_size=2,
+    )
+
+    assert len(out) == 2
+    assert len(params) == 1
+    assert out.retrieval["stop_reason"] == "ceiling"
+    assert out.retrieval["complete"] is False
+    assert out.retrieval["total_reported"] == 16451
+
+
+def test_a_paper_repeated_on_a_later_page_is_kept_once(monkeypatch):
+    out, _ = _paged(
+        monkeypatch,
+        [
+            _page([_paper(1), _paper(2)], offset=0, total=4, next_offset=2),
+            _page([_paper(2), _paper(3)], offset=2, total=4),
+        ],
+        limit=10,
+        page_size=2,
+        max_pages=5,
+    )
+
+    assert [c["s2_paper_id"] for c in out] == ["p1", "p2", "p3"]
+    assert out.retrieval["records_dropped"] == {"duplicate_across_pages": 1}
+
+
+def test_a_failed_later_page_keeps_earlier_results_and_is_visible(monkeypatch):
+    out, _ = _paged(
+        monkeypatch,
+        [
+            _page([_paper(1), _paper(2)], offset=0, total=10, next_offset=2),
+            FakeResponse({"error": "bad"}, status_code=404),
+        ],
+        limit=10,
+        page_size=2,
+        max_pages=5,
+    )
+
+    assert len(out) == 2
+    assert out.retrieval["stop_reason"] == "page_error"
+    assert out.retrieval["error"] == "http_404"
+    assert out.retrieval["complete"] is False
+
+
+def test_a_malformed_later_page_is_reported_incomplete(monkeypatch):
+    out, _ = _paged(
+        monkeypatch,
+        [
+            _page([_paper(1)], offset=0, total=10, next_offset=1),
+            FakeResponse(["not", "an", "object"]),
+        ],
+        limit=10,
+        page_size=1,
+        max_pages=5,
+    )
+
+    assert len(out) == 1
+    assert out.retrieval["error"] == "TypeError"
+
+
+def test_the_page_budget_bounds_the_requests(monkeypatch):
+    out, params = _paged(
+        monkeypatch,
+        [
+            _page([_paper(1)], offset=0, total=100, next_offset=1),
+            _page([_paper(2)], offset=1, total=100, next_offset=2),
+        ],
+        limit=50,
+        page_size=1,
+        max_pages=2,
+    )
+
+    assert len(params) == 2
+    assert out.retrieval["stop_reason"] == "page_budget"
+    assert out.retrieval["complete"] is False
+
+
+def test_paging_never_asks_past_the_apis_thousand_result_ceiling(monkeypatch):
+    pages = [
+        _page(
+            [_paper(i * 100 + j) for j in range(100)],
+            offset=i * 100,
+            total=16451,
+            next_offset=(i + 1) * 100,
+        )
+        for i in range(10)
+    ]
+    out, params = _paged(monkeypatch, pages, limit=5000, page_size=100, max_pages=50)
+
+    assert len(params) == 10
+    assert max(p["offset"] + p["limit"] for p in params) == 1000
+    assert len(out) == 1000
+    assert out.retrieval["stop_reason"] == "ceiling"
+
+
+def test_a_record_without_a_title_is_dropped(monkeypatch):
+    out, _ = _paged(
+        monkeypatch,
+        [_page([_paper(1, title=None), _paper(2)], offset=0, total=2)],
+        limit=10,
+    )
+
+    assert [c["title"] for c in out] == ["Paper 2"]
+    assert out.retrieval["records_dropped"] == {"no_title": 1}
+
+
+def test_the_open_access_link_and_provenance_are_kept(monkeypatch):
+    oa = {"url": "https://arxiv.org/pdf/2409.13331", "status": "GREEN", "license": None}
+    none = {"url": "", "status": "CLOSED", "license": None}
+    out, _ = _paged(
+        monkeypatch,
+        [
+            _page(
+                [_paper(1, openAccessPdf=oa), _paper(2, openAccessPdf=none)],
+                offset=0,
+                total=2,
+            )
+        ],
+        limit=10,
+    )
+
+    assert out[0]["openaccess_pdf_url"] == "https://arxiv.org/pdf/2409.13331"
+    assert out[0]["openaccess_status"] == "GREEN"
+    assert out[0]["s2_paper_id"] == "p1"
+    assert out[0]["source_url"] == "https://www.semanticscholar.org/paper/p1"
+    # The API's "no copy" answer is an empty string, not a URL.
+    assert out[1]["openaccess_pdf_url"] is None
+    assert out[1]["openaccess_status"] == "CLOSED"
+
+
+def test_the_search_asks_for_the_provenance_fields(monkeypatch):
+    _, params = _paged(monkeypatch, [_page([], offset=0, total=0)])
+
+    fields = params[0]["fields"].split(",")
+    assert {"paperId", "url", "openAccessPdf", "externalIds"} <= set(fields)
+
+
+def test_no_results_is_a_complete_empty_read(monkeypatch):
+    out, params = _paged(monkeypatch, [_page([], offset=0, total=0)])
+
+    assert out == []
+    assert len(params) == 1
+    assert out.retrieval["complete"] is True

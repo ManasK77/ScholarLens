@@ -66,6 +66,7 @@ h3 { margin-bottom: 8px; font: 600 21px/1.25 'Newsreader', Georgia, serif; }
 blockquote { margin: 0; padding: 15px 18px; background: #f3f4ee; border-left: 3px solid #91b9ae; border-radius: 0 9px 9px 0; }
 blockquote p { margin-bottom: 7px; color: #40514b; font-size: 13px; line-height: 1.55; }
 blockquote cite { font-style: normal; color: #79847f; font-size: 11px; }
+.conflict-pair { display: grid; gap: 6px; }.conflict-pair blockquote { border-left-color: #994e35; }
 .subtle, .muted-copy { color: var(--muted); line-height: 1.6; }
 .split-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 285px; gap: 22px; }
 .chart-panel { min-width: 0; border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
@@ -77,14 +78,15 @@ blockquote cite { font-style: normal; color: #79847f; font-size: 11px; }
 .trend-row b { font: 500 11px 'DM Mono', monospace; }.positive { color: var(--teal); }.negative { color: #b85e46; }
 .inline-empty { min-height: 380px; display: grid; place-items: center; color: var(--muted); padding: 30px; text-align: center; }
 .graph-wrap { position: relative; background: #f4f5ef; border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
-.graph-canvas { display: block; width: 100%; min-height: 470px; }
-.graph-edges line { stroke: #bdc7c0; stroke-opacity: .7; stroke-width: 1; }
+.graph-canvas { display: block; width: 100%; min-height: 470px; cursor: grab; touch-action: none; user-select: none; }.graph-canvas:active { cursor: grabbing; }.graph-reset { position: absolute; left: 14px; top: 14px; padding: 6px 10px; font-size: 11px; }
+.graph-edges line { stroke: #bdc7c0; stroke-opacity: .7; stroke-width: 1; }.graph-edges line.active { stroke: var(--teal); stroke-opacity: 1; stroke-width: 1.6; }
 .graph-node { cursor: pointer; }.graph-node circle { stroke: #fff; stroke-width: 2; }.paper-node { fill: #087b6d; }.entity-node { fill: #e99b4a; }
 .graph-node text { font: 500 10px 'Manrope', sans-serif; fill: #31433d; paint-order: stroke; stroke: #f4f5ef; stroke-width: 3px; }
 .graph-legend { position: absolute; left: 14px; bottom: 13px; display: flex; gap: 13px; font-size: 11px; color: #596963; background: rgba(251,250,245,.92); padding: 8px 10px; border-radius: 7px; }
 .graph-legend span { display: flex; align-items: center; gap: 5px; }.graph-legend i { width: 8px; height: 8px; border-radius: 50%; }.paper-swatch { background: #087b6d; }.entity-swatch { background: #e99b4a; }
 .graph-selection { position: absolute; top: 14px; right: 14px; background: #102b27; color: #fff; padding: 12px 15px; border-radius: 9px; max-width: 260px; }
 .graph-selection span, .graph-selection strong { display: block; }.graph-selection span { font: 500 9px 'DM Mono', monospace; text-transform: uppercase; color: #98b5ad; margin-bottom: 4px; }.graph-selection strong { font-size: 12px; }
+.graph-selection small { display: block; margin-top: 8px; font: 500 9px 'DM Mono', monospace; text-transform: uppercase; color: #98b5ad; }.graph-selection ul { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 11px; line-height: 1.4; }
 .dark-workspace { color: #fff; background: #102b27; border-color: #102b27; padding: 0; overflow: hidden; }
 .ask-layout { display: grid; grid-template-columns: minmax(250px, .75fr) minmax(420px, 1.35fr); min-height: 570px; }
 .ask-intro { padding: 42px; border-right: 1px solid rgba(255,255,255,.12); }
@@ -96,6 +98,7 @@ blockquote cite { font-style: normal; color: #79847f; font-size: 11px; }
 .asked-question { margin: 0 0 15px; padding-left: 13px; border-left: 3px solid var(--teal); font: 600 14px/1.5 'Manrope', sans-serif; color: var(--ink); }
 .answer-card { margin-top: 26px; padding-top: 24px; border-top: 1px solid var(--line); }.answer-status { display: flex; justify-content: space-between; gap: 12px; align-items: center; }.answer-status > span { display: inline-flex; gap: 5px; align-items: center; font: 500 10px 'DM Mono', monospace; text-transform: uppercase; }.grounded { color: var(--teal); }.ungrounded { color: #b85e46; }.answer-status small { color: var(--muted); font-size: 10px; }
 .answer-text { font: 500 clamp(19px, 2.5vw, 27px)/1.45 'Newsreader', Georgia, serif; margin: 21px 0; }
+.answer-claim sup { margin-left: 2px; color: var(--teal); font: 500 11px 'DM Mono', monospace; }
 .citation-list { display: grid; gap: 8px; }.citation-list h3 { font: 700 11px 'Manrope', sans-serif; text-transform: uppercase; letter-spacing: .07em; margin: 5px 0; }.citation { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; background: #f0f2eb; border-radius: 9px; padding: 12px; }.citation > span { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: #d8e8e2; color: var(--teal); font: 500 10px 'DM Mono', monospace; }.citation strong { font-size: 12px; }.citation small { display: block; margin-top: 2px; color: #79847f; font: 500 10px 'DM Mono', monospace; }.citation p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .error-banner { display: flex; gap: 9px; margin-top: 18px; color: #98492f; background: #f8e6de; border-radius: 9px; padding: 12px; font-size: 12px; }
 .corpus-warning { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 18px; color: #805029; background: #fbefd9; border: 1px solid #efd7aa; border-radius: 9px; padding: 12px; font-size: 12px; line-height: 1.5; }.corpus-warning svg { flex: 0 0 auto; margin-top: 1px; }

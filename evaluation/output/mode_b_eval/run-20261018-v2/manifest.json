@@ -1,0 +1,100 @@
+{
+ "code_sha256": {
+  "backend/app/interactive/calibration.py": "e196e0ed34aae35437f93ee4ee09c6d1ef1126926fc5e89e7c6d302276f44cdf",
+  "backend/app/interactive/claim_check.py": "3880e5baee6b07b8c6880e140b16c479ffa4bde63f0c35ffc9d6c2af18bf841f",
+  "backend/app/interactive/intent.py": "19c51322eaadfa18aaaadf850da719201f9b3ebbe58e39ced531f27f7cade889",
+  "backend/app/interactive/workflow.py": "ea36629343a633d754465e0c3c03f134f4a72957b7ddbafdcf1e169ac67a9eeb",
+  "evaluation/mode_b.py": "ef4c2ed05496dfa85f218ca0bdaf60e83e392ebe9749b75c1923dd6b9279db81"
+ },
+ "created_at": "2026-10-18T18:10:54.458235+00:00",
+ "git": {
+  "dirty_paths": 156,
+  "head": "bdfe21edff8f29cfd456f497064a392d6b30688b"
+ },
+ "inputs": {
+  "aspects": "evaluation\\output\\mode_b_eval\\run-20261018-v2\\live\\aspects.json",
+  "claims_supplement": "evaluation\\datasets\\mode_b_claims_s2",
+  "dataset_dir": "evaluation\\datasets\\mode_b_v1",
+  "live": [
+   "evaluation\\output\\mode_b_eval\\run-20261018-v2\\live\\LV-Q1.json",
+   "evaluation\\output\\mode_b_eval\\run-20261018-v2\\live\\LV-Q2.json",
+   "evaluation\\output\\mode_b_eval\\run-20261018-v2\\live\\LV-Q2b.json",
+   "evaluation\\output\\mode_b_eval\\run-20261018-v2\\live\\LV-Q3.json",
+   "evaluation\\output\\mode_b_eval\\run-20261018-v2\\live\\LV-Q3b.json",
+   "evaluation\\output\\mode_b_eval\\run-20261018-v2\\live\\LV-Q1b.json"
+  ],
+  "live_review": "evaluation\\output\\mode_b_eval\\run-20261018-v2\\live\\live-review.csv",
+  "papers": "C:\\Users\\Manas\\Desktop\\NLP\\evaluation\\output\\mode_b_calibration\\independent\\papers.csv",
+  "passages": "C:\\Users\\Manas\\Desktop\\NLP\\evaluation\\output\\mode_b_calibration\\independent\\passages.csv",
+  "retrieval_run": "evaluation\\output\\mode_b_eval\\run-20261018-v1\\retrieval-run.json",
+  "sha256": {
+   "aspects": "dd2306e5b57b8679120015e0a6bd39fde18a34ec21741f65cc00003ba20b580b",
+   "catalogue/papers.csv": "a39bb273155f4024d74f61e6a537bce7379568e0922b7855d197127f91406af5",
+   "catalogue/passages.csv": "2b9d904ea64e7308447286b56fb19fbc5c888703bf165da394d6d376190bb0e0",
+   "claims_supplement/claims.csv": "954a71edac775c68aee79955e38178dd1c5fba9570ddfebf4f205ec0780c86e7",
+   "dataset/claims.csv": "1f465372d46ac2faa0517a007797def7952aff6a01b7f19b6d11adec09acf799",
+   "dataset/labels.csv": "5c14007f86a6db3f9542bed8ac1a161152ef78a34ef9a318f92732ef203acc6f",
+   "dataset/questions.csv": "ce759430b148a125cdd0ee3fa07637daaa9a7050fe0778ef4c68d5329c352063",
+   "live/LV-Q1.json": "58cae3a7b54c8369d05a0bea4bc6c7e2b0c9d87bbf12ee77f89eace085c03778",
+   "live/LV-Q1b.json": "840eb8beb1f1ffed35c371cdac84e6607032a17ed5b1c904318e2e0c507d5f93",
+   "live/LV-Q2.json": "c7d51c7dbf5e358140661ed8b7c50e5b06dde1de9d92a30eaff93104d9ddd09a",
+   "live/LV-Q2b.json": "246b7027942709774300d69145bc99362578b658458b1c27a45610cf2483a025",
+   "live/LV-Q3.json": "9233f4261d46c0c043b28363ba740d35113c148b97284a84188de44b1e281b76",
+   "live/LV-Q3b.json": "30e4df3b84088626385c4668224bd90074d8a0a410d11629f5d8f9e55aec0460",
+   "live_review": "f5fe15af258dc8f5f2a3594c51fe8df768829901f2170984136858c183188f58",
+   "retrieval_run": "16ce86d0d01e4bfebf11cdd3246cfac07a65580d6f514e2cd71777ef20459881"
+  }
+ },
+ "label_provenance": {
+  "adjudicated": false,
+  "authored_by": "AI coding agent (Claude) working on this repository, 2026-10-18",
+  "catalogue": "evaluation/output/mode_b_calibration/independent/passages.csv",
+  "catalogue_sha256": "2b9d904ea64e7308447286b56fb19fbc5c888703bf165da394d6d376190bb0e0",
+  "frozen_at": "2026-10-18T07:18Z",
+  "frozen_sha256": {
+   "claims.csv": "1f465372d46ac2faa0517a007797def7952aff6a01b7f19b6d11adec09acf799",
+   "labels.csv": "5c14007f86a6db3f9542bed8ac1a161152ef78a34ef9a318f92732ef203acc6f",
+   "questions.csv": "ce759430b148a125cdd0ee3fa07637daaa9a7050fe0778ef4c68d5329c352063"
+  },
+  "independent": false,
+  "inter_annotator_agreement": null,
+  "labelled_before_scores": true,
+  "labellers": 1,
+  "name": "mode_b_v1",
+  "see": "DATASET.md",
+  "source": "agent-authored",
+  "status": "provisional",
+  "version": 1
+ },
+ "mode": {
+  "live_calls": 0,
+  "llm_judge": false,
+  "mocked": false,
+  "offline": true
+ },
+ "python": "3.12.13",
+ "results_sha256": "b6344ee9f1b22d76eeca03a53bb2087dacbd2e46cac6fd964fc576d803666198",
+ "retrieval_run_provenance": {
+  "embedding_adapter": "allenai/specter2",
+  "embedding_adapter_revision": "2081559630a80fc5851d8f798a05ba81e9468089",
+  "embedding_model": "allenai/specter2_base",
+  "embedding_model_revision": "3447645e1def9117997203454fa4495937bfbd83",
+  "generated_at": "2026-10-18T07:34:31.256841+00:00",
+  "llm_calls": 0,
+  "query_embed_version": "7a4c25987c79ddf5e54f95eb67c921eb7ede4b33e68addb827917c12befb5f1f",
+  "query_matches_stored_vectors": true,
+  "questions_sha256": "ce759430b148a125cdd0ee3fa07637daaa9a7050fe0778ef4c68d5329c352063",
+  "stored_embed_versions": [
+   "7a4c25987c79ddf5e54f95eb67c921eb7ede4b33e68addb827917c12befb5f1f"
+  ]
+ },
+ "run_id": "run-20261018-v2",
+ "schema": "scholarlens-mode-b-eval/1",
+ "settings": {
+  "retrieval_min_chunks": 2,
+  "retrieval_min_papers": 2,
+  "retrieval_min_score": 0.2,
+  "retrieval_top_n": 12
+ },
+ "warnings": []
+}

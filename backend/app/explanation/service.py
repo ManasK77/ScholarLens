@@ -46,6 +46,7 @@ from sqlalchemy.orm import Session
 
 from app.clustering.storage import list_clusters, members_for_cluster
 from app.core.config import Settings, get_settings
+from app.core.pipeline import fingerprint
 from app.explanation.llm import (
     LLMAuthError,
     LLMConfigurationError,
@@ -62,6 +63,7 @@ from app.explanation.schema import (
 )
 from app.explanation.selection import evidence_summary, select_evidence
 from app.explanation.storage import GapReport, list_reports, replace_reports
+from app.explanation.verification import annotate_justification, nli_conflict_verifier
 from app.ingestion.corpus import Paper
 from app.ranking.storage import list_rankings
 
@@ -185,18 +187,95 @@ def _grounded_evidence(evidence: list[dict], cited_ids: list[str]) -> list[dict]
     return [item for item in evidence if item["id"] in cited]
 
 
+def _inputs_key(session: Session, cluster_id: int, label, ranking) -> str:
+    """Everything a report is generated from that a Stage 6 rebuild can change.
+
+    The label and the distinct member texts build the retrieval query, the
+    member papers steer evidence selection, and the five signals are quoted
+    in the prompt. Settings and the vector index are untouched by a rebuild.
+    """
+    members = members_for_cluster(session, cluster_id)
+    return fingerprint(
+        [
+            label,
+            list(dict.fromkeys(member.text for member in members)),
+            sorted({member.paper_id for member in members}),
+            [
+                ranking.mention_frequency,
+                ranking.trend_slope,
+                ranking.solution_density,
+                ranking.citation_impact,
+                ranking.contradiction_flag,
+            ],
+        ]
+    )
+
+
+def _keys_by_cluster(session: Session) -> dict[int, str]:
+    labels = {cluster.id: cluster.label for cluster in list_clusters(session)}
+    return {
+        ranking.cluster_id: _inputs_key(
+            session, ranking.cluster_id, labels.get(ranking.cluster_id), ranking
+        )
+        for ranking in list_rankings(session, len(labels) or 1)
+        if ranking.cluster_id in labels
+    }
+
+
+def report_inputs(session: Session) -> dict[str, GapReportRecord]:
+    """Stored reports keyed by their generation inputs, taken before a rebuild."""
+    keys = _keys_by_cluster(session)
+    return {
+        keys[row.cluster_id]: _stored_record(row)
+        for row in list_reports(session)
+        if row.cluster_id in keys
+    }
+
+
+def carry_over_reports(
+    session: Session, snapshot: dict[str, GapReportRecord]
+) -> list[int]:
+    """Re-attach snapshot reports to rebuilt clusters with identical inputs.
+
+    Cluster ids change on every Stage 6 rebuild, which clears all reports; a
+    report whose inputs are unchanged is still exactly what Stage 9 would ask
+    for, so it is kept instead of regenerated. Returns the new cluster ids.
+    """
+    carried = []
+    for cluster_id, key in sorted(_keys_by_cluster(session).items()):
+        record = snapshot.get(key)
+        if record is None:
+            continue
+        session.add(
+            GapReport(
+                cluster_id=cluster_id,
+                gap=record.gap,
+                evidence=list(record.evidence),
+                confidence=record.confidence,
+                suggested_directions=list(record.suggested_directions),
+                provider=record.provider,
+                model=record.model,
+                justification=dict(record.justification or {}),
+            )
+        )
+        carried.append(cluster_id)
+    session.flush()
+    return carried
+
+
 def generate_top_reports(
     session: Session,
     settings: Settings | None = None,
     index=None,
     llm=None,
+    verifier=None,
 ) -> list[int]:
     """Explain the top-ranked gaps and store the reports. Returns cluster ids.
 
     The ids-only form of `generate_reports`, kept for callers that need no
     outcome.
     """
-    return generate_reports(session, settings, index, llm).stored
+    return generate_reports(session, settings, index, llm, verifier=verifier).stored
 
 
 def generate_reports(
@@ -206,6 +285,7 @@ def generate_reports(
     llm=None,
     *,
     resume: bool = False,
+    verifier=None,
 ) -> ReportOutcome:
     """Explain the top-ranked gaps, store the reports, and say how it went.
 
@@ -232,7 +312,10 @@ def generate_reports(
             outcome.reused.append(cluster_id)
             continue
         members = members_for_cluster(session, cluster_id)
-        query = retrieval_query(labels.get(cluster_id), [m.text for m in members])
+        # Each sentence once: Stage 6 stores a row per label (D-06-14).
+        query = retrieval_query(
+            labels.get(cluster_id), list(dict.fromkeys(m.text for m in members))
+        )
         if not query.strip():
             # A cluster with neither a label nor a statement describes nothing,
             # and an empty query does not fail — it returns whatever happens to
@@ -366,13 +449,17 @@ def generate_reports(
         # what stops "inconsistent findings across studies" being stored with
         # nothing behind it (D-09-05).
         justification = draft.justification({item["id"] for item in evidence})
+        # A conflict claim is checked against the passages it cites, and every
+        # claim records whether it is LLM judgment or verified (D-09-13).
+        verifier = verifier or nli_conflict_verifier()
+        justification = annotate_justification(justification, evidence, verifier)
         if (
             draft.conflicting_evidence.supported
             and not justification["conflicting_evidence"]["supported"]
         ):
             logger.info(
-                "Stage 9: cluster %d claimed conflicting evidence with no "
-                "retrieved passage behind it; recorded as unsupported",
+                "Stage 9: cluster %d claimed conflicting evidence that no "
+                "retrieved passage or NLI check confirmed; recorded as unsupported",
                 cluster_id,
             )
 

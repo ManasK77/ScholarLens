@@ -41,7 +41,9 @@ def _answer(*evidence_ids: str, text: str = "The evidence shows a gap.") -> dict
         "answer": text,
         "claims": [
             {
-                "text": "The evidence shows a gap.",
+                # What `_point`'s default passage states, so the claim is
+                # supported by its citation (claim_check vetoes otherwise).
+                "text": "Existing systems fail outside English.",
                 "evidence_ids": list(evidence_ids),
             }
         ],
@@ -128,7 +130,10 @@ class TestRetrieveAssessAndRerank:
         graph = FakeGraphExpander(
             [
                 {
+                    # A one-hop neighbour reached from vector hit 8, as
+                    # expand_paper_neighborhood returns it.
                     "paper_id": 10,
+                    "seed_paper_id": 8,
                     "title": "Graph neighbour",
                     "entity": "multilingual prompts",
                     "entity_type": "domain",
@@ -200,6 +205,37 @@ class TestRetrieveAssessAndRerank:
 
         assert result["retrieval_rounds"] == 2
 
+    def test_graph_neighbourhood_rows_do_not_make_weak_retrieval_sufficient(self):
+        # Graph rows are entity facts about the papers the vector search hit,
+        # carrying a fixed score rather than a similarity. In production every
+        # paper has entity edges, so if they counted, two low-similarity hits
+        # would always look "sufficient" and the retry loop could never fire.
+        retriever = FakeRetriever(
+            [
+                [_point("e1", 8, score=0.1), _point("e2", 9, score=0.1)],
+                [_point("e3", 8), _point("e4", 9)],
+            ]
+        )
+        graph = FakeGraphExpander(
+            [
+                {"paper_id": 8, "entity": "prompt injection", "entity_type": "task"},
+                {"paper_id": 9, "entity": "jailbreak", "entity_type": "task"},
+            ]
+        )
+        llm = ScriptedLLM(
+            reformulate=[{"query": "focused query"}],
+            answer=[_answer("e3", "e4")],
+            verify=[{"grounded": True, "unsupported_claim_indexes": []}],
+        )
+
+        result = _run("What gaps exist?", _services(retriever, llm, graph=graph))
+
+        assert result["retrieval_rounds"] == 2
+        assert any(
+            t.startswith("assess:sufficient=False;relevant=0;papers=0;")
+            for t in result["trace"]
+        )
+
     def test_reranked_order_controls_deterministic_citation_order(self):
         retriever = FakeRetriever([[_point("e1", 8), _point("e2", 9)]])
         llm = ScriptedLLM(
@@ -238,7 +274,9 @@ class TestRetrieveAssessAndRerank:
         )
 
         assert result["grounded"] is False
-        assert [item["id"] for item in result["citations"]] == ["e1"]
+        # Only `e1` survived as a candidate; a refusal cites nothing.
+        assert result["trace"][0].startswith("retrieve:round=1;vector=1;")
+        assert result["citations"] == []
 
 
 class TestBoundedRetrievalLoop:
@@ -498,3 +536,75 @@ class TestCitationTitles:
             c["paper_id"]: c["title"] for c in result["citations"] if c["id"] == "a"
         }
         assert titles == {1: "From Neo4j"}
+
+
+class TestSufficiencyRule:
+    """`assess_sufficiency` is the one rule Mode B and the calibration harness use.
+
+    Scores are Qdrant cosine similarities: higher is more similar, compared
+    with `>=` against `RETRIEVAL_MIN_SCORE` (0.2 by default).
+    """
+
+    @staticmethod
+    def _vector(item_id, paper_id, score):
+        return {
+            "id": item_id,
+            "paper_id": paper_id,
+            "score": score,
+            "source_type": "paragraph",
+        }
+
+    def test_two_passages_from_two_papers_at_the_threshold_are_sufficient(self):
+        from app.interactive.workflow import assess_sufficiency
+
+        verdict = assess_sufficiency(
+            [self._vector("a", 1, 0.2), self._vector("b", 2, 0.2)], 0.2, 2, 2
+        )
+        assert verdict == {"sufficient": True, "relevant": 2, "papers": 2}
+
+    @pytest.mark.parametrize("score", [0.19999, 0.0, -0.3])
+    def test_a_passage_just_below_the_threshold_is_not_relevant(self, score):
+        from app.interactive.workflow import assess_sufficiency
+
+        verdict = assess_sufficiency(
+            [self._vector("a", 1, 0.9), self._vector("b", 2, score)], 0.2, 2, 2
+        )
+        assert verdict == {"sufficient": False, "relevant": 1, "papers": 1}
+
+    def test_two_relevant_passages_from_one_paper_are_not_enough_papers(self):
+        from app.interactive.workflow import assess_sufficiency
+
+        verdict = assess_sufficiency(
+            [self._vector("a", 1, 0.9), self._vector("b", 1, 0.9)], 0.2, 2, 2
+        )
+        assert verdict == {"sufficient": False, "relevant": 2, "papers": 1}
+
+    def test_graph_only_rows_are_never_sufficient(self):
+        from app.interactive.workflow import assess_sufficiency
+
+        graph = [
+            {"id": f"graph:{p}:x", "paper_id": p, "score": 0.5, "source_type": "graph"}
+            for p in (1, 2, 3)
+        ]
+        verdict = assess_sufficiency(graph, 0.0, 1, 1)
+        assert verdict == {"sufficient": False, "relevant": 0, "papers": 0}
+
+    def test_missing_or_non_finite_scores_never_count(self):
+        from app.interactive.workflow import assess_sufficiency
+
+        rows = [
+            {"id": "a", "paper_id": 1, "source_type": "paragraph"},
+            self._vector("b", 2, float("nan")),
+            self._vector("c", 3, float("inf")),
+        ]
+        verdict = assess_sufficiency(rows, 0.0, 1, 1)
+        assert verdict == {"sufficient": False, "relevant": 0, "papers": 0}
+
+    def test_scores_pass_through_untransformed_from_the_vector_store(self):
+        # Higher is better and the raw cosine is kept: no rescaling to [0, 1].
+        from app.interactive.workflow import _normalize_vector_evidence
+
+        rows = _normalize_vector_evidence(
+            [{"id": "a", "paper_id": 1, "text": "t", "score": 0.873}]
+        )
+        assert rows[0]["score"] == 0.873

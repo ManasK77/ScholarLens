@@ -24,6 +24,7 @@ Retry-After it named.
 
 import json
 import logging
+from collections.abc import Callable
 from typing import Protocol
 
 import httpx
@@ -235,6 +236,10 @@ class GroqClient:
         else:
             self.limiter = _GROQ_LIMITER
             self.limiter.set_min_interval(min_interval_seconds)
+        # Seconds this client may still wait for a request slot; `None` (Mode
+        # A, the default) waits as long as the pacing needs. Mode B sets it to
+        # what is left of the query deadline (`interactive.deadline`).
+        self.wait_budget: Callable[[], float] | None = None
 
     def _body(self, prompt: str, schema: dict) -> dict:
         body = {
@@ -277,6 +282,9 @@ class GroqClient:
                 # A read timeout or dropped connection is as transient as a
                 # 5xx and is retried on the same curve.
                 retryable_exceptions=(httpx.RequestError,),
+                # `WaitBudgetExceeded` propagates as itself: it is the
+                # caller's deadline, not Groq rate limiting.
+                wait_budget=self.wait_budget,
             )
         except CooldownActive as exc:
             # An earlier caller was metered and the limiter is still parked.

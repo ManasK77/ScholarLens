@@ -10,6 +10,15 @@ _POSTGRES_COMPATIBILITY_DDL = (
     # The A/B/C justification (D-09-05). Nullable: rows written before it
     # existed have no justification, and `GET /reports` serves `{}` there.
     "ALTER TABLE gap_reports ADD COLUMN IF NOT EXISTS justification JSON",
+    # S1 hardening (2026-10-12): full-text provenance on papers, and the
+    # collection run's lifecycle and persisted summary. All nullable; older
+    # rows simply have none. `fulltext_attempts` is a new table, which
+    # `create_all` creates.
+    "ALTER TABLE papers ADD COLUMN IF NOT EXISTS openaccess_pdf_url VARCHAR",
+    "ALTER TABLE papers ADD COLUMN IF NOT EXISTS source_url VARCHAR",
+    "ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS status VARCHAR",
+    "ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS finished_at TIMESTAMP",
+    "ALTER TABLE collection_runs ADD COLUMN IF NOT EXISTS summary JSON",
 )
 
 

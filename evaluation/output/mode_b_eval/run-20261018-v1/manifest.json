@@ -1,0 +1,95 @@
+{
+ "code_sha256": {
+  "backend/app/interactive/calibration.py": "e196e0ed34aae35437f93ee4ee09c6d1ef1126926fc5e89e7c6d302276f44cdf",
+  "backend/app/interactive/claim_check.py": "d427286625e8f6deeddf89c1439a46eb9635c669387e4be7435954be16e3b340",
+  "backend/app/interactive/workflow.py": "dcfd2b8360ad6e36c0df202645737accb700753b4b6eb2b1f3cfdae2404a5f77",
+  "evaluation/mode_b.py": "590c8a72371797bd61156a7e8cc81e9428eb46f1521692c297f5c0ab9ca5f020"
+ },
+ "created_at": "2026-10-18T08:16:07.748203+00:00",
+ "git": {
+  "dirty_paths": 142,
+  "head": "bdfe21edff8f29cfd456f497064a392d6b30688b"
+ },
+ "inputs": {
+  "dataset_dir": "evaluation\\datasets\\mode_b_v1",
+  "live": [
+   "evaluation\\output\\mode_b_eval\\run-20261018-v1\\live\\LV-1.json",
+   "evaluation\\output\\mode_b_eval\\run-20261018-v1\\live\\LV-2.json",
+   "evaluation\\output\\mode_b_eval\\run-20261018-v1\\live\\LV-2b.json",
+   "evaluation\\output\\mode_b_eval\\run-20261018-v1\\live\\LV-3.json",
+   "evaluation\\output\\mode_b_eval\\run-20261018-v1\\live\\LV-1b.json",
+   "evaluation\\output\\mode_b_eval\\run-20261018-v1\\live\\LV-2c.json"
+  ],
+  "live_review": "evaluation\\output\\mode_b_eval\\run-20261018-v1\\live\\live-review.csv",
+  "papers": "C:\\Users\\Manas\\Desktop\\NLP\\evaluation\\output\\mode_b_calibration\\independent\\papers.csv",
+  "passages": "C:\\Users\\Manas\\Desktop\\NLP\\evaluation\\output\\mode_b_calibration\\independent\\passages.csv",
+  "retrieval_run": "evaluation\\output\\mode_b_eval\\run-20261018-v1\\retrieval-run.json",
+  "sha256": {
+   "catalogue/papers.csv": "a39bb273155f4024d74f61e6a537bce7379568e0922b7855d197127f91406af5",
+   "catalogue/passages.csv": "2b9d904ea64e7308447286b56fb19fbc5c888703bf165da394d6d376190bb0e0",
+   "dataset/claims.csv": "1f465372d46ac2faa0517a007797def7952aff6a01b7f19b6d11adec09acf799",
+   "dataset/labels.csv": "5c14007f86a6db3f9542bed8ac1a161152ef78a34ef9a318f92732ef203acc6f",
+   "dataset/questions.csv": "ce759430b148a125cdd0ee3fa07637daaa9a7050fe0778ef4c68d5329c352063",
+   "live/LV-1.json": "cf0ddd52075233fd760ed4ed82816b07851aca99ddba06d700bdb8202dccca44",
+   "live/LV-1b.json": "d8ab54cf02c9db6b2777d8c2fc238786db3bf493495a26e87f7114421be6ecef",
+   "live/LV-2.json": "b7752418351d7fbd2fb5559e73acaf4d32af4a7096ab1bb3a8b07cd8c9c57930",
+   "live/LV-2b.json": "e72ed92512be2151af40b7bc3172b11ce4b1f2784ecd63880b591b985772de18",
+   "live/LV-2c.json": "dcc4be697bbdd844e333dee648041dc20473137337aa03f7be875e50cd146f3b",
+   "live/LV-3.json": "3fd4ac714c061f8e4be7a86477b0e6a6ac57347b7e08fa68228836456e0a9815",
+   "live_review": "3d9fa7a521f5b89fa20a2c9747ce8a3a55da81a32ba94b694244cc2a13442ee9",
+   "retrieval_run": "16ce86d0d01e4bfebf11cdd3246cfac07a65580d6f514e2cd71777ef20459881"
+  }
+ },
+ "label_provenance": {
+  "adjudicated": false,
+  "authored_by": "AI coding agent (Claude) working on this repository, 2026-10-18",
+  "catalogue": "evaluation/output/mode_b_calibration/independent/passages.csv",
+  "catalogue_sha256": "2b9d904ea64e7308447286b56fb19fbc5c888703bf165da394d6d376190bb0e0",
+  "frozen_at": "2026-10-18T07:18Z",
+  "frozen_sha256": {
+   "claims.csv": "1f465372d46ac2faa0517a007797def7952aff6a01b7f19b6d11adec09acf799",
+   "labels.csv": "5c14007f86a6db3f9542bed8ac1a161152ef78a34ef9a318f92732ef203acc6f",
+   "questions.csv": "ce759430b148a125cdd0ee3fa07637daaa9a7050fe0778ef4c68d5329c352063"
+  },
+  "independent": false,
+  "inter_annotator_agreement": null,
+  "labelled_before_scores": true,
+  "labellers": 1,
+  "name": "mode_b_v1",
+  "see": "DATASET.md",
+  "source": "agent-authored",
+  "status": "provisional",
+  "version": 1
+ },
+ "mode": {
+  "live_calls": 0,
+  "llm_judge": false,
+  "mocked": false,
+  "offline": true
+ },
+ "python": "3.12.13",
+ "results_sha256": "4e5c308ac8bd859262d47acb4f88b316eb4732a3f3a76bf5abc40c57805779a1",
+ "retrieval_run_provenance": {
+  "embedding_adapter": "allenai/specter2",
+  "embedding_adapter_revision": "2081559630a80fc5851d8f798a05ba81e9468089",
+  "embedding_model": "allenai/specter2_base",
+  "embedding_model_revision": "3447645e1def9117997203454fa4495937bfbd83",
+  "generated_at": "2026-10-18T07:34:31.256841+00:00",
+  "llm_calls": 0,
+  "query_embed_version": "7a4c25987c79ddf5e54f95eb67c921eb7ede4b33e68addb827917c12befb5f1f",
+  "query_matches_stored_vectors": true,
+  "questions_sha256": "ce759430b148a125cdd0ee3fa07637daaa9a7050fe0778ef4c68d5329c352063",
+  "stored_embed_versions": [
+   "7a4c25987c79ddf5e54f95eb67c921eb7ede4b33e68addb827917c12befb5f1f"
+  ]
+ },
+ "run_id": "run-20261018-v1",
+ "schema": "scholarlens-mode-b-eval/1",
+ "settings": {
+  "retrieval_min_chunks": 2,
+  "retrieval_min_papers": 2,
+  "retrieval_min_score": 0.2,
+  "retrieval_top_n": 12
+ },
+ "warnings": []
+}

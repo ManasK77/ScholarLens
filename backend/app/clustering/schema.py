@@ -123,7 +123,16 @@ class StatementCluster:
 
     @property
     def member_count(self) -> int:
-        return len(self.members)
+        """Distinct statements: a sentence stored under two labels counts once."""
+        return len({(member.paper_id, member.text) for member in self.members})
+
+    @property
+    def statements(self) -> tuple[GapStatement, ...]:
+        """One row per distinct statement, the smallest point id representing it."""
+        seen: dict[tuple[int, str], GapStatement] = {}
+        for member in sorted(self.members, key=lambda item: item.point_id):
+            seen.setdefault((member.paper_id, member.text), member)
+        return tuple(seen.values())
 
     @property
     def paper_ids(self) -> tuple[int, ...]:

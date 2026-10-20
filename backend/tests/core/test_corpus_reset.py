@@ -487,3 +487,24 @@ def test_reset_removes_the_collection_audit_trail(session, neo4j, index):
     assert session.scalar(select(collection_audit.CollectionRun)) is None
     assert result["postgres_records"]["candidate_decisions"] == 1
     assert result["postgres_records"]["collection_runs"] == 1
+
+
+def test_reset_removes_the_full_text_attempt_trail(session, neo4j, index):
+    """D-FULLTEXT-01: `fulltext_attempts` references `papers` and
+    `collection_runs` and describes the corpus being wiped."""
+    from app.ingestion import collection_audit, fulltext
+
+    _seed_full_corpus(session, index)
+    paper_id = session.scalar(select(Paper.id))
+    run = collection_audit.start_upload(session)
+    log = fulltext.AttemptLog(session, run.id)
+    log.record(paper_id, "unpaywall", "enrichment", "no_oa_location")
+    log.record(paper_id, "arxiv", "enrichment", "http_error")
+    session.commit()
+
+    with pipeline_run(session, {}):
+        result = reset_corpus(session, neo4j, index)
+
+    assert session.scalar(select(collection_audit.FulltextAttempt)) is None
+    assert result["postgres_records"]["fulltext_attempts"] == 2
+    assert "fulltext_attempts" in result["sequences_restarted"]

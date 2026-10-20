@@ -9,9 +9,7 @@ Stage 2 onward reads from this schema without ever branching on `source`
 from collections.abc import Generator
 from datetime import datetime
 from functools import lru_cache
-from pathlib import Path
 
-import httpx
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -51,6 +49,12 @@ class Paper(Base):
     # Nullable rather than defaulted to 0: an arXiv-only or manually uploaded
     # record has no count, and 0 would assert that nobody cited it.
     citation_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Provenance kept for full-text acquisition (D-FULLTEXT-01, 2026-10-12):
+    # Semantic Scholar's `openAccessPdf` URL, and the record's page at its
+    # source (arXiv abstract, Semantic Scholar paper, ACL Anthology entry).
+    # Both were dropped on the way into this table before.
+    openaccess_pdf_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
@@ -99,11 +103,6 @@ def rows_missing_fulltext(session: Session) -> list[Paper]:
     return list(session.scalars(stmt))
 
 
-# PDF readers accept the `%PDF-` header anywhere in a file's first 1024 bytes.
-_PDF_MAGIC = b"%PDF-"
-_PDF_HEADER_WINDOW = 1024
-
-
 def download_pdf(url: str, dest_path: str, timeout: float = 30.0) -> bool:
     """Store the PDF at `url`; False on any failure, including a non-PDF body.
 
@@ -111,26 +110,13 @@ def download_pdf(url: str, dest_path: str, timeout: float = 30.0) -> bool:
     publisher landing page, and storing that as `has_full_text` hands Stage 2 an
     HTML "document" and stops Unpaywall from ever trying the paper again.
 
-    The body is written beside `dest_path` and moved into place only once it
-    is known to be a PDF: /collect fetches before dedup, so a re-collected
-    paper downloads onto the file its stored row already points at, and a
-    failed second fetch must not destroy the first.
+    Delegates to `app.ingestion.fulltext.safe_download` (D-FULLTEXT-01): only
+    public HTTP(S) hosts, redirects re-checked, a size limit, and a body
+    written beside `dest_path` and moved into place only once it is known to
+    be a PDF -- /collect fetches before dedup, so a re-collected paper
+    downloads onto the file its stored row already points at, and a failed
+    second fetch must not destroy the first.
     """
-    path = Path(dest_path)
-    partial = path.with_name(f"{path.name}.part")
-    try:
-        with httpx.stream("GET", url, timeout=timeout, follow_redirects=True) as resp:
-            if resp.status_code != 200:
-                return False
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with open(partial, "wb") as f:
-                f.writelines(resp.iter_bytes())
-        with open(partial, "rb") as f:
-            is_pdf = _PDF_MAGIC in f.read(_PDF_HEADER_WINDOW)
-        if is_pdf:
-            partial.replace(path)
-        return is_pdf
-    except httpx.HTTPError:
-        return False
-    finally:
-        partial.unlink(missing_ok=True)
+    from app.ingestion.fulltext import safe_download
+
+    return safe_download(url, dest_path, timeout=timeout).ok

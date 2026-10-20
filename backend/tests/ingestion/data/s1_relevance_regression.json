@@ -1,0 +1,537 @@
+{
+  "about": "S1 relevance-gate regression set for the topic 'Multilingual prompt injection'. Items are the 17 papers collection run 1 (2026-10-09) admitted, plus the 3 ACL Anthology candidates it rejected; text is the title and abstract each source supplied. Labels are one reviewer's human judgments from the 2026-10-10 S1 audit, made from abstracts and, where available, parsed full text. They are not ground truth: borderline items say so in their rationale.",
+  "labels": {
+    "CORE": "Directly studies multilingual or cross-lingual prompt injection as a security threat. The gate should admit these.",
+    "PARTIAL": "Studies prompt injection with little real multilinguality, or the reverse.",
+    "ADJACENT": "Primarily jailbreaks or another related but distinct threat model.",
+    "IRRELEVANT": "A phrase or semantic match that does not address the topic.",
+    "INSUFFICIENT_EVIDENCE": "Too little accessible text to judge. Excluded from precision and recall; reported separately."
+  },
+  "topic": "Multilingual prompt injection",
+  "cross_encoder": {
+    "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    "note": "Raw logits for '<title>. <abstract>' against the topic, recomputed 2026-10-10 with the production scorer; they equal run 1's recorded scores. The offline evaluation replays them so no test loads the model."
+  },
+  "items": [
+    {
+      "id": "paper-1",
+      "title": "Multilingual Hidden Prompt Injection Attacks on LLM-Based Academic Reviewing",
+      "abstract": "Large language models (LLMs) are increasingly considered for use in high-impact workflows, including academic peer review. However, LLMs are vulnerable to document-level hidden prompt injection attacks. In this work, we construct a dataset of approximately 500 real academic papers accepted to ICML and evaluate the effect of embedding hidden adversarial prompts within these documents. Each paper is injected with semantically equivalent instructions in four different languages and reviewed using an LLM. We find that prompt injection induces substantial changes in review scores and accept/reject decisions for English, Japanese, and Chinese injections, while Arabic injections produce little to no effect. These results highlight the susceptibility of LLM-based reviewing systems to document-level prompt injection and reveal notable differences in vulnerability across languages.",
+      "year": 2025,
+      "venue": "arXiv.org",
+      "doi": "10.48550/arXiv.2512.23684",
+      "arxiv_id": "2512.23684v1",
+      "acl_id": null,
+      "has_full_text": true,
+      "label": "CORE",
+      "rationale": "Embeds semantically equivalent hidden injected instructions in four languages into ~500 ICML papers and measures per-language effect on LLM reviewing.",
+      "cross_encoder_score": 7.0442,
+      "run1": [
+        {
+          "source": "arxiv",
+          "source_ref": "2512.23684v1",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 7.0442
+        },
+        {
+          "source": "semantic_scholar",
+          "source_ref": "10.48550/arXiv.2512.23684",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 7.0442
+        }
+      ]
+    },
+    {
+      "id": "paper-2",
+      "title": "MIPIAD: Multilingual Indirect Prompt Injection Attack Defense with Qwen -- TF-IDF Hybrid and Meta-Ensemble Learning",
+      "abstract": "Indirect prompt injection remains a persistent weakness in retrieval-augmented and tool-using LLM systems, and the problem becomes harder to characterise in multilingual settings. We present MIPIAD, a defense framework evaluated on English and Bangla that combines a sequence classifier fine-tuned from Qwen2.5-1.5B via LoRA (XLPID), TF-IDF lexical features, and validation-tuned ensembling through late fusion, stacking, and gradient boosting. The framework is evaluated on a synthetic benchmark built from BIPIA(Yi et al., 2023) templates spanning five task families -- email, table, QA, abstract, and code-comprising over 1.43 million generated samples, with train and test splits using mutually exclusive attack categories. Across the experiments, lexical signals prove strong (TF-IDF+SVM F1=0.77), and the hybrid XLPID+TF-IDF ensemble achieves the best overall F1 (0.9205) while the Boosting Ensemble achieves the best AUROC (0.9378). Ensemble methods consistently reduce the English-Bangla cross-lingual gap relative to standalone neural models. The pipeline is designed for extensibility: NLLB-200 supports over 200 languages and XLPID's multilingual backbone can be retargeted to additional languages without architectural changes; empirical validation is currently limited to English and Bangla",
+      "year": 2026,
+      "venue": "arXiv.org",
+      "doi": "10.48550/arXiv.2605.07269",
+      "arxiv_id": "2605.07269v1",
+      "acl_id": null,
+      "has_full_text": true,
+      "label": "CORE",
+      "rationale": "Defense against indirect prompt injection evaluated on English and Bangla; reports the cross-lingual gap.",
+      "cross_encoder_score": 6.552,
+      "run1": [
+        {
+          "source": "arxiv",
+          "source_ref": "2605.07269v1",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 6.552
+        },
+        {
+          "source": "semantic_scholar",
+          "source_ref": "10.48550/arXiv.2605.07269",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 6.6039
+        }
+      ]
+    },
+    {
+      "id": "paper-3",
+      "title": "The Effect of Multi-Lingual and Keyword Adversarial Injection on LLM Relevance Judgment",
+      "abstract": "Large language models (LLMs) are increasingly being used as automated judges\n  for relevance evaluation in information retrieval, yet their robustness to\n  adversarial manipulation remains insufficiently understood, particularly in\n  multilingual settings. In this work, we investigate the impact of\n  cross-lingual prompt injection attacks on LLM-based relevance judgments using\n  TREC Deep Learning collections and two open-weight models under established\n  prompting frameworks. We examine both instruction-based and content-based\n  injection strategies in 8 languages spanning different resource levels. Our\n  results demonstrate that multilingual query-based injections are highly\n  effective in inflating relevance scores while simultaneously evading existing\n  prompt-injection defenses. We further found that, although existing defense\n  mechanisms can be modified to mitigate such attacks, these injections can be\n  easily adapted to bypass them. These findings highlight a critical gap in\n  current defense approaches and demonstrate that language generalization can\n  act as an attack vector, underscoring the need for more robust and proactive\n  evaluation frameworks for LLM-as-a-judge systems.",
+      "year": 2026,
+      "venue": "arXiv.org",
+      "doi": "10.48550/arXiv.2607.10080",
+      "arxiv_id": "2607.10080v1",
+      "acl_id": null,
+      "has_full_text": true,
+      "label": "CORE",
+      "rationale": "Cross-lingual prompt-injection attacks on LLM relevance judges in 8 languages; shows they evade prompt-injection defenses.",
+      "cross_encoder_score": 6.4875,
+      "run1": [
+        {
+          "source": "arxiv",
+          "source_ref": "2607.10080v1",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 6.4875
+        },
+        {
+          "source": "semantic_scholar",
+          "source_ref": "10.48550/arXiv.2607.10080",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 6.4875
+        }
+      ]
+    },
+    {
+      "id": "paper-4",
+      "title": "Applying Pre-trained Multilingual BERT in Embeddings for Improved Malicious Prompt Injection Attacks Detection",
+      "abstract": "Large language models (LLMs) are renowned for their exceptional capabilities, and applying to a wide range of applications. However, this widespread use brings significant vulnerabilities. Also, it is well observed that there are huge gap which lies in the need for effective detection and mitigation strategies against malicious prompt injection attacks in large language models, as current approaches may not adequately address the complexity and evolving nature of these vulnerabilities in real-world applications. Therefore, this work focuses the impact of malicious prompt injection attacks which is one of most dangerous vulnerability on real LLMs applications. It examines to apply various BERT (Bidirectional Encoder Representations from Transformers) like multilingual BERT, DistilBert for classifying malicious prompts from legitimate prompts. Also, we observed how tokenizing the prompt texts and generating embeddings using multilingual BERT contributes to improve the performance of various machine learning methods: Gaussian Naive Bayes, Random Forest, Support Vector Machine, and Logistic Regression. The performance of each model is rigorously analyzed with various parameters to improve the binary classification to discover malicious prompts. Multilingual BERT approach to embed the prompts significantly improved and outperformed the existing works and achieves an outstanding accuracy of 96.55% by Logistic regression. Additionally, we investigated the incorrect predictions of the model to gain insights into its limitations. The findings can guide researchers in tuning various BERT for finding the most suitable model for diverse LLMs vulnerabilities.",
+      "year": 2024,
+      "venue": "2024 2nd International Conference on Artificial Intelligence, Blockchain, and Internet of Things (AIBThings)",
+      "doi": "10.1109/AIBThings63359.2024.10863664",
+      "arxiv_id": "2409.13331v1",
+      "acl_id": null,
+      "has_full_text": true,
+      "label": "PARTIAL",
+      "rationale": "Prompt-injection detection; 'multilingual' names the mBERT encoder. Full text: dataset 'mostly English', no per-language analysis.",
+      "cross_encoder_score": 5.3978,
+      "run1": [
+        {
+          "source": "arxiv",
+          "source_ref": "2409.13331v1",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 5.3978
+        },
+        {
+          "source": "semantic_scholar",
+          "source_ref": "10.1109/AIBThings63359.2024.10863664",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 5.3978
+        }
+      ]
+    },
+    {
+      "id": "paper-5",
+      "title": "An Empirical Evaluation of Prompt Injection Vulnerabilities in Large Language Models Across Multilingual and Obfuscated Attack Scenarios",
+      "abstract": "Large Language Models (LLMs) have rapidly evolved, transforming industries by automating complex tasks and generating human-like content. However, as their adoption accelerates, prompt injection vulnerabilities have become increasingly apparent. Malicious actors exploit these weaknesses to generate phishing emails, deceptive websites, nd malware, posing serious security risks. This paper presents an empirical evaluation of six state-of-the-art LLMs (DeepSeek, GPT, Gemini, Grok, Llama, and Qwen) under diverse adversarial prompt scenarios, including direct and multi-stage obfuscated attacks across multiple languages and character encodings. The proposed framework measures how effectively current LLMs resist manipulation into performing harmful actions. Our findings reveal systematic vulnerabilities across all tested models. Even direct prompt injections frequently induce the generation of phishing content, websites, and malware, while elaborate prompts achieve even higher malicious compliance rates, particularly for phishing. Models such as DeepSeek, Gemini, and Grok show especially high susceptibility under complex instructions. Notably, non-English languages consistently exhibit higher compliance rates than English, exposing significant gaps in multilingual safety alignment. Although simple character encodings reduce malicious outputs, they do not eliminate them. These results highlight persistent challenges in LLM safety and underscore the urgent need for stronger defenses and improved security mechanisms to support the ethical and secure deployment of LLMs in cybersecurity sensitive contexts.",
+      "year": 2026,
+      "venue": "2026 21st European Dependable Computing Conference Companion Proceedings (EDCC-C)",
+      "doi": "10.23919/EDCCCCPS00002.2026.00039",
+      "arxiv_id": "2606.29602v1",
+      "acl_id": null,
+      "has_full_text": true,
+      "label": "CORE",
+      "rationale": "Prompt-injection evaluation of six LLMs across multiple languages; non-English shows higher compliance. Borderline ADJACENT: the threat model is close to harmful-content jailbreaking.",
+      "cross_encoder_score": 5.3464,
+      "run1": [
+        {
+          "source": "arxiv",
+          "source_ref": "2606.29602v1",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 5.3464
+        },
+        {
+          "source": "semantic_scholar",
+          "source_ref": "10.23919/EDCCCCPS00002.2026.00039",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 5.3464
+        }
+      ]
+    },
+    {
+      "id": "paper-6",
+      "title": "The Tower of Babel Revisited: Multilingual Jailbreak Prompts on Closed-Source Large Language Models",
+      "abstract": "Large language models (LLMs) have seen widespread applications across various domains, yet remain vulnerable to adversarial prompt injections. While most existing research on jailbreak attacks and hallucination phenomena has focused primarily on open-source models, we investigate the frontier of closed-source LLMs under multilingual attack scenarios. We present a first-of-its-kind integrated adversarial framework that leverages diverse attack techniques to systematically evaluate frontier proprietary solutions, including GPT-4o, DeepSeek-R1, Gemini-1.5-Pro, and Qwen-Max. Our evaluation spans six categories of security contents in both English and Chinese, generating 38,400 responses across 32 types of jailbreak attacks. Attack success rate (ASR) is utilized as the quantitative metric to assess performance from three dimensions: prompt design, model architecture, and language environment. Our findings suggest that Qwen-Max is the most vulnerable, while GPT-4o shows the strongest defense. Notably, prompts in Chinese consistently yield higher ASRs than their English counterparts, and our novel Two-Sides attack technique proves to be the most effective across all models. This work highlights a dire need for language-aware alignment and robust cross-lingual defenses in LLMs, and we hope it will inspire researchers, developers, and policymakers toward more robust and inclusive AI systems.",
+      "year": 2025,
+      "venue": null,
+      "doi": null,
+      "arxiv_id": "2505.12287v1",
+      "acl_id": null,
+      "has_full_text": true,
+      "label": "ADJACENT",
+      "rationale": "Primarily a jailbreak study (32 jailbreak types, English/Chinese); 'prompt injections' appears once as framing.",
+      "cross_encoder_score": 5.1752,
+      "run1": [
+        {
+          "source": "arxiv",
+          "source_ref": "2505.12287v1",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 5.1752
+        }
+      ]
+    },
+    {
+      "id": "paper-7",
+      "title": "Sentra-Guard: A Real-Time Multilingual Defense Against Adversarial LLM Prompts",
+      "abstract": "This paper presents a real-time modular defense system named Sentra-Guard. The system detects and mitigates jailbreak and prompt injection attacks targeting large language models (LLMs). The framework uses a hybrid architecture with FAISS-indexed SBERT embedding representations that capture the semantic meaning of prompts, combined with fine-tuned transformer classifiers, which are machine learning models specialized for distinguishing between benign and adversarial language inputs. It identifies adversarial prompts in both direct and obfuscated attack vectors. A core innovation is the classifier-retriever fusion module, which dynamically computes context-aware risk scores that estimate how likely a prompt is to be adversarial based on its content and context. The framework ensures multilingual resilience with a language-agnostic preprocessing layer. This component automatically translates non-English prompts into English for semantic evaluation, enabling consistent detection across over 100 languages. The system includes a HITL feedback loop, where decisions made by the automated system are reviewed by human experts for continual learning and rapid adaptation under adversarial pressure. Sentra-Guard maintains an evolving dual-labeled knowledge base of benign and malicious prompts, enhancing detection reliability and reducing false positives. Evaluation results show a 99.96% detection rate (AUC = 1.00, F1 = 1.00) and an attack success rate (ASR) of only 0.004%. This outperforms leading baselines such as LlamaGuard-2 (1.3%) and OpenAI Moderation (3.7%). Unlike black-box approaches, Sentra-Guard is transparent, fine-tunable, and compatible with diverse LLM backends. Its modular design supports scalable deployment in both commercial and open-source environments. The system establishes a new state-of-the-art in adversarial LLM defense.",
+      "year": 2025,
+      "venue": null,
+      "doi": null,
+      "arxiv_id": "2510.22628v2",
+      "acl_id": null,
+      "has_full_text": true,
+      "label": "ADJACENT",
+      "rationale": "Jailbreak and prompt-injection detector; multilinguality is translating inputs to English before classification. Reports AUC=1.00/F1=1.00.",
+      "cross_encoder_score": 4.2275,
+      "run1": [
+        {
+          "source": "arxiv",
+          "source_ref": "2510.22628v2",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 4.2275
+        }
+      ]
+    },
+    {
+      "id": "paper-8",
+      "title": "Jailbreaking and Mitigation of Vulnerabilities in Large Language Models",
+      "abstract": "Large Language Models (LLMs) have transformed artificial intelligence by advancing natural language understanding and generation, enabling applications across fields beyond healthcare, software engineering, and conversational systems. Despite these advancements in the past few years, LLMs have shown considerable vulnerabilities, particularly to prompt injection and jailbreaking attacks. This review analyzes the state of research on these vulnerabilities and presents available defense strategies. We roughly categorize attack approaches into prompt-based, model-based, multimodal, and multilingual, covering techniques such as adversarial prompting, backdoor injections, and cross-modality exploits. We also review various defense mechanisms, including prompt filtering, transformation, alignment techniques, multi-agent defenses, and self-regulation, evaluating their strengths and shortcomings. We also discuss key metrics and benchmarks used to assess LLM safety and robustness, noting challenges like the quantification of attack success in interactive contexts and biases in existing datasets. Identifying current research gaps, we suggest future directions for resilient alignment strategies, advanced defenses against evolving attacks, automation of jailbreak detection, and consideration of ethical and societal impacts. This review emphasizes the need for continued research and cooperation within the AI community to enhance LLM security and ensure their safe deployment.",
+      "year": 2024,
+      "venue": null,
+      "doi": "10.63336/Eureka.47",
+      "arxiv_id": "2410.15236v4",
+      "acl_id": null,
+      "has_full_text": true,
+      "label": "ADJACENT",
+      "rationale": "Review of jailbreaking and its mitigation; prompt injection and multilinguality are each one item in enumerations.",
+      "cross_encoder_score": 3.169,
+      "run1": [
+        {
+          "source": "arxiv",
+          "source_ref": "2410.15236v4",
+          "decision": "admitted",
+          "reason_code": "relevant:conceptual",
+          "tier": "conceptual",
+          "score": 3.169
+        }
+      ]
+    },
+    {
+      "id": "paper-9",
+      "title": "Systematically Analyzing Prompt Injection Vulnerabilities in Diverse LLM Architectures",
+      "abstract": "This study systematically analyzes the vulnerability of 36 large language models (LLMs) to various prompt injection attacks, a technique that leverages carefully crafted prompts to elicit malicious LLM behavior. Across 144 prompt injection tests, we observed a strong correlation between model parameters and vulnerability, with statistical analyses, such as logistic regression and random forest feature analysis, indicating that parameter size and architecture significantly influence susceptibility. Results revealed that 56 percent of tests led to successful prompt injections, emphasizing widespread vulnerability across various parameter sizes, with clustering analysis identifying distinct vulnerability profiles associated with specific model configurations. Additionally, our analysis uncovered correlations between certain prompt injection techniques, suggesting potential overlaps in vulnerabilities. These findings underscore the urgent need for robust, multi-layered defenses in LLMs deployed across critical infrastructure and sensitive industries. Successful prompt injection attacks could result in severe consequences, including data breaches, unauthorized access, or misinformation. Future research should explore multilingual and multi-step defenses alongside adaptive mitigation strategies to strengthen LLM security in diverse, real-world environments.",
+      "year": 2024,
+      "venue": null,
+      "doi": null,
+      "arxiv_id": "2410.23308v1",
+      "acl_id": null,
+      "has_full_text": true,
+      "label": "PARTIAL",
+      "rationale": "Prompt-injection study over 36 LLMs; multilinguality appears only as a future-research suggestion (full text: 2 mentions).",
+      "cross_encoder_score": 3.0256,
+      "run1": [
+        {
+          "source": "arxiv",
+          "source_ref": "2410.23308v1",
+          "decision": "admitted",
+          "reason_code": "relevant:conceptual",
+          "tier": "conceptual",
+          "score": 3.0256
+        }
+      ]
+    },
+    {
+      "id": "paper-10",
+      "title": "Transferable Modeling Strategies for Low-Resource LLM Tasks: A Prompt and Alignment-Based Approach",
+      "abstract": "This paper addresses the limited transfer and adaptation capabilities of large language models in low-resource language scenarios. It proposes a unified framework that combines a knowledge transfer module with parameter-efficient fine-tuning strategies. The method introduces knowledge alignment loss and soft prompt tuning to guide the model in effectively absorbing the structural features of target languages or tasks under minimal annotation. This enhances both generalization performance and training stability. The framework includes lightweight adaptation modules to reduce computational costs. During training, it integrates freezing strategies and prompt injection to preserve the model's original knowledge while enabling quick adaptation to new tasks. The study also conducts stability analysis experiments and synthetic pseudo-data transfer experiments to systematically evaluate the method's applicability and robustness across different low-resource tasks. Experimental results show that compared with existing multilingual pre-trained models and mainstream transfer methods, the proposed approach achieves higher performance and stability on cross-lingual tasks such as MLQA, XQuAD, and PAWS-X. It demonstrates particularly strong advantages under extremely data-scarce conditions. The proposed method offers strong generality and scalability. It enhances task-specific adaptability while preserving the general capabilities of large language models. This makes it well-suited for complex semantic modeling and multilingual processing tasks.",
+      "year": 2025,
+      "venue": null,
+      "doi": null,
+      "arxiv_id": "2507.00601v2",
+      "acl_id": null,
+      "has_full_text": true,
+      "label": "IRRELEVANT",
+      "rationale": "Low-resource cross-lingual transfer learning; 'prompt injection' is a benign fine-tuning technique, no security threat studied.",
+      "cross_encoder_score": 2.8224,
+      "run1": [
+        {
+          "source": "arxiv",
+          "source_ref": "2507.00601v2",
+          "decision": "admitted",
+          "reason_code": "relevant:conceptual",
+          "tier": "conceptual",
+          "score": 2.8224
+        }
+      ]
+    },
+    {
+      "id": "paper-11",
+      "title": "A Privacy Preserving Federated XLM-RoBERTa Framework for Multilingual Prompt Injection Defense in Educational AI Platforms",
+      "abstract": "AI-powered education systems have revolutionized personalized learning, multilingual assistance, and intelligent support in education. Such systems are still susceptible to prompt injection attacks, in which the adversary can submit prompts to the system that cause it to provide unexpected answers, reveal hidden code, or execute unsafe code. In multilingual settings, this risk is magnified even more by code-mixed or cross-lingual prompts, which can be targeted by malicious actors to evade existing countermeasures. In this paper, we introduce a Federated Multilingual Prompt Injection Defense Framework for educational AI systems based on XLM-RoBERTa. The framework uses federated learning to collaboratively train detection models using distributed institutional data that contains no sensitive student or academic information, thus maintaining privacy. XLM-RoBERTa is used because of its high multi-lingual text comprehension and categorization abilities, enabling it to identify malicious prompts across a variety of languages. The proposed system includes real-time screening, anomaly detection, and response filtering to provide a more secure and reliable learning environment in the presence of AI. Both IID and non-IID federated settings are tested with multilingual prompt datasets. The results show that the model achieves good detection performance, good privacy protection and robustness against new prompt injection techniques. By adopting the proposed approach, the security and scalability of next-generation educational AI systems can be ensured.",
+      "year": 2026,
+      "venue": "2026 7th International Conference on Smart Systems and Inventive Technology (ICSSIT)",
+      "doi": "10.1109/ICSSIT69151.2026.11656649",
+      "arxiv_id": null,
+      "acl_id": null,
+      "has_full_text": false,
+      "label": "CORE",
+      "rationale": "Federated XLM-RoBERTa detection of code-mixed and cross-lingual prompt injection in educational platforms. Weak venue; abstract reports no numbers.",
+      "cross_encoder_score": 7.6233,
+      "run1": [
+        {
+          "source": "semantic_scholar",
+          "source_ref": "10.1109/ICSSIT69151.2026.11656649",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 7.6233
+        }
+      ]
+    },
+    {
+      "id": "paper-12",
+      "title": "Multilingual Prompt-Injection-Based Jailbreak Vulnerability Analysis : A Comparative Study of English, Korean Plain Speech, and Honorific Style",
+      "abstract": null,
+      "year": 2025,
+      "venue": "Jouranl of Information and Security",
+      "doi": "10.33778/kcsa.2025.25.5.117",
+      "arxiv_id": null,
+      "acl_id": null,
+      "has_full_text": false,
+      "label": "INSUFFICIENT_EVIDENCE",
+      "rationale": "Title suggests a multilingual prompt-injection-based jailbreak comparison (English vs Korean), but no abstract or full text is available.",
+      "cross_encoder_score": 6.9422,
+      "run1": [
+        {
+          "source": "semantic_scholar",
+          "source_ref": "10.33778/kcsa.2025.25.5.117",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 6.9422
+        }
+      ]
+    },
+    {
+      "id": "paper-13",
+      "title": "Detection and analysis of prompt injection in indian multilingual large language models",
+      "abstract": "With the use of Large Language Models (LLMs) becoming more significant in many applications, it has become a great need to ask the question how these LLMs can be made safe and robust, and hence make it behave in an ethical way. Among the most seen and evident vulnerabilities or loopholes in LLM are the attacks termed as prompts injections, which is a key vulnerability. Even though this issue is being extensively studied, most of the available and existing literature and defense systems are mostly focussed on English language prompts. As of now, there are no publicly available datasets or any known defense mechanisms that works with the aim of detecting and/or preventing the so-called prompt injection in Indian regional or code-mixed languages associated. The project aims to identify or propose a mechanism to find an answer on exactly how to overcome this significant research gap by assessing the reaction of various LLMs to the injection-style prompts typed in Indian languages particularly Hindi and its code-mixed version, Hinglish. A clean dataset of size 4000 prompts including safe and malicious prompts in Hindi and Hinglish (Hindi-2000 prompts and Hinglish-2000 prompts) is made and a hybrid classifier is proposed that finds to detect injection attempts using their language patterns and other intents or features. Various algorithms including Transformer, Distil Transformer, SVM, XGBoost, Random Forest and Logistic Regression are trained and tested. The integration of a rule-based layer and a transformer model was shown to perform better than all baselines, with 99.70% accuracy and high precision (99.65%), recall (99.75%), and F1-score (99.70%), which demonstrates that its detection is very reliable. The system provides a new direction in ensuring the security of LLM interfaces against prompt-based injection attacks, especially in a diverse and multilingual user population like that in India.",
+      "year": 2026,
+      "venue": "Scientific Reports",
+      "doi": "10.1038/s41598-026-43883-0",
+      "arxiv_id": null,
+      "acl_id": null,
+      "has_full_text": false,
+      "label": "CORE",
+      "rationale": "Hindi and Hinglish prompt-injection dataset (4,000 prompts) and detector.",
+      "cross_encoder_score": 6.0748,
+      "run1": [
+        {
+          "source": "semantic_scholar",
+          "source_ref": "10.1038/s41598-026-43883-0",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 6.0748
+        }
+      ]
+    },
+    {
+      "id": "paper-14",
+      "title": "Cross-Lingual Indirect Prompt Injection Across Retrieval, Reranking, And Generation In Multilingual RAG",
+      "abstract": "External evidence can make retrieval-augmented generation (RAG) more informative, yet retrieved passages also provide a path for adversarial instructions to enter the model context. We examine that path in an English-Indonesian RAG system and track cross-lingual indirect prompt injection separately at retrieval, reranking, and generation. The experiment starts from 75 semantic items and evaluates every item in eight query/body/payload language combinations, for 600 paired trials. Qwen3-Embedding-0.6B and BGE-M3 produce top-20 candidate sets, BGE-reranker-v2-m3 reduces each set to five documents, and Qwen3-0.6B answers from the resulting context with either a standard prompt or an explicit trust-boundary prompt. Statistical uncertainty is estimated by resampling semantic items, and paired binary outcomes are modeled with generalized estimating equations. Poison documents reached the top 20 in 80.50% of Qwen trials and 37.67% of BGE-M3 trials (odds ratio 6.94, 95% CI 4.53-10.63). Top-five exposure was 18.50% and 16.17%, respectively. Standard end-to-end attack success was 6.33% for Qwen and 6.00% for BGE-M3; boundary-aware prompting lowered both rates to 1.33%, with no canary false positives. The results indicate that multilingual RAG security depends on several linked stages rather than generation alone.",
+      "year": 2026,
+      "venue": "Journal of Computational Science and Technology",
+      "doi": "10.59435/jocstec.v4i3.809",
+      "arxiv_id": null,
+      "acl_id": null,
+      "has_full_text": false,
+      "label": "CORE",
+      "rationale": "Cross-lingual indirect prompt injection in an English-Indonesian RAG pipeline, measured at retrieval, reranking and generation.",
+      "cross_encoder_score": 5.5945,
+      "run1": [
+        {
+          "source": "semantic_scholar",
+          "source_ref": "10.59435/jocstec.v4i3.809",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 5.5945
+        }
+      ]
+    },
+    {
+      "id": "paper-15",
+      "title": "A Fragment-Based Multilingual Jailbreak Testing Framework for Large Language Models with Implications for Healthcare Deployment",
+      "abstract": "Large language models (LLMs) have seen rapid adoption owing to their scale and emergent reasoning capabilities, however, they remain significantly vulnerable to jailbreak and prompt-injection attacks. This study conceptualizes multilingual \"Do Anything Now\" (DAN) style prompts as a form of structured prompt-space exploration and proposes a reproducible, fragment-based assessment framework for probing model robustness. At the core of this framework is a DAN-style multilingual dataset generator coupled with an automated test harness. This setup evaluates robustness within a minimal adversarial setting in which the model is instructed to output only a designated forbidden token. Accordingly, the forbidden-token task should be interpreted as a controlled proxy for jailbreak robustness, rather than as direct evidence of real-world clinical misuse risk. The dataset is constructed by composing prompt fragments to generate semantically equivalent but lexically diverse jailbreak variants across multiple languages. The evaluation framework categorizes responses into six distinct groups, enabling the precise differentiation and tracking of successful and failed cases. Empirical results demonstrate that multilingual variants broaden the attack coverage and expose language-specific vulnerabilities. We quantify robustness using Strict-ASR (exact-token attack success rate), Leak-ASR (token exposure rate), and Non-Refusal Rate (NRR), which captures the model’s propensity to provide a response rather than an explicit refusal. The main contributions of this study are a fragment-based multilingual prompt-generation framework, an automated evaluation pipeline integrating normalization, refusal detection, behavioral classification, and metric aggregation, and an empirical analysis showing that multilingual variants and stylistic decorators broaden coverage and reveal language-dependent jailbreak vulnerabilities. We further discuss how these observed failure modes may inform deployment risk assessment in sensitive domains such as healthcare.",
+      "year": 2026,
+      "venue": "International Conference on Software Testing, Verification and Validation Workshops",
+      "doi": "10.1109/ICSTW72326.2026.00052",
+      "arxiv_id": null,
+      "acl_id": null,
+      "has_full_text": false,
+      "label": "ADJACENT",
+      "rationale": "Multilingual DAN-style jailbreak testing framework; prompt injection is mentioned once.",
+      "cross_encoder_score": 4.4897,
+      "run1": [
+        {
+          "source": "semantic_scholar",
+          "source_ref": "10.1109/ICSTW72326.2026.00052",
+          "decision": "admitted",
+          "reason_code": "relevant:strong",
+          "tier": "strong",
+          "score": 4.4897
+        }
+      ]
+    },
+    {
+      "id": "paper-16",
+      "title": "A Test Suite of Prompt Injection Attacks for {LLM}-based Machine Translation",
+      "abstract": "LLM-based NLP systems typically work by embedding their input data into prompt templates which contain instructions and/or in-context examples, creating queries which are submitted to a LLM, then parse the LLM response in order to generate the system outputs. Prompt Injection Attacks (PIAs) are a type of subversion of these systems where a malicious user crafts special inputs which interfer with the prompt templates, causing the LLM to respond in ways unintended by the system designer.Recently, Sun and Miceli-Barone (2024) proposed a class of PIAs against LLM-based machine translation. Specifically, the task is to translate questions from the TruthfulQA test suite, where an adversarial prompt is prepended to the questions, instructing the system to ignore the translation instruction and answer the questions instead.In this test suite we extend this approach to all the language pairs of the WMT 2024 General Machine Translation task. Moreover, we include additional attack formats in addition to the one originally studied.",
+      "year": 2024,
+      "venue": "Proceedings of the Ninth Conference on Machine Translation",
+      "doi": "10.18653/v1/2024.wmt-1.30",
+      "arxiv_id": null,
+      "acl_id": "2024.wmt-1.30",
+      "has_full_text": true,
+      "label": "CORE",
+      "rationale": "Prompt-injection attack test suite against LLM-based machine translation across all WMT24 language pairs.",
+      "cross_encoder_score": 0.8076,
+      "run1": [
+        {
+          "source": "acl_anthology",
+          "source_ref": "2024.wmt-1.30",
+          "decision": "admitted",
+          "reason_code": "relevant:conceptual",
+          "tier": "conceptual",
+          "score": 0.8076
+        }
+      ]
+    },
+    {
+      "id": "paper-17",
+      "title": "Scaling Behavior of Machine Translation with Large Language Models under Prompt Injection Attacks",
+      "abstract": "Large Language Models (LLMs) are increasingly becoming the preferred foundation platforms for many Natural Language Processing tasks such as Machine Translation, owing to their quality often comparable to or better than task-specific models, and the simplicity of specifying the task through natural language instructions or in-context examples.Their generality, however, opens them up to subversion by end users who may embed into their requests instructions that cause the model to behave in unauthorized and possibly unsafe ways.In this work we study these Prompt Injection Attacks (PIAs) on multiple families of LLMs on a Machine Translation task, focusing on the effects of model size on the attack success rates.We introduce a new benchmark data set and we discover that on multiple language pairs and injected prompts written in English, larger models under certain conditions may become more susceptible to successful attacks, an instance of the Inverse Scaling phenomenon (McKenzie et al., 2023).To our knowledge, this is the first work to study non-trivial LLM scaling behaviour in a multi-lingual setting.",
+      "year": 2024,
+      "venue": "Proceedings of the First edition of the Workshop on the Scaling Behavior of Large Language Models (SCALE-LLM 2024)",
+      "doi": "10.18653/v1/2024.scalellm-1.2",
+      "arxiv_id": null,
+      "acl_id": "2024.scalellm-1.2",
+      "has_full_text": true,
+      "label": "CORE",
+      "rationale": "Prompt-injection attacks on LLM machine translation across multiple language pairs; studies scaling behaviour.",
+      "cross_encoder_score": 0.7144,
+      "run1": [
+        {
+          "source": "acl_anthology",
+          "source_ref": "2024.scalellm-1.2",
+          "decision": "admitted",
+          "reason_code": "relevant:conceptual",
+          "tier": "conceptual",
+          "score": 0.7144
+        }
+      ]
+    },
+    {
+      "id": "acl-2026.semeval-1.411",
+      "title": "{S}hef{F}riday at {S}em{E}val-2026 Task 9: {LLM}-Based Annotation Methods for Detecting Multilingual, Multicultural and Multievent Online Polarisation",
+      "abstract": "This paper presents our findings for SemEval-2026 Task 9. We submit to all three subtasks using an LLM-as-an-annotator strategy, simulating the data annotation process with large language models. We created 30 LLM annotators using persona injection (also known as sociodemographic prompting) and experimented with various annotation aggregation methods, including Dawid-Skene and MACE. To further increase the variability in annotator responses, we used the hatefulness detection task as proxy for identifying polarisation. Our findings indicate that this reframing of the problem is effective for the binary classification of polarisation, but is less effective for finer-grained polarisation detection. For subtasks 2 and 3, majority voting yielded the best overall performance. While our unsupervised approach does not rank as highly as supervised ones, this work provides insight into the utility of persona-based prompting and the issue of LLM annotators exhibiting high intra-model agreement.",
+      "year": 2026,
+      "venue": "Proceedings of the 20th {I}nternational {W}orkshop on {S}emantic {E}valuation (2026)",
+      "doi": "10.18653/v1/2026.semeval-1.411",
+      "arxiv_id": null,
+      "acl_id": "2026.semeval-1.411",
+      "has_full_text": false,
+      "label": "IRRELEVANT",
+      "rationale": "SemEval polarisation-detection system; 'persona injection' is a prompting technique, not a security threat.",
+      "cross_encoder_score": 1.3343,
+      "run1": [
+        {
+          "source": "acl_anthology",
+          "source_ref": "2026.semeval-1.411",
+          "decision": "rejected",
+          "reason_code": "sense_mismatch:prompt injection",
+          "tier": null,
+          "score": null
+        }
+      ]
+    },
+    {
+      "id": "acl-2026.findings-eacl.276",
+      "title": "A Comprehensive Evaluation of Multilingual Chain-of-Thought Reasoning: Performance, Consistency, and Faithfulness Across Languages",
+      "abstract": "Large reasoning models (LRMs) increasingly rely on step-by-step Chain-of-Thought (CoT) reasoning to improve task performance, particularly in high-resource languages such as English. While recent work has examined final-answer accuracy in multilingual settings, the thinking traces themselves, i.e., the intermediate steps that lead to the final answer, remain underexplored. In this paper, we present a comprehensive study of multilingual CoT reasoning, evaluating three key dimensions: performance, consistency, and faithfulness. We begin by measuring language compliance, answer accuracy, and answer consistency when LRMs are explicitly instructed or prompt-hacked to think in a target language, revealing strong language preferences and divergent performance across languages. Next, we assess crosslingual consistency of thinking traces by interchanging them between languages. We find that the quality and effectiveness of thinking traces vary substantially depending on the prompt language. Finally, we adapt perturbation-based techniques {--} i.e., truncation and error injection {--} to probe the faithfulness of thinking traces across languages, showing that models rely on traces to varying degrees. We release our code and data to support future research.",
+      "year": 2026,
+      "venue": "Findings of the {A}ssociation for {C}omputational {L}inguistics: {EACL} 2026",
+      "doi": "10.18653/v1/2026.findings-eacl.276",
+      "arxiv_id": null,
+      "acl_id": "2026.findings-eacl.276",
+      "has_full_text": false,
+      "label": "IRRELEVANT",
+      "rationale": "Multilingual chain-of-thought evaluation; 'error injection' is a perturbation method.",
+      "cross_encoder_score": -2.1899,
+      "run1": [
+        {
+          "source": "acl_anthology",
+          "source_ref": "2026.findings-eacl.276",
+          "decision": "rejected",
+          "reason_code": "sense_mismatch:prompt injection",
+          "tier": null,
+          "score": null
+        }
+      ]
+    },
+    {
+      "id": "acl-2026.eacl-long.139",
+      "title": "Safe-Unsafe Concept Separation Emerges from a Single Direction in Language Models Activation Space",
+      "abstract": "Ensuring the safety of Large Language Models (LLMs) is a critical alignment challenge. Existing approaches often rely on invasive fine- tuning or external generation-based checks, which can be opaque and resource-inefficient. In this work, we investigate the geometry of safety concepts within pretrained representations, proposing a mechanistic methodology that identifies the layer where safe and unsafe concepts are maximally separable within a pretrained model{'}s representation space. By leveraging the intrinsic activation space of the optimal layer, we show that safety enforcement can be achieved via a simple linear classifier, avoiding the need for weight modification. We validate our framework across multiple domains (regulation, law, finance, cybersecurity, education, code, human resources, and social media), diverse tasks (safety classification, prompt injection, and toxicity detection), and 16 non-English languages on both encoder and decoder architectures. Our results show that: (i) the separation between safe and unsafe concepts emerges from a single layer direction in the activation space, (ii) monitoring internal representations provides a significantly more robust safeguarding mechanism compared to traditional evaluative or generative guardrail paradigms.",
+      "year": 2026,
+      "venue": "Proceedings of the 19th Conference of the {E}uropean Chapter of the {A}ssociation for {C}omputational {L}inguistics (Volume 1: Long Papers)",
+      "doi": "10.18653/v1/2026.eacl-long.139",
+      "arxiv_id": null,
+      "acl_id": "2026.eacl-long.139",
+      "has_full_text": false,
+      "label": "PARTIAL",
+      "rationale": "Safety-concept probing; prompt injection is one of several evaluated tasks, across 16 non-English languages.",
+      "cross_encoder_score": -7.2084,
+      "run1": [
+        {
+          "source": "acl_anthology",
+          "source_ref": "2026.eacl-long.139",
+          "decision": "rejected",
+          "reason_code": "low_semantic_relevance",
+          "tier": null,
+          "score": -7.2084
+        }
+      ]
+    }
+  ]
+}

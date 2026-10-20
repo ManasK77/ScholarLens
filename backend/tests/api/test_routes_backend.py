@@ -457,7 +457,18 @@ def test_get_reports_returns_seeded_report(
             GapReportRecord(
                 cluster_id=cluster_id,
                 gap="Multilingual evaluation is underexplored.",
-                evidence=[{"id": "e1"}],
+                # The six keys `schema.evidence_from_point` always stores;
+                # `/reports` is typed against that shape.
+                evidence=[
+                    {
+                        "id": "e1",
+                        "paper_id": 3,
+                        "title": "A paper",
+                        "text": "Evaluation is English-only.",
+                        "year": 2024,
+                        "source_type": "limitation",
+                    }
+                ],
                 confidence=0.8,
                 suggested_directions=["Build a multilingual benchmark."],
                 provider="groq",
@@ -619,13 +630,27 @@ def test_get_graph_returns_snapshot(
     monkeypatch.setattr(
         routes_backend,
         "graph_snapshot",
-        lambda neo4j, limit: {"nodes": [], "edges": []},
+        # `graph_snapshot` always returns all five keys; `/graph` is typed
+        # against that shape.
+        lambda neo4j, limit: {
+            "nodes": [],
+            "edges": [],
+            "total_nodes": 0,
+            "total_edges": 0,
+            "truncated": False,
+        },
     )
 
     response = client.get("/graph")
 
     assert response.status_code == 200
-    assert response.json() == {"nodes": [], "edges": []}
+    assert response.json() == {
+        "nodes": [],
+        "edges": [],
+        "total_nodes": 0,
+        "total_edges": 0,
+        "truncated": False,
+    }
 
 
 def test_post_index_indexes_and_returns_count(
@@ -713,6 +738,30 @@ def test_pipeline_run_calls_every_stage_and_commits(
     assert body["extracted"] == 2
     assert body["indexed"] == 3
     assert body["reports"] == [1]
+
+
+def test_pipeline_run_reports_s2_outcomes_that_are_not_clean_parses(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A PDF no parser read, and a parse made while GROBID was down, are named.
+
+    Both used to be returned as plain "parsed" ids, indistinguishable from a
+    GROBID parse of a readable PDF (D-S2-STATUS-01). Additive keys.
+    """
+    _stub_evidence_stages(monkeypatch, [])
+    monkeypatch.setattr(
+        routes_backend,
+        "parse_all_pending",
+        lambda *a, **k: SimpleNamespace(
+            processed=[1, 2, 3], missing_pdfs=[], no_text=[2], grobid_unavailable=[3]
+        ),
+    )
+
+    body = client.post("/pipeline/run", json={"generate_reports": False}).json()
+
+    assert body["parsed"] == [1, 2, 3]
+    assert body["no_text_pdfs"] == [2]
+    assert body["grobid_unavailable"] == [3]
 
 
 def test_a_rate_limited_pipeline_run_keeps_the_evidence_base_and_says_so(
@@ -1178,3 +1227,50 @@ def test_post_reports_returns_the_outcome_additively(client, monkeypatch):
     assert body["clusters"] == [11, 2]
     assert body["count"] == 2
     assert body["report_generation"]["status"] == "partial"
+
+
+def test_derived_state_from_before_one_statement_per_sentence_is_not_current(
+    db_session: SASession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D-06-14 changed what S6 produces from unchanged inputs.
+
+    Clusters built from label rows must be recomputed, not reused because the
+    corpus fingerprint happens to be the same.
+    """
+    assert routes_backend._DERIVED_VERSION >= 2
+    settings = SimpleNamespace()
+    current = routes_backend._derived_fingerprint(db_session, settings)
+    monkeypatch.setattr(routes_backend, "_DERIVED_VERSION", 1)
+    assert routes_backend._derived_fingerprint(db_session, settings) != current
+
+
+def test_gaps_trends_and_clusters_carry_their_evidence_qualifiers(
+    client: TestClient, db_session: SASession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Additive keys: single-paper scope (S8) and trend sample caveats (S7)."""
+    import datetime
+
+    cluster_id = _seed_cluster(db_session)
+    replace_trends(
+        db_session, [(cluster_id, TrendSeries({"2025": 1, "2026": 2}, 1.0, 0))]
+    )
+    replace_rankings(
+        db_session,
+        [(cluster_id, -24.0, GapSignals(1, 0.0, 1.0, 0.0, 0.0))],
+    )
+    db_session.commit()
+    monkeypatch.setattr(routes_backend, "_today", lambda: datetime.date(2026, 10, 13))
+
+    [gap] = client.get("/gaps").json()
+    assert (gap["paper_count"], gap["evidence_scope"], gap["exploratory"]) == (
+        1,
+        "single_paper",
+        True,
+    )
+    [trend] = client.get("/trends").json()
+    assert trend["qualifiers"]["partial_years"] == ["2026"]
+    assert trend["qualifiers"]["small_sample"] is True
+    assert trend["slope"] == 1.0  # the stored value is unchanged
+    [cluster] = client.get("/clusters").json()
+    assert cluster["paper_count"] == len({m["paper_id"] for m in cluster["members"]})
+    assert cluster["evidence_scope"] in {"single_paper", "corroborated"}

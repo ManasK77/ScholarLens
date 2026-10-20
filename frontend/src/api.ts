@@ -4,12 +4,22 @@ const DEFAULT_BASE_URL = '/api'
 
 export class ApiError extends Error {
   status: number
+  /** Seconds to wait before retrying, from a 429's `Retry-After` header. */
+  retryAfter?: number
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, retryAfter?: number) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.retryAfter = retryAfter
   }
+}
+
+/** `Retry-After` in seconds. Only the delay-seconds form is used by the API. */
+function retryAfterSeconds(response: Response): number | undefined {
+  const header = response.headers.get('Retry-After')?.trim()
+  const seconds = header ? Number(header) : NaN
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined
 }
 
 /** Collection endpoints return a JSON array. Anything else is treated as empty.
@@ -22,6 +32,18 @@ export class ApiError extends Error {
  */
 function asList<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : []
+}
+
+/** The message in a FastAPI error body: `detail` is a string for errors the
+ *  API raises, and a list of `{msg}` objects for request validation (422). */
+function errorDetail(payload: unknown): string | undefined {
+  const detail = (payload as { detail?: unknown } | null)?.detail
+  if (typeof detail === 'string' && detail) return detail
+  if (Array.isArray(detail)) {
+    const first = detail.find((item): item is { msg: string } => typeof item?.msg === 'string')
+    if (first) return `Invalid request: ${first.msg}`
+  }
+  return undefined
 }
 
 export class ScholarLensApi {
@@ -39,18 +61,29 @@ export class ScholarLensApi {
     if (this.apiKey) headers.set('X-API-Key', this.apiKey)
     if (init?.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
 
-    const response = await fetch(`${this.baseUrl}${path}`, { ...init, headers })
+    let response: Response
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, { ...init, headers })
+    } catch (error) {
+      // A caller's abort stays an AbortError so it can tell "cancelled" apart.
+      if (error instanceof DOMException && error.name === 'AbortError') throw error
+      throw new ApiError('Could not reach the ScholarLens API.', 0)
+    }
     if (!response.ok) {
       let message = `Request failed (${response.status})`
       try {
-        const payload = await response.json() as { detail?: string }
-        if (payload.detail) message = payload.detail
+        message = errorDetail(await response.json()) ?? message
       } catch {
         // Keep the status-based message for non-JSON errors.
       }
-      throw new ApiError(message, response.status)
+      throw new ApiError(message, response.status, retryAfterSeconds(response))
     }
-    return response.json() as Promise<T>
+    try {
+      return await response.json() as T
+    } catch {
+      // e.g. a proxy's HTML page served with 200: never a raw parser error.
+      throw new ApiError('The API returned a response that could not be read.', response.status)
+    }
   }
 
   async dashboard(): Promise<DashboardData> {
@@ -67,6 +100,8 @@ export class ScholarLensApi {
       graph = {
         nodes: asList<DashboardData['graph']['nodes'][number]>(snapshot?.nodes),
         edges: asList<DashboardData['graph']['edges'][number]>(snapshot?.edges),
+        total_nodes: typeof snapshot?.total_nodes === 'number' ? snapshot.total_nodes : undefined,
+        total_edges: typeof snapshot?.total_edges === 'number' ? snapshot.total_edges : undefined,
       }
     } catch (error) {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) throw error
@@ -112,10 +147,11 @@ export class ScholarLensApi {
     return this.request<CorpusResetResult>('/admin/corpus', { method: 'DELETE' })
   }
 
-  runPipeline(generateReports: boolean): Promise<PipelineResult> {
+  runPipeline(generateReports: boolean, signal?: AbortSignal): Promise<PipelineResult> {
     return this.request<PipelineResult>('/pipeline/run', {
       method: 'POST',
       body: JSON.stringify({ generate_reports: generateReports }),
+      signal,
     })
   }
 }

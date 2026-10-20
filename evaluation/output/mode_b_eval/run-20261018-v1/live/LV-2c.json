@@ -1,0 +1,129 @@
+{
+ "mode": "live",
+ "sent": true,
+ "test_id": "LV-2c",
+ "question": "Which papers report that LLM safety or instruction compliance is weaker for non-English prompts?",
+ "started_at": "2026-10-18T08:12:09Z",
+ "http_status": 200,
+ "elapsed_seconds": 82.17,
+ "outcome": "grounding_failed",
+ "expected_outcome": "grounded_answer",
+ "outcome_as_expected": false,
+ "verdict": "SAFE_NON_ANSWER",
+ "checks": {
+  "http_200": {
+   "ok": true,
+   "detail": 200
+  },
+  "response_schema": {
+   "ok": true,
+   "detail": null
+  },
+  "answer_non_empty": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_structure": {
+   "ok": true,
+   "detail": null
+  },
+  "claims_cite_returned_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "citations_match_stored_sources": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_titles_match_corpus": {
+   "ok": true,
+   "detail": null
+  },
+  "non_answer_carries_no_claims": {
+   "ok": true,
+   "detail": "grounding_failed"
+  },
+  "refusal_lists_no_citations": {
+   "ok": true,
+   "detail": 0
+  },
+  "loop_bounds": {
+   "ok": true,
+   "detail": {
+    "retrieval_rounds": 1,
+    "retry_count": 0,
+    "regeneration_count": 1
+   }
+  }
+ },
+ "workflow": {
+  "retrieval_rounds": 1,
+  "assessments": [
+   "sufficient=True;relevant=12;papers=5"
+  ],
+  "reformulations": 0,
+  "invalid_reformulations": 0,
+  "grounding_reasons": [
+   "claim_check_failed",
+   "claim_check_failed"
+  ],
+  "veto_codes": [
+   [
+    [
+     "unsupported_term",
+     "misattributed"
+    ],
+    [
+     "unsupported_term"
+    ]
+   ],
+   [
+    [
+     "unsupported_term",
+     "misattributed"
+    ],
+    [
+     "unsupported_term"
+    ]
+   ]
+  ],
+  "llm_calls": 2,
+  "reranked": true,
+  "generations": 2,
+  "regenerations": 1,
+  "grounding_checks": [
+   "structural=True;grounded=False;claims=2;cited=3;invalid_citations=0;unsupported=2;reason=claim_check_failed;vetoed=2;prose_uncovered=1;veto_codes=unsupported_term+misattributed,unsupported_term",
+   "structural=True;grounded=False;claims=2;cited=3;invalid_citations=0;unsupported=2;reason=claim_check_failed;vetoed=2;prose_uncovered=1;veto_codes=unsupported_term+misattributed,unsupported_term"
+  ],
+  "terminal": "grounding_failed"
+ },
+ "llm_calls": 2,
+ "expected_paper_ids": [
+  1,
+  3,
+  10
+ ],
+ "expected_paper_overlap": [],
+ "response": {
+  "answer": "A grounded answer could not be produced from the retrieved evidence. Try a narrower question or add more relevant papers.",
+  "claims": [],
+  "citations": [],
+  "grounded": false,
+  "retrieval_rounds": 1,
+  "retry_count": 0,
+  "regeneration_count": 1,
+  "trace": [
+   "retrieve:round=1;vector=12;graph=5;total=17",
+   "assess:sufficient=True;relevant=12;papers=5",
+   "rerank",
+   "generate:strict=False",
+   "grounding:structural=True;grounded=False;claims=2;cited=3;invalid_citations=0;unsupported=2;reason=claim_check_failed;vetoed=2;prose_uncovered=1;veto_codes=unsupported_term+misattributed,unsupported_term",
+   "regenerate:1",
+   "generate:strict=True",
+   "grounding:structural=True;grounded=False;claims=2;cited=3;invalid_citations=0;unsupported=2;reason=claim_check_failed;vetoed=2;prose_uncovered=1;veto_codes=unsupported_term+misattributed,unsupported_term",
+   "grounding_failed"
+  ],
+  "provider": "groq",
+  "model": "openai/gpt-oss-20b"
+ }
+}

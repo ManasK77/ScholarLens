@@ -1,6 +1,8 @@
 """Complete Phase 11 REST surface for Phases 1–10."""
 
 import logging
+from datetime import UTC, date, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
@@ -32,20 +34,30 @@ from app.explanation.llm import (
     LLMRateLimitError,
     LLMUnavailableError,
 )
+from app.explanation.schema import MAX_EVIDENCE_CHARS
 from app.explanation.selection import evidence_summary
 from app.explanation.storage import list_reports, report_snapshot
+from app.extraction.citations import citation_markers
 from app.extraction.service import extract_all_parsed
 from app.extraction.storage import ExtractedFact
 from app.ingestion import corpus
 from app.ingestion.corpus import Paper
+from app.interactive.deadline import (
+    Deadline,
+    QueryDeadlineExceeded,
+    bound_services,
+    call_with_deadline,
+)
 from app.interactive.workflow import default_services, run_query
 from app.ner_re import service as graph_service
 from app.ner_re.graph import graph_session, graph_snapshot
 from app.parsing.service import parse_all_pending
 from app.parsing.storage import ParsedDocument
 from app.ranking import service as ranking_service
+from app.ranking.signals import evidence_scope
 from app.ranking.storage import ClusterRanking, list_rankings
 from app.trends import service as trend_service
+from app.trends.analysis import trend_qualifiers
 from app.trends.storage import list_trends
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
@@ -64,6 +76,236 @@ class QueryRequest(BaseModel):
                 "question must contain at least 3 non-whitespace characters"
             )
         return value
+
+
+class QueryCitation(BaseModel):
+    id: str
+    paper_id: int
+    title: str | None
+    text: str
+    year: int | None
+    source_type: str | None
+
+
+class QueryClaim(BaseModel):
+    text: str
+    evidence_ids: list[str]
+
+
+class QueryResponse(BaseModel):
+    """`POST /query`. Citations are listed only for a grounded answer; every
+    refusal outcome returns no claims and no citations."""
+
+    outcome: Literal[
+        "grounded_answer",
+        "no_indexed_evidence",
+        "insufficient_evidence",
+        "grounding_failed",
+    ]
+    answer: str
+    claims: list[QueryClaim]
+    citations: list[QueryCitation]
+    grounded: bool
+    retrieval_rounds: int
+    retry_count: int
+    regeneration_count: int
+    # Claims of a grounded answer's draft that failed a check and are not
+    # shown; non-zero means the answer may be incomplete. 0 for every refusal.
+    removed_claim_count: int = 0
+    trace: list[str]
+    provider: str
+    model: str
+
+
+class PaperOut(BaseModel):
+    """`GET /papers` item. Field set unchanged from the untyped dict it replaced."""
+
+    id: int
+    title: str | None
+    authors: list | None
+    year: int | None
+    venue: str | None
+    doi: str | None
+    abstract: str | None
+    source: str
+    has_full_text: bool
+    citation_count: int | None
+
+
+class TrendOut(BaseModel):
+    """`GET /trends` item. `yearly_counts` maps a year to distinct papers."""
+
+    cluster_id: int
+    yearly_counts: dict
+    slope: float
+    qualifiers: dict
+
+
+class GapSignals(BaseModel):
+    mention_frequency: int
+    trend_slope: float
+    solution_density: float
+    citation_impact: float
+    contradiction_flag: float
+
+
+class GapOut(BaseModel):
+    """`GET /gaps` item, highest score first, with its signal breakdown."""
+
+    cluster_id: int
+    score: float
+    paper_count: int
+    evidence_scope: Literal["corroborated", "single_paper"]
+    exploratory: bool
+    signals: GapSignals
+
+
+class ClusterMemberOut(BaseModel):
+    """One sentence in a cluster, with every label it was stored under."""
+
+    point_id: str
+    point_ids: list[str]
+    paper_id: int
+    text: str
+    year: int | None
+    source_type: str
+    source_types: list[str]
+    citation_markers: list[str]
+
+
+class ContradictionPairOut(BaseModel):
+    """A verified cross-paper disagreement. A side's text is null when that
+    point is no longer a member of the cluster."""
+
+    left_point_id: str
+    left_paper_id: int
+    left_text: str | None
+    right_point_id: str
+    right_paper_id: int
+    right_text: str | None
+    score: float
+
+
+class ClusterOut(BaseModel):
+    """`GET /clusters` item, largest cluster first."""
+
+    id: int
+    label: str | None
+    member_count: int
+    paper_count: int
+    evidence_scope: Literal["corroborated", "single_paper"]
+    contradiction_flag: bool
+    contradiction_score: float
+    contradictions: list[ContradictionPairOut]
+    members: list[ClusterMemberOut]
+
+
+class ReportEvidenceOut(BaseModel):
+    """One cited passage (`schema.evidence_from_point`'s six keys).
+
+    `citation_markers` and `truncated` are derived for current reports only;
+    rows served from an archived snapshot omit them.
+    """
+
+    id: str
+    paper_id: int
+    # Absent from the oldest archived snapshots, which stored only id, paper
+    # and text; omitted from the response then, never sent as null.
+    title: str | None = None
+    text: str
+    year: int | None = None
+    source_type: str | None = None
+    citation_markers: list[str] | None = None
+    truncated: bool | None = None
+
+
+class ConflictVerification(BaseModel):
+    """`explanation.verification`'s NLI check of a claimed conflict."""
+
+    method: str
+    threshold: float
+    pairs_checked: int
+    max_score: float | None
+    verified: bool
+
+
+class JustificationClaim(BaseModel):
+    """One part of a report's justification (D-09-05).
+
+    `basis` is absent on claims stored before it existed (the oldest
+    snapshot); `llm_supported` and `verification` exist on the conflict claim
+    only, the latter only when the model asserted a conflict.
+    """
+
+    supported: bool
+    statement: str
+    evidence_ids: list[str]
+    basis: str | None = None
+    llm_supported: bool | None = None
+    verification: ConflictVerification | None = None
+
+
+class ReportJustification(BaseModel):
+    """`{}` for a report stored before justifications existed."""
+
+    problem_evidence: JustificationClaim | None = None
+    solution_insufficiency_evidence: JustificationClaim | None = None
+    research_gap_evidence: JustificationClaim | None = None
+    conflicting_evidence: JustificationClaim | None = None
+
+
+class EvidenceSummaryOut(BaseModel):
+    passage_count: int
+    unique_paper_count: int
+    max_passages_from_one_paper: int
+
+
+class ReportOut(BaseModel):
+    """`GET /reports` item, best gap first.
+
+    Two sources, one shape: current reports carry `evidence_summary` and a
+    non-null `justification`; when none exist the latest archived snapshot is
+    served instead, its rows marked `stale` with `snapshot_id` and
+    `snapshot_created_at`, stored as they were (justification may be null, or
+    absent from a snapshot archived before justifications existed).
+    Keys a row does not have are omitted, never sent as null.
+    """
+
+    cluster_id: int
+    gap: str
+    evidence: list[ReportEvidenceOut]
+    confidence: float
+    suggested_directions: list[str]
+    provider: str
+    model: str
+    justification: ReportJustification | None = None
+    evidence_summary: EvidenceSummaryOut | None = None
+    stale: bool | None = None
+    snapshot_id: str | None = None
+    snapshot_created_at: str | None = None
+
+
+class GraphNodeOut(BaseModel):
+    id: str
+    labels: list[str]
+    label: str | None
+
+
+class GraphEdgeOut(BaseModel):
+    source: str
+    target: str
+    type: str
+
+
+class GraphOut(BaseModel):
+    """`GET /graph`: a bounded, self-consistent part of the graph, with the
+    whole graph's size so a caller can tell when it is `truncated`."""
+
+    nodes: list[GraphNodeOut]
+    edges: list[GraphEdgeOut]
+    total_nodes: int
+    total_edges: int
+    truncated: bool
 
 
 class PipelineRequest(BaseModel):
@@ -95,6 +337,7 @@ def parse_papers(session: Session = Depends(corpus.get_session)):  # noqa: B008
             return {
                 "processed": result.processed,
                 "missing_pdfs": result.missing_pdfs,
+                **_parse_outcomes(result),
                 "run_id": run.id,
             }
     except PipelineBusy as exc:
@@ -109,6 +352,23 @@ def extract_papers(session: Session = Depends(corpus.get_session)):  # noqa: B00
             return {"processed": ids, "count": len(ids), "run_id": run.id}
     except PipelineBusy as exc:
         raise HTTPException(409, str(exc)) from exc
+
+
+def _today() -> date:
+    """Today's date, for partial-year trend caveats. Patched in tests."""
+    return datetime.now(UTC).date()
+
+
+def _parse_outcomes(batch) -> dict:
+    """S2 results that are not clean parses (D-S2-STATUS-01). Additive keys.
+
+    `processed` alone cannot tell a GROBID parse from a PDF no parser read, or
+    from a fallback parse made while GROBID was down (retried on a later run).
+    """
+    return {
+        "no_text_pdfs": list(getattr(batch, "no_text", [])),
+        "grobid_unavailable": list(getattr(batch, "grobid_unavailable", [])),
+    }
 
 
 def _paper_dict(paper: Paper) -> dict:
@@ -126,7 +386,7 @@ def _paper_dict(paper: Paper) -> dict:
     }
 
 
-@router.get("/papers")
+@router.get("/papers", response_model=list[PaperOut])
 def papers(
     year: int | None = None,
     venue: str | None = None,
@@ -145,7 +405,7 @@ def papers(
     return [_paper_dict(paper) for paper in session.scalars(statement)]
 
 
-@router.get("/graph")
+@router.get("/graph", response_model=GraphOut)
 def get_graph(limit: int = Query(500, ge=1, le=2000)):
     with graph_session() as neo4j:
         return graph_snapshot(neo4j, limit)
@@ -200,26 +460,53 @@ def _cluster_payload(session, cluster) -> dict:
     than queried twice per cluster.
     """
     members = members_for_cluster(session, cluster.id)
+    paper_count = len({member.paper_id for member in members})
     return {
         "id": cluster.id,
         "label": cluster.label,
         "member_count": cluster.member_count,
+        # Additive (S8 scope): a theme one paper states is exploratory.
+        "paper_count": paper_count,
+        "evidence_scope": evidence_scope(paper_count),
         "contradiction_flag": cluster.contradiction_flag,
         "contradiction_score": cluster.contradiction_score,
         "contradictions": _contradiction_payload(session, cluster.id, members),
-        "members": [
-            {
-                "point_id": member.point_id,
-                "paper_id": member.paper_id,
-                "text": member.text,
-                "year": member.year,
-            }
-            for member in members
-        ],
+        "members": _member_payload(members),
     }
 
 
-@router.get("/clusters")
+def _member_payload(members) -> list[dict]:
+    """One entry per sentence, with every label it was stored under (D-06-14).
+
+    Stage 6 keeps a row per label so none is lost; listing the rows made a
+    doubly-typed sentence appear twice beside a count of one. `point_id` and
+    `source_type` keep their meaning (the first row's); `point_ids`,
+    `source_types` and `citation_markers` are additive.
+    """
+    grouped: dict[tuple[int, str], dict] = {}
+    for member in members:
+        entry = grouped.get((member.paper_id, member.text))
+        if entry is None:
+            grouped[(member.paper_id, member.text)] = {
+                "point_id": member.point_id,
+                "point_ids": [member.point_id],
+                "paper_id": member.paper_id,
+                "text": member.text,
+                "year": member.year,
+                "source_type": member.source_type,
+                "source_types": [member.source_type],
+                "citation_markers": citation_markers(member.text),
+            }
+        else:
+            entry["point_ids"].append(member.point_id)
+            if member.source_type not in entry["source_types"]:
+                entry["source_types"].append(member.source_type)
+    for entry in grouped.values():
+        entry["source_types"].sort()
+    return list(grouped.values())
+
+
+@router.get("/clusters", response_model=list[ClusterOut])
 def clusters(session: Session = Depends(corpus.get_session)):  # noqa: B008
     return [_cluster_payload(session, cluster) for cluster in list_clusters(session)]
 
@@ -231,13 +518,15 @@ def rebuild_clusters(session: Session = Depends(corpus.get_session)):  # noqa: B
     return {"clusters": ids, "count": len(ids)}
 
 
-@router.get("/trends")
+@router.get("/trends", response_model=list[TrendOut])
 def trends(session: Session = Depends(corpus.get_session)):  # noqa: B008
     return [
         {
             "cluster_id": row.cluster_id,
             "yearly_counts": row.yearly_counts,
             "slope": row.slope,
+            # Additive (D-07-08): sample size and partial-year caveats.
+            "qualifiers": trend_qualifiers(row.yearly_counts, _today()),
         }
         for row in list_trends(session)
     ]
@@ -250,7 +539,7 @@ def rebuild_trends(session: Session = Depends(corpus.get_session)):  # noqa: B00
     return {"clusters": ids, "count": len(ids)}
 
 
-@router.get("/gaps")
+@router.get("/gaps", response_model=list[GapOut])
 def gaps(
     limit: int = Query(100, ge=1, le=500),
     session: Session = Depends(corpus.get_session),  # noqa: B008
@@ -259,6 +548,11 @@ def gaps(
         {
             "cluster_id": row.cluster_id,
             "score": row.score,
+            # Additive: distinct papers stating the theme, and whether that is
+            # one paper's view (exploratory) or corroborated. Ranking unchanged.
+            "paper_count": row.mention_frequency,
+            "evidence_scope": evidence_scope(row.mention_frequency),
+            "exploratory": evidence_scope(row.mention_frequency) == "single_paper",
             "signals": {
                 "mention_frequency": row.mention_frequency,
                 "trend_slope": row.trend_slope,
@@ -278,19 +572,25 @@ def rebuild_gaps(session: Session = Depends(corpus.get_session)):  # noqa: B008
     return {"clusters": ids, "count": len(ids)}
 
 
-@router.get("/reports")
+@router.get(
+    "/reports",
+    response_model=list[ReportOut],
+    # A current row and an archived row have different key sets; omit, not null.
+    response_model_exclude_unset=True,
+)
 def reports(session: Session = Depends(corpus.get_session)):  # noqa: B008
     return [
         {
             "cluster_id": row.cluster_id,
             "gap": row.gap,
-            "evidence": row.evidence,
+            "evidence": _evidence_with_markers(row.evidence),
             "confidence": row.confidence,
             "suggested_directions": row.suggested_directions,
             "provider": row.provider,
             "model": row.model,
             # Which parts of the gap statement the evidence actually carried
-            # (D-09-05); `{}` for a report stored before this existed.
+            # (D-09-05), and since D-09-13 the `basis` of each claim; `{}` for
+            # a report stored before justifications existed.
             "justification": row.justification or {},
             # Passages and papers are not the same number, and a reader cannot
             # tell eight passages from one study apart from eight papers without
@@ -299,6 +599,26 @@ def reports(session: Session = Depends(corpus.get_session)):  # noqa: B008
         }
         for row in list_reports(session)
     ] or report_snapshot(session)
+
+
+def _evidence_with_markers(evidence) -> list[dict]:
+    """Each passage plus the citation markers in its text (D-S3-CITE-01).
+
+    So a reader can see when a quoted finding is attributed to other work.
+    Derived; the stored evidence is unchanged.
+
+    `truncated` (additive): the quote reached `MAX_EVIDENCE_CHARS`, the cap
+    Stage 9 stores, so the source passage may continue past it. A stored
+    quote is never longer than the cap.
+    """
+    return [
+        {
+            **item,
+            "citation_markers": citation_markers(item.get("text")),
+            "truncated": len(item.get("text") or "") >= MAX_EVIDENCE_CHARS,
+        }
+        for item in evidence or []
+    ]
 
 
 def _llm_http_error(exc: LLMError, prefix: str = "") -> HTTPException:
@@ -350,26 +670,52 @@ def generate_reports(session: Session = Depends(corpus.get_session)):  # noqa: B
     }
 
 
-@router.post("/query")
+@router.post(
+    "/query",
+    response_model=QueryResponse,
+    responses={504: {"description": "The overall query deadline passed; no answer."}},
+)
 def query(body: QueryRequest):
     settings = get_settings()
-    try:
+    deadline = Deadline(settings.query_deadline_seconds)
+
+    def answer() -> dict:
         return run_query(
             body.question,
-            default_services(settings),
+            bound_services(default_services(settings), deadline),
             settings.retrieval_round_cap,
             settings.retrieval_top_n,
             settings.retrieval_min_chunks,
             settings.retrieval_min_papers,
             settings.retrieval_min_score,
             settings.grounding_regeneration_cap,
+            settings.retrieval_min_papers_paper_specific,
+            settings.retrieval_pool_factor,
         )
-    except LLMUnavailableError as exc:
-        logger.warning("Interactive GraphRAG LLM provider unavailable: %s", exc)
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    try:
+        return call_with_deadline(answer, deadline)
+    except QueryDeadlineExceeded as exc:
+        # Never a partial or "grounded" answer: whatever the worker produced
+        # after this point is discarded. The question is not logged.
+        logger.warning(
+            "Interactive GraphRAG query exceeded its %gs deadline at step=%s",
+            deadline.seconds,
+            exc,
+        )
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                f"The question was not answered within the "
+                f"{deadline.seconds:g}-second limit. No answer was produced; "
+                "try a narrower question or retry later."
+            ),
+        ) from exc
     except LLMError as exc:
-        logger.warning("Interactive GraphRAG LLM configuration failed: %s", exc)
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        # Same mapping as /reports: 429 (+ Retry-After) when Groq is metering
+        # us, 503 for an outage, 502 for a rejected key or unusable model.
+        logger.warning("Interactive GraphRAG LLM call failed: %s", exc)
+        raise _llm_http_error(exc) from exc
     except Exception as exc:
         logger.exception("Interactive GraphRAG query failed")
         raise HTTPException(status_code=502, detail="Query generation failed") from exc
@@ -402,10 +748,15 @@ def run_pipeline(
         raise HTTPException(409, str(exc)) from exc
 
 
+# Bumped when Stages 6-8 produce something different from unchanged inputs.
+# 2: each sentence is clustered once, however many labels it has (D-06-14).
+_DERIVED_VERSION = 2
+
+
 def _derived_fingerprint(session, settings):
     return fingerprint(
         {
-            "version": 1,
+            "version": _DERIVED_VERSION,
             "stages": [
                 (s.paper_id, s.stage, s.input_hash, s.status)
                 for s in session.scalars(
@@ -570,6 +921,7 @@ def _execute_pipeline(body, session, settings, run):
     return {
         "parsed": parsed,
         "missing_pdfs": parsing.missing_pdfs,
+        **_parse_outcomes(parsing),
         "extracted": extracted,
         "graphed": graphed,
         "indexed": indexed,

@@ -1,0 +1,26 @@
+[
+  {
+    "cutoff_year": 2026,
+    "description": "Despite the existence of adversarial prompt injection attacks and some defenses, there remains a gap in evaluating defenses on Bangla and large‑scale multilingual indirect injection benchmarks, and in exploring diverse injection strategies and mitigation techniques.",
+    "gap_id": "scholarlens:cluster-11:report-10",
+    "relevant_future_paper_ids": null
+  },
+  {
+    "cutoff_year": 2026,
+    "description": "Limited multilingual coverage and evaluation, coupled with insufficient solutions, leaves an open gap for scalable, production‑grade multilingual defenses that address inference latency and cross‑lingual generalization.",
+    "gap_id": "scholarlens:cluster-12:report-11",
+    "relevant_future_paper_ids": null
+  },
+  {
+    "cutoff_year": 2026,
+    "description": "There is a lack of response-quality evaluation in current prompt injection defenses, indicating a research gap.",
+    "gap_id": "scholarlens:cluster-14:report-12",
+    "relevant_future_paper_ids": null
+  },
+  {
+    "cutoff_year": 2026,
+    "description": "Adaptive adversarial defense research lacks comprehensive multilingual evaluation, especially for Bangla, and fails to fully mitigate false positives under distribution shift.",
+    "gap_id": "scholarlens:cluster-13:report-13",
+    "relevant_future_paper_ids": null
+  }
+]

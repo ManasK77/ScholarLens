@@ -8,8 +8,8 @@ never an INSERT.
 import httpx
 import pytest
 
-from app.ingestion import corpus
-from app.ingestion.unpaywall import enrich, resolve_oa_pdf
+from app.ingestion import corpus, unpaywall
+from app.ingestion.unpaywall import OaLookup, enrich, lookup_oa_pdf, resolve_oa_pdf
 
 
 class _FakeResponse:
@@ -116,8 +116,10 @@ def test_enrich_calls_enrich_paper_never_insert_paper(
 
     monkeypatch.setattr(corpus, "rows_missing_fulltext", lambda session: [FakeRow()])
     monkeypatch.setattr(
-        "app.ingestion.unpaywall.resolve_oa_pdf",
-        lambda doi, email: "https://example.org/paper.pdf",
+        "app.ingestion.unpaywall.lookup_oa_pdf",
+        lambda doi, email: OaLookup(
+            "oa_location_found", "https://example.org/paper.pdf"
+        ),
     )
     monkeypatch.setattr(corpus, "download_pdf", lambda url, dest_path, **kw: True)
     monkeypatch.setattr(
@@ -151,7 +153,8 @@ def test_enrich_skips_rows_with_no_oa_copy(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(corpus, "rows_missing_fulltext", lambda session: [FakeRow()])
     monkeypatch.setattr(
-        "app.ingestion.unpaywall.resolve_oa_pdf", lambda doi, email: None
+        "app.ingestion.unpaywall.lookup_oa_pdf",
+        lambda doi, email: OaLookup("no_oa_copy"),
     )
     monkeypatch.setattr(
         corpus,
@@ -187,7 +190,8 @@ def _enrich_with(monkeypatch, url: str, **kwargs):
 
     monkeypatch.setattr(corpus, "rows_missing_fulltext", lambda session: [FakeRow()])
     monkeypatch.setattr(
-        "app.ingestion.unpaywall.resolve_oa_pdf", lambda doi, email: url
+        "app.ingestion.unpaywall.lookup_oa_pdf",
+        lambda doi, email: OaLookup("oa_location_found", url),
     )
     monkeypatch.setattr(corpus, "enrich_paper", lambda session, paper_id, updates: None)
     return enrich(
@@ -306,3 +310,168 @@ def test_resolve_oa_pdf_returns_none_when_unpaywall_is_unreachable(
     monkeypatch.setattr(httpx, "Client", _UnreachableClient)
 
     assert resolve_oa_pdf("10.1/xyz", "test@example.org") is None
+
+
+# ---------------------------------------------------------------------------
+# Observable outcomes (Phase 1 closeout, 2026-10-12)
+#
+# `resolve_oa_pdf` answers None for six different situations. `lookup_oa_pdf`
+# says which one occurred, and `enrich` counts them, so a run can tell "no
+# open-access copy exists" from "Unpaywall timed out" or "the PDF download
+# failed". No test reaches the network.
+# ---------------------------------------------------------------------------
+
+
+class _NotJson(_FakeResponse):
+    def json(self):
+        raise ValueError("not JSON")
+
+
+def _raising_client(exc):
+    class _Client:
+        def __init__(self, transport=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, params=None, timeout=None):
+            raise exc
+
+    return _Client
+
+
+@pytest.mark.parametrize(
+    ("response", "status"),
+    [
+        (
+            _FakeResponse(
+                200, {"best_oa_location": {"url_for_pdf": "https://x/p.pdf"}}
+            ),
+            "oa_location_found",
+        ),
+        (_FakeResponse(200, {"best_oa_location": None}), "no_oa_copy"),
+        (_FakeResponse(404, None), "doi_not_found"),
+        (_FakeResponse(500, None), "http_error"),
+        (_FakeResponse(429, None), "http_error"),
+        (_NotJson(200, None), "invalid_response"),
+        (_FakeResponse(200, ["not", "an", "object"]), "invalid_response"),
+        (
+            _FakeResponse(200, {"best_oa_location": {"host_type": "repo"}}),
+            "invalid_response",
+        ),
+    ],
+)
+def test_lookup_names_the_outcome_of_every_response(monkeypatch, response, status):
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(response))
+
+    result = lookup_oa_pdf("10.1/xyz", "test@example.org")
+
+    assert result.status == status
+    assert (result.url is not None) == (status == "oa_location_found")
+
+
+def test_lookup_keeps_the_http_status_of_an_error(monkeypatch):
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(_FakeResponse(503, None)))
+
+    assert lookup_oa_pdf("10.1/xyz", "test@example.org").http_status == 503
+
+
+@pytest.mark.parametrize(
+    ("exc", "status"),
+    [
+        (httpx.ReadTimeout("timed out"), "timeout"),
+        (httpx.ConnectTimeout("timed out"), "timeout"),
+        (httpx.ConnectError("refused"), "network_error"),
+    ],
+)
+def test_lookup_distinguishes_a_timeout_from_other_transport_errors(
+    monkeypatch, exc, status
+):
+    monkeypatch.setattr(httpx, "Client", _raising_client(exc))
+
+    assert lookup_oa_pdf("10.1/xyz", "test@example.org").status == status
+
+
+def test_resolve_oa_pdf_still_returns_only_the_url(monkeypatch):
+    monkeypatch.setattr(httpx, "Client", _make_fake_client(_FakeResponse(404, None)))
+
+    assert resolve_oa_pdf("10.1/xyz", "test@example.org") is None
+
+
+def _rows(*ids):
+    class Row:
+        def __init__(self, paper_id):
+            self.id = paper_id
+            self.doi = f"10.1/{paper_id}"
+
+    return [Row(i) for i in ids]
+
+
+def test_enrich_counts_each_outcome(monkeypatch):
+    lookups = {
+        "10.1/1": OaLookup("oa_location_found", "https://example.org/1.pdf"),
+        "10.1/2": OaLookup("oa_location_found", "https://example.org/2.pdf"),
+        "10.1/3": OaLookup("no_oa_copy"),
+        "10.1/4": OaLookup("doi_not_found", http_status=404),
+        "10.1/5": OaLookup("timeout"),
+    }
+    monkeypatch.setattr(
+        corpus, "rows_missing_fulltext", lambda session: _rows(1, 2, 3, 4, 5)
+    )
+    monkeypatch.setattr(unpaywall, "lookup_oa_pdf", lambda doi, email: lookups[doi])
+    monkeypatch.setattr(
+        corpus, "download_pdf", lambda url, dest_path, **kw: url.endswith("1.pdf")
+    )
+    monkeypatch.setattr(corpus, "enrich_paper", lambda session, paper_id, updates: None)
+    outcomes = {}
+
+    result = enrich(object(), "test@example.org", "/tmp/pdfs", outcomes=outcomes)
+
+    assert result == [1]
+    assert outcomes == {
+        "oa_pdf_stored": 1,
+        "download_failed": 1,
+        "no_oa_copy": 1,
+        "doi_not_found": 1,
+        "timeout": 1,
+    }
+
+
+def test_enrich_counts_only_the_rows_it_looked_up(monkeypatch):
+    monkeypatch.setattr(corpus, "rows_missing_fulltext", lambda session: _rows(1, 2))
+    monkeypatch.setattr(
+        unpaywall, "lookup_oa_pdf", lambda doi, email: OaLookup("no_oa_copy")
+    )
+    outcomes = {}
+
+    enrich(object(), "test@example.org", "/tmp/pdfs", paper_id=2, outcomes=outcomes)
+
+    assert outcomes == {"no_oa_copy": 1}
+
+
+def test_enrich_without_an_outcome_sink_behaves_as_before(monkeypatch):
+    monkeypatch.setattr(corpus, "rows_missing_fulltext", lambda session: _rows(1))
+    monkeypatch.setattr(
+        unpaywall, "lookup_oa_pdf", lambda doi, email: OaLookup("timeout")
+    )
+
+    assert enrich(object(), "test@example.org", "/tmp/pdfs") == []
+
+
+def test_no_outcome_log_line_carries_the_contact_email(monkeypatch, caplog):
+    email = "owner-secret@example.org"
+    monkeypatch.setattr(
+        httpx,
+        "Client",
+        _raising_client(httpx.ConnectError(f"failed for ?email={email}")),
+    )
+    monkeypatch.setattr(corpus, "rows_missing_fulltext", lambda session: _rows(1))
+    caplog.set_level("DEBUG")
+
+    enrich(object(), email, "/tmp/pdfs", outcomes={})
+
+    assert email not in caplog.text

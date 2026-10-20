@@ -1,0 +1,96 @@
+{
+ "code_sha256": {
+  "backend/app/interactive/calibration.py": "e196e0ed34aae35437f93ee4ee09c6d1ef1126926fc5e89e7c6d302276f44cdf",
+  "backend/app/interactive/claim_check.py": "63a64dddc0f2f2132b417c9034c49ab9d7c4602aeed9d30a776d8f4e9d931564",
+  "backend/app/interactive/intent.py": "19c51322eaadfa18aaaadf850da719201f9b3ebbe58e39ced531f27f7cade889",
+  "backend/app/interactive/workflow.py": "933101c7735362dea05944b7982229d174d2d91882e6779ed0e22567396b16de",
+  "evaluation/mode_b.py": "ef4c2ed05496dfa85f218ca0bdaf60e83e392ebe9749b75c1923dd6b9279db81"
+ },
+ "created_at": "2026-10-18T19:32:38.652009+00:00",
+ "git": {
+  "dirty_paths": 165,
+  "head": "bdfe21edff8f29cfd456f497064a392d6b30688b"
+ },
+ "inputs": {
+  "aspects": "evaluation\\output\\mode_b_eval\\run-20261019-v3\\live\\aspects.json",
+  "claims_supplement": "evaluation\\datasets\\mode_b_claims_s2",
+  "dataset_dir": "evaluation\\datasets\\mode_b_v1",
+  "live": [
+   "evaluation\\output\\mode_b_eval\\run-20261019-v3\\live\\LV-R1.json",
+   "evaluation\\output\\mode_b_eval\\run-20261019-v3\\live\\LV-R2.json",
+   "evaluation\\output\\mode_b_eval\\run-20261019-v3\\live\\LV-R3.json",
+   "evaluation\\output\\mode_b_eval\\run-20261019-v3\\live\\LV-R4.json"
+  ],
+  "live_review": "evaluation\\output\\mode_b_eval\\run-20261019-v3\\live\\live-review.csv",
+  "papers": "C:\\Users\\Manas\\Desktop\\NLP\\evaluation\\output\\mode_b_calibration\\independent\\papers.csv",
+  "passages": "C:\\Users\\Manas\\Desktop\\NLP\\evaluation\\output\\mode_b_calibration\\independent\\passages.csv",
+  "retrieval_run": "evaluation\\output\\mode_b_eval\\run-20261018-v1\\retrieval-run.json",
+  "sha256": {
+   "aspects": "3fd3df944453bf337392243539f6031a8888852197396f3be14d947c7e846cda",
+   "catalogue/papers.csv": "a39bb273155f4024d74f61e6a537bce7379568e0922b7855d197127f91406af5",
+   "catalogue/passages.csv": "2b9d904ea64e7308447286b56fb19fbc5c888703bf165da394d6d376190bb0e0",
+   "claims_supplement/claims.csv": "954a71edac775c68aee79955e38178dd1c5fba9570ddfebf4f205ec0780c86e7",
+   "dataset/claims.csv": "1f465372d46ac2faa0517a007797def7952aff6a01b7f19b6d11adec09acf799",
+   "dataset/labels.csv": "5c14007f86a6db3f9542bed8ac1a161152ef78a34ef9a318f92732ef203acc6f",
+   "dataset/questions.csv": "ce759430b148a125cdd0ee3fa07637daaa9a7050fe0778ef4c68d5329c352063",
+   "live/LV-R1.json": "0b15232ede692c645b24cb26e0980ed8469867e349f7d51b2bd6ebcd26cfa860",
+   "live/LV-R2.json": "d1ec63ae9919a61882c2baeb853d0e14c81d3774a19ccc4c5ece72882cd95d39",
+   "live/LV-R3.json": "b1b5d00be9947df20fedd52d247bd24f7797820bd0b28f37c7f2c98b3479a628",
+   "live/LV-R4.json": "2228a060807bdc1977d03676dcbf304a230cde200efec04cf2f154fd9aaef66c",
+   "live_review": "c5d424682c9470b5f296c6ce52ea5985fafb0f8fa5c9d1cc4d1d5f88d85b953a",
+   "retrieval_run": "16ce86d0d01e4bfebf11cdd3246cfac07a65580d6f514e2cd71777ef20459881"
+  }
+ },
+ "label_provenance": {
+  "adjudicated": false,
+  "authored_by": "AI coding agent (Claude) working on this repository, 2026-10-18",
+  "catalogue": "evaluation/output/mode_b_calibration/independent/passages.csv",
+  "catalogue_sha256": "2b9d904ea64e7308447286b56fb19fbc5c888703bf165da394d6d376190bb0e0",
+  "frozen_at": "2026-10-18T07:18Z",
+  "frozen_sha256": {
+   "claims.csv": "1f465372d46ac2faa0517a007797def7952aff6a01b7f19b6d11adec09acf799",
+   "labels.csv": "5c14007f86a6db3f9542bed8ac1a161152ef78a34ef9a318f92732ef203acc6f",
+   "questions.csv": "ce759430b148a125cdd0ee3fa07637daaa9a7050fe0778ef4c68d5329c352063"
+  },
+  "independent": false,
+  "inter_annotator_agreement": null,
+  "labelled_before_scores": true,
+  "labellers": 1,
+  "name": "mode_b_v1",
+  "see": "DATASET.md",
+  "source": "agent-authored",
+  "status": "provisional",
+  "version": 1
+ },
+ "mode": {
+  "live_calls": 0,
+  "llm_judge": false,
+  "mocked": false,
+  "offline": true
+ },
+ "python": "3.12.13",
+ "results_sha256": "13738d50a8e733f3f582577b96e8de6c689b1f45f81207f23337be7ce251112e",
+ "retrieval_run_provenance": {
+  "embedding_adapter": "allenai/specter2",
+  "embedding_adapter_revision": "2081559630a80fc5851d8f798a05ba81e9468089",
+  "embedding_model": "allenai/specter2_base",
+  "embedding_model_revision": "3447645e1def9117997203454fa4495937bfbd83",
+  "generated_at": "2026-10-18T07:34:31.256841+00:00",
+  "llm_calls": 0,
+  "query_embed_version": "7a4c25987c79ddf5e54f95eb67c921eb7ede4b33e68addb827917c12befb5f1f",
+  "query_matches_stored_vectors": true,
+  "questions_sha256": "ce759430b148a125cdd0ee3fa07637daaa9a7050fe0778ef4c68d5329c352063",
+  "stored_embed_versions": [
+   "7a4c25987c79ddf5e54f95eb67c921eb7ede4b33e68addb827917c12befb5f1f"
+  ]
+ },
+ "run_id": "run-20261019-v3",
+ "schema": "scholarlens-mode-b-eval/1",
+ "settings": {
+  "retrieval_min_chunks": 2,
+  "retrieval_min_papers": 2,
+  "retrieval_min_score": 0.2,
+  "retrieval_top_n": 12
+ },
+ "warnings": []
+}

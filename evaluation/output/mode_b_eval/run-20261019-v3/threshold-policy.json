@@ -1,0 +1,1173 @@
+{
+ "note": "Provisional, agent-authored labels (mode_b_v1). The same agent wrote the gate rules; nothing here is independent validation.",
+ "policies": {
+  "cosine_calibration_choice": {
+   "all": {
+    "answerable": {
+     "accepted": 66,
+     "n": 69
+    },
+    "by_label": {
+     "partially_relevant": {
+      "accepted": 26,
+      "n": 28
+     },
+     "relevant": {
+      "accepted": 40,
+      "n": 41
+     },
+     "unrelated": {
+      "accepted": 0,
+      "n": 30
+     },
+     "weak": {
+      "accepted": 21,
+      "n": 31
+     }
+    },
+    "by_question_type": {
+     "absence_stated": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "adjacent_topic": {
+      "weak": {
+       "accepted": 6,
+       "n": 11
+      }
+     },
+     "causal_explanation": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "comparison": {
+      "partially_relevant": {
+       "accepted": 3,
+       "n": 4
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "factual": {
+      "relevant": {
+       "accepted": 14,
+       "n": 14
+      }
+     },
+     "future_work": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "limitations": {
+      "relevant": {
+       "accepted": 5,
+       "n": 5
+      }
+     },
+     "misleading_overlap": {
+      "weak": {
+       "accepted": 10,
+       "n": 14
+      }
+     },
+     "not_in_index": {
+      "weak": {
+       "accepted": 5,
+       "n": 6
+      }
+     },
+     "numeric": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 11,
+       "n": 12
+      }
+     },
+     "off_topic": {
+      "unrelated": {
+       "accepted": 0,
+       "n": 30
+      }
+     },
+     "overgeneralization_trap": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "partial_single_paper": {
+      "partially_relevant": {
+       "accepted": 16,
+       "n": 17
+      }
+     },
+     "synthesis": {
+      "partially_relevant": {
+       "accepted": 3,
+       "n": 3
+      },
+      "relevant": {
+       "accepted": 6,
+       "n": 6
+      }
+     }
+    },
+    "unanswerable": {
+     "accepted": 21,
+     "n": 61
+    }
+   },
+   "applies_to": "Qdrant cosine similarity of each retrieved passage",
+   "calibration": {
+    "answerable": {
+     "accepted": 27,
+     "n": 28
+    },
+    "by_label": {
+     "partially_relevant": {
+      "accepted": 13,
+      "n": 14
+     },
+     "relevant": {
+      "accepted": 14,
+      "n": 14
+     },
+     "unrelated": {
+      "accepted": 0,
+      "n": 18
+     },
+     "weak": {
+      "accepted": 14,
+      "n": 18
+     }
+    },
+    "by_question_type": {
+     "adjacent_topic": {
+      "weak": {
+       "accepted": 3,
+       "n": 4
+      }
+     },
+     "causal_explanation": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "comparison": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 2
+      }
+     },
+     "factual": {
+      "relevant": {
+       "accepted": 4,
+       "n": 4
+      }
+     },
+     "limitations": {
+      "relevant": {
+       "accepted": 4,
+       "n": 4
+      }
+     },
+     "misleading_overlap": {
+      "weak": {
+       "accepted": 8,
+       "n": 11
+      }
+     },
+     "not_in_index": {
+      "weak": {
+       "accepted": 3,
+       "n": 3
+      }
+     },
+     "numeric": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 5,
+       "n": 5
+      }
+     },
+     "off_topic": {
+      "unrelated": {
+       "accepted": 0,
+       "n": 18
+      }
+     },
+     "partial_single_paper": {
+      "partially_relevant": {
+       "accepted": 9,
+       "n": 9
+      }
+     },
+     "synthesis": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     }
+    },
+    "unanswerable": {
+     "accepted": 14,
+     "n": 36
+    }
+   },
+   "held_out": {
+    "answerable": {
+     "accepted": 39,
+     "n": 41
+    },
+    "by_label": {
+     "partially_relevant": {
+      "accepted": 13,
+      "n": 14
+     },
+     "relevant": {
+      "accepted": 26,
+      "n": 27
+     },
+     "unrelated": {
+      "accepted": 0,
+      "n": 12
+     },
+     "weak": {
+      "accepted": 7,
+      "n": 13
+     }
+    },
+    "by_question_type": {
+     "absence_stated": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "adjacent_topic": {
+      "weak": {
+       "accepted": 3,
+       "n": 7
+      }
+     },
+     "causal_explanation": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "comparison": {
+      "partially_relevant": {
+       "accepted": 2,
+       "n": 2
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "factual": {
+      "relevant": {
+       "accepted": 10,
+       "n": 10
+      }
+     },
+     "future_work": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "limitations": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "misleading_overlap": {
+      "weak": {
+       "accepted": 2,
+       "n": 3
+      }
+     },
+     "not_in_index": {
+      "weak": {
+       "accepted": 2,
+       "n": 3
+      }
+     },
+     "numeric": {
+      "relevant": {
+       "accepted": 6,
+       "n": 7
+      }
+     },
+     "off_topic": {
+      "unrelated": {
+       "accepted": 0,
+       "n": 12
+      }
+     },
+     "overgeneralization_trap": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "partial_single_paper": {
+      "partially_relevant": {
+       "accepted": 7,
+       "n": 8
+      }
+     },
+     "synthesis": {
+      "partially_relevant": {
+       "accepted": 2,
+       "n": 2
+      },
+      "relevant": {
+       "accepted": 5,
+       "n": 5
+      }
+     }
+    },
+    "unanswerable": {
+     "accepted": 7,
+     "n": 25
+    }
+   },
+   "threshold": 0.915318
+  },
+  "cosine_production": {
+   "all": {
+    "answerable": {
+     "accepted": 68,
+     "n": 69
+    },
+    "by_label": {
+     "partially_relevant": {
+      "accepted": 28,
+      "n": 28
+     },
+     "relevant": {
+      "accepted": 40,
+      "n": 41
+     },
+     "unrelated": {
+      "accepted": 30,
+      "n": 30
+     },
+     "weak": {
+      "accepted": 30,
+      "n": 31
+     }
+    },
+    "by_question_type": {
+     "absence_stated": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "adjacent_topic": {
+      "weak": {
+       "accepted": 11,
+       "n": 11
+      }
+     },
+     "causal_explanation": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "comparison": {
+      "partially_relevant": {
+       "accepted": 4,
+       "n": 4
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "factual": {
+      "relevant": {
+       "accepted": 14,
+       "n": 14
+      }
+     },
+     "future_work": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "limitations": {
+      "relevant": {
+       "accepted": 5,
+       "n": 5
+      }
+     },
+     "misleading_overlap": {
+      "weak": {
+       "accepted": 13,
+       "n": 14
+      }
+     },
+     "not_in_index": {
+      "weak": {
+       "accepted": 6,
+       "n": 6
+      }
+     },
+     "numeric": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 11,
+       "n": 12
+      }
+     },
+     "off_topic": {
+      "unrelated": {
+       "accepted": 30,
+       "n": 30
+      }
+     },
+     "overgeneralization_trap": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "partial_single_paper": {
+      "partially_relevant": {
+       "accepted": 17,
+       "n": 17
+      }
+     },
+     "synthesis": {
+      "partially_relevant": {
+       "accepted": 3,
+       "n": 3
+      },
+      "relevant": {
+       "accepted": 6,
+       "n": 6
+      }
+     }
+    },
+    "unanswerable": {
+     "accepted": 60,
+     "n": 61
+    }
+   },
+   "applies_to": "Qdrant cosine similarity of each retrieved passage",
+   "calibration": {
+    "answerable": {
+     "accepted": 28,
+     "n": 28
+    },
+    "by_label": {
+     "partially_relevant": {
+      "accepted": 14,
+      "n": 14
+     },
+     "relevant": {
+      "accepted": 14,
+      "n": 14
+     },
+     "unrelated": {
+      "accepted": 18,
+      "n": 18
+     },
+     "weak": {
+      "accepted": 17,
+      "n": 18
+     }
+    },
+    "by_question_type": {
+     "adjacent_topic": {
+      "weak": {
+       "accepted": 4,
+       "n": 4
+      }
+     },
+     "causal_explanation": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "comparison": {
+      "partially_relevant": {
+       "accepted": 2,
+       "n": 2
+      }
+     },
+     "factual": {
+      "relevant": {
+       "accepted": 4,
+       "n": 4
+      }
+     },
+     "limitations": {
+      "relevant": {
+       "accepted": 4,
+       "n": 4
+      }
+     },
+     "misleading_overlap": {
+      "weak": {
+       "accepted": 10,
+       "n": 11
+      }
+     },
+     "not_in_index": {
+      "weak": {
+       "accepted": 3,
+       "n": 3
+      }
+     },
+     "numeric": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 5,
+       "n": 5
+      }
+     },
+     "off_topic": {
+      "unrelated": {
+       "accepted": 18,
+       "n": 18
+      }
+     },
+     "partial_single_paper": {
+      "partially_relevant": {
+       "accepted": 9,
+       "n": 9
+      }
+     },
+     "synthesis": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     }
+    },
+    "unanswerable": {
+     "accepted": 35,
+     "n": 36
+    }
+   },
+   "held_out": {
+    "answerable": {
+     "accepted": 40,
+     "n": 41
+    },
+    "by_label": {
+     "partially_relevant": {
+      "accepted": 14,
+      "n": 14
+     },
+     "relevant": {
+      "accepted": 26,
+      "n": 27
+     },
+     "unrelated": {
+      "accepted": 12,
+      "n": 12
+     },
+     "weak": {
+      "accepted": 13,
+      "n": 13
+     }
+    },
+    "by_question_type": {
+     "absence_stated": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "adjacent_topic": {
+      "weak": {
+       "accepted": 7,
+       "n": 7
+      }
+     },
+     "causal_explanation": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "comparison": {
+      "partially_relevant": {
+       "accepted": 2,
+       "n": 2
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "factual": {
+      "relevant": {
+       "accepted": 10,
+       "n": 10
+      }
+     },
+     "future_work": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "limitations": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "misleading_overlap": {
+      "weak": {
+       "accepted": 3,
+       "n": 3
+      }
+     },
+     "not_in_index": {
+      "weak": {
+       "accepted": 3,
+       "n": 3
+      }
+     },
+     "numeric": {
+      "relevant": {
+       "accepted": 6,
+       "n": 7
+      }
+     },
+     "off_topic": {
+      "unrelated": {
+       "accepted": 12,
+       "n": 12
+      }
+     },
+     "overgeneralization_trap": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "partial_single_paper": {
+      "partially_relevant": {
+       "accepted": 8,
+       "n": 8
+      }
+     },
+     "synthesis": {
+      "partially_relevant": {
+       "accepted": 2,
+       "n": 2
+      },
+      "relevant": {
+       "accepted": 5,
+       "n": 5
+      }
+     }
+    },
+    "unanswerable": {
+     "accepted": 25,
+     "n": 25
+    }
+   },
+   "threshold": 0.2
+  },
+  "rerank_floor_candidate": {
+   "all": {
+    "answerable": {
+     "accepted": 69,
+     "n": 69
+    },
+    "by_label": {
+     "partially_relevant": {
+      "accepted": 28,
+      "n": 28
+     },
+     "relevant": {
+      "accepted": 41,
+      "n": 41
+     },
+     "unrelated": {
+      "accepted": 0,
+      "n": 30
+     },
+     "weak": {
+      "accepted": 26,
+      "n": 31
+     }
+    },
+    "by_question_type": {
+     "absence_stated": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "adjacent_topic": {
+      "weak": {
+       "accepted": 9,
+       "n": 11
+      }
+     },
+     "causal_explanation": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "comparison": {
+      "partially_relevant": {
+       "accepted": 4,
+       "n": 4
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "factual": {
+      "relevant": {
+       "accepted": 14,
+       "n": 14
+      }
+     },
+     "future_work": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "limitations": {
+      "relevant": {
+       "accepted": 5,
+       "n": 5
+      }
+     },
+     "misleading_overlap": {
+      "weak": {
+       "accepted": 11,
+       "n": 14
+      }
+     },
+     "not_in_index": {
+      "weak": {
+       "accepted": 6,
+       "n": 6
+      }
+     },
+     "numeric": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 12,
+       "n": 12
+      }
+     },
+     "off_topic": {
+      "unrelated": {
+       "accepted": 0,
+       "n": 30
+      }
+     },
+     "overgeneralization_trap": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "partial_single_paper": {
+      "partially_relevant": {
+       "accepted": 17,
+       "n": 17
+      }
+     },
+     "synthesis": {
+      "partially_relevant": {
+       "accepted": 3,
+       "n": 3
+      },
+      "relevant": {
+       "accepted": 6,
+       "n": 6
+      }
+     }
+    },
+    "unanswerable": {
+     "accepted": 26,
+     "n": 61
+    }
+   },
+   "applies_to": "cross-encoder logit of the question's best reranked passage (unbounded; never compared with a cosine)",
+   "calibration": {
+    "answerable": {
+     "accepted": 28,
+     "n": 28
+    },
+    "by_label": {
+     "partially_relevant": {
+      "accepted": 14,
+      "n": 14
+     },
+     "relevant": {
+      "accepted": 14,
+      "n": 14
+     },
+     "unrelated": {
+      "accepted": 0,
+      "n": 18
+     },
+     "weak": {
+      "accepted": 15,
+      "n": 18
+     }
+    },
+    "by_question_type": {
+     "adjacent_topic": {
+      "weak": {
+       "accepted": 2,
+       "n": 4
+      }
+     },
+     "causal_explanation": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "comparison": {
+      "partially_relevant": {
+       "accepted": 2,
+       "n": 2
+      }
+     },
+     "factual": {
+      "relevant": {
+       "accepted": 4,
+       "n": 4
+      }
+     },
+     "limitations": {
+      "relevant": {
+       "accepted": 4,
+       "n": 4
+      }
+     },
+     "misleading_overlap": {
+      "weak": {
+       "accepted": 10,
+       "n": 11
+      }
+     },
+     "not_in_index": {
+      "weak": {
+       "accepted": 3,
+       "n": 3
+      }
+     },
+     "numeric": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 5,
+       "n": 5
+      }
+     },
+     "off_topic": {
+      "unrelated": {
+       "accepted": 0,
+       "n": 18
+      }
+     },
+     "partial_single_paper": {
+      "partially_relevant": {
+       "accepted": 9,
+       "n": 9
+      }
+     },
+     "synthesis": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     }
+    },
+    "unanswerable": {
+     "accepted": 15,
+     "n": 36
+    }
+   },
+   "held_out": {
+    "answerable": {
+     "accepted": 41,
+     "n": 41
+    },
+    "by_label": {
+     "partially_relevant": {
+      "accepted": 14,
+      "n": 14
+     },
+     "relevant": {
+      "accepted": 27,
+      "n": 27
+     },
+     "unrelated": {
+      "accepted": 0,
+      "n": 12
+     },
+     "weak": {
+      "accepted": 11,
+      "n": 13
+     }
+    },
+    "by_question_type": {
+     "absence_stated": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "adjacent_topic": {
+      "weak": {
+       "accepted": 7,
+       "n": 7
+      }
+     },
+     "causal_explanation": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "comparison": {
+      "partially_relevant": {
+       "accepted": 2,
+       "n": 2
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "factual": {
+      "relevant": {
+       "accepted": 10,
+       "n": 10
+      }
+     },
+     "future_work": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      },
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "limitations": {
+      "relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "misleading_overlap": {
+      "weak": {
+       "accepted": 1,
+       "n": 3
+      }
+     },
+     "not_in_index": {
+      "weak": {
+       "accepted": 3,
+       "n": 3
+      }
+     },
+     "numeric": {
+      "relevant": {
+       "accepted": 7,
+       "n": 7
+      }
+     },
+     "off_topic": {
+      "unrelated": {
+       "accepted": 0,
+       "n": 12
+      }
+     },
+     "overgeneralization_trap": {
+      "partially_relevant": {
+       "accepted": 1,
+       "n": 1
+      }
+     },
+     "partial_single_paper": {
+      "partially_relevant": {
+       "accepted": 8,
+       "n": 8
+      }
+     },
+     "synthesis": {
+      "partially_relevant": {
+       "accepted": 2,
+       "n": 2
+      },
+      "relevant": {
+       "accepted": 5,
+       "n": 5
+      }
+     }
+    },
+    "unanswerable": {
+     "accepted": 11,
+     "n": 25
+    }
+   },
+   "threshold": -5.7361228466033936
+  }
+ },
+ "rerank_cross_fit": [
+  {
+   "answerable_rejected": [],
+   "fit_fold": 0,
+   "floor": -5.7361228466033936,
+   "test": {
+    "partially_relevant": {
+     "accepted": 14,
+     "n": 14
+    },
+    "relevant": {
+     "accepted": 27,
+     "n": 27
+    },
+    "unrelated": {
+     "accepted": 0,
+     "n": 12
+    },
+    "weak": {
+     "accepted": 11,
+     "n": 13
+    }
+   }
+  },
+  {
+   "answerable_rejected": [],
+   "fit_fold": 1,
+   "floor": -6.3176093101501465,
+   "test": {
+    "partially_relevant": {
+     "accepted": 14,
+     "n": 14
+    },
+    "relevant": {
+     "accepted": 14,
+     "n": 14
+    },
+    "unrelated": {
+     "accepted": 0,
+     "n": 18
+    },
+    "weak": {
+     "accepted": 16,
+     "n": 18
+    }
+   }
+  }
+ ],
+ "rerank_floor_verdict": {
+  "decision": "defer",
+  "reasons": [
+   "labels are agent-authored, not independent (evaluation/output/mode_b_calibration/independent/PROTOCOL.md)",
+   "the two halves' floors differ by 0.58, more than the 0.38 margin to the lowest answerable score"
+  ]
+ },
+ "rerank_separation_all_130": {
+  "gap": 1.9185771942138672,
+  "highest_unrelated": -7.27689790725708,
+  "lowest_answerable": -5.358320713043213
+ },
+ "split": {
+  "calibration": 64,
+  "held_out": 66
+ }
+}

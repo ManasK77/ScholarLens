@@ -224,7 +224,9 @@ def client(monkeypatch: pytest.MonkeyPatch):
         semantic_scholar, "search_topic", lambda topic, api_key=None, **kwargs: []
     )
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic: [])
     monkeypatch.setattr(

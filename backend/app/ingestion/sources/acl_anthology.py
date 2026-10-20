@@ -5,6 +5,14 @@ export (D-15, corrected post-research) — lighter than the official
 `acl-anthology` package's ~30 transitive dependencies and ~120MB first-use
 download for this phase's simple topic-filter job.
 
+**Freshness (D-ACL-CACHE-01, 2026-10-12).** The export is cached beside a
+`.meta.json` file recording when, from where, how many records and its
+SHA-256. `download_anthology_export` refreshes it when it is missing or
+older than `ACL_ANTHOLOGY_MAX_AGE_DAYS`; a refresh is validated before it
+replaces the cache, and a failed one keeps the last known-good file and is
+reported as stale. `python -m app.ingestion.sources.acl_anthology --refresh`
+does the same on demand.
+
 Anthology ID / PDF URL derivation (Pitfall 3 + Open Question #1 resolution):
 primary path strips the record's `url` field's trailing slash and takes the
 last path segment; when `url` is absent (old-style pre-2020 entries), falls
@@ -12,10 +20,18 @@ back to the BibTeX cite key (`entry["ID"]`, always populated by
 bibtexparser) and constructs the PDF URL directly.
 """
 
+import codecs
 import gzip
+import hashlib
+import json
 import logging
+import os
 import re
+import threading
+import time
 from collections.abc import Callable, Sequence
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 import bibtexparser
@@ -23,9 +39,21 @@ import httpx
 
 from app.ingestion import corpus
 from app.ingestion.relevance import normalize
+from app.ingestion.retrieval import error_category
 from app.ingestion.topic import meaningful_terms
 
 EXPORT_URL = "https://aclanthology.org/anthology+abstracts.bib.gz"
+# A refresh is rejected below this share of the cached export's records.
+_MIN_RECORD_RATIO = 0.9
+# A refresh lock older than this was left by a process that died mid-refresh.
+_LOCK_STALE_SECONDS = 15 * 60
+_REFRESH_THREAD_LOCK = threading.Lock()
+_UTF8_CONTINUATION = bytes(range(0x80, 0xC0))
+
+
+class ExportInvalid(ValueError):
+    """A downloaded export failed validation, or none is available at all."""
+
 
 logger = logging.getLogger(__name__)
 
@@ -233,30 +261,278 @@ def search_topic(
                 "abstract": abstract,
                 "acl_id": acl_id,
                 "pdf_url": pdf_url,
+                "source_url": entry.get("url") or f"https://aclanthology.org/{acl_id}/",
             }
         )
     return results
 
 
-def fetch_pdf(candidate: dict, dest_dir: str) -> str | None:
-    """Fetch `candidate`'s PDF via the shared corpus.download_pdf helper."""
+def fetch_pdf(candidate: dict, dest_dir: str, download=None) -> str | None:
+    """Fetch `candidate`'s PDF via the shared corpus.download_pdf helper.
+
+    `download` lets `/collect` pass a downloader that records the outcome of
+    the attempt (D-FULLTEXT-01); it defaults to `corpus.download_pdf`.
+    """
     dest_path = f"{dest_dir}/{candidate['acl_id']}.pdf"
-    ok = corpus.download_pdf(candidate["pdf_url"], dest_path)
+    fetch = corpus.download_pdf if download is None else download
+    ok = fetch(candidate["pdf_url"], dest_path)
     return dest_path if ok else None
 
 
-def download_anthology_export(dest_path: str, force: bool = False) -> None:
-    """Fetch-and-cache the live 42MB `.bib.gz` export, gunzipped, to `dest_path`.
+def _meta_path(dest_path: str) -> Path:
+    return Path(f"{dest_path}.meta.json")
 
-    A no-op (no HTTP call) when `dest_path` already exists and `force` is False.
+
+def _read_meta(dest_path: str) -> dict:
+    try:
+        meta = json.loads(_meta_path(dest_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return meta if isinstance(meta, dict) else {}
+
+
+def _write_meta(dest_path: str, meta: dict) -> None:
+    path = _meta_path(dest_path)
+    tmp = path.with_name(f"{path.name}.tmp")
+    tmp.write_text(json.dumps(meta, indent=2, sort_keys=True), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+def cache_status(
+    dest_path: str, max_age_days: int | None = None, *, now: datetime | None = None
+) -> dict:
+    """What the cached export is: when it was fetched, from where, how big.
+
+    Read from the metadata file a refresh writes beside the export. An export
+    cached before that file existed has only its modification time, and says
+    so (``fetched_at_source: file_mtime``) with an unknown record count.
     """
-    if Path(dest_path).exists() and not force:
-        return
+    now = now or _utcnow()
+    path = Path(dest_path)
+    meta = _read_meta(dest_path)
+    status: dict = {
+        "file": path.name,
+        "exists": path.is_file(),
+        "fetched_at": None,
+        "fetched_at_source": None,
+        "age_days": None,
+        "max_age_days": max_age_days,
+        "stale": None,
+        "record_count": meta.get("record_count"),
+        "bytes": meta.get("bytes"),
+        "sha256": meta.get("sha256"),
+        "source_url": meta.get("source_url"),
+        "last_refresh_attempt": meta.get("last_refresh_attempt"),
+        "last_refresh_result": meta.get("last_refresh_result"),
+    }
+    if not status["exists"]:
+        return status
+    fetched_at = None
+    if meta.get("fetched_at"):
+        try:
+            fetched_at = datetime.fromisoformat(meta["fetched_at"])
+            status["fetched_at_source"] = "metadata"
+        except ValueError:
+            fetched_at = None
+    if fetched_at is None:
+        fetched_at = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+        status["fetched_at_source"] = "file_mtime"
+    status["fetched_at"] = fetched_at.isoformat()
+    age = (now - fetched_at).total_seconds() / 86400
+    status["age_days"] = round(age, 2)
+    if max_age_days is not None:
+        status["stale"] = age >= max_age_days
+    return status
 
-    with httpx.Client(transport=httpx.HTTPTransport(retries=2)) as client:
-        resp = client.get(EXPORT_URL, timeout=60.0)
-    resp.raise_for_status()  # fail clearly on a non-200 body rather than a confusing gzip error
-    decompressed = gzip.decompress(resp.content)
 
-    Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(dest_path).write_bytes(decompressed)
+@contextmanager
+def _refresh_lock(dest_path: str):
+    """One refresh at a time, across threads and processes.
+
+    A lock file created with O_EXCL; one older than `_LOCK_STALE_SECONDS` was
+    left by a process that died mid-refresh and is taken over. Yields False
+    when another refresh holds the lock.
+    """
+    lock = Path(f"{dest_path}.lock")
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    with _REFRESH_THREAD_LOCK:
+        for _ in range(2):
+            try:
+                fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                try:
+                    age = time.time() - lock.stat().st_mtime
+                except OSError:
+                    continue
+                if age > _LOCK_STALE_SECONDS:
+                    lock.unlink(missing_ok=True)
+                    continue
+                yield False
+                return
+            os.close(fd)
+            try:
+                yield True
+            finally:
+                lock.unlink(missing_ok=True)
+            return
+        yield False
+
+
+def _record_count(data: bytes) -> int:
+    """BibTeX records: lines that open with `@` (the export's one guarantee)."""
+    return data.count(b"\n@") + (1 if data.startswith(b"@") else 0)
+
+
+def refresh_export(
+    dest_path: str,
+    *,
+    url: str = EXPORT_URL,
+    min_records: int = 1,
+    timeout: float = 120.0,
+) -> dict:
+    """Download, validate and atomically install a fresh export.
+
+    The cached file is replaced only by a download that gunzips, opens as
+    UTF-8 BibTeX, and holds at least `min_records` records and no fewer than
+    `_MIN_RECORD_RATIO` of the cached file's -- so a truncated or empty
+    export can never displace a good one. The new file is written beside the
+    old and moved over it in one step, so a reader never sees a partial file.
+    Returns ``{"result": "refreshed" | "failed" | "locked", ...}``; never
+    raises for a failed download -- the caller decides whether a cache
+    remains usable.
+    """
+    attempted_at = _utcnow().isoformat()
+    meta = _read_meta(dest_path)
+    with _refresh_lock(dest_path) as acquired:
+        if not acquired:
+            return {"result": "locked"}
+        new_path = Path(f"{dest_path}.new")
+        try:
+            with httpx.Client(transport=httpx.HTTPTransport(retries=2)) as client:
+                resp = client.get(url, timeout=timeout)
+            # Fail clearly on a non-200 body rather than a confusing gzip error.
+            resp.raise_for_status()
+            try:
+                data = gzip.decompress(resp.content)
+            except (OSError, EOFError) as exc:
+                raise ExportInvalid("not a gzip archive") from exc
+            if not data.lstrip()[:1] == b"@":
+                raise ExportInvalid("not a BibTeX export")
+            # Spot-check the encoding at both ends: a slice boundary may split
+            # a multi-byte character, which is not an encoding error.
+            try:
+                codecs.getincrementaldecoder("utf-8")().decode(data[:1_000_000])
+                data[-1_000_000:].lstrip(_UTF8_CONTINUATION).decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ExportInvalid("not UTF-8") from exc
+            records = _record_count(data)
+            floor = max(
+                min_records, int(_MIN_RECORD_RATIO * (meta.get("record_count") or 0))
+            )
+            if records < floor:
+                raise ExportInvalid(f"{records} records, {floor} required")
+            Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
+            new_path.write_bytes(data)
+            os.replace(new_path, dest_path)
+        except (httpx.HTTPError, OSError, EOFError, ValueError) as exc:
+            new_path.unlink(missing_ok=True)
+            category = (
+                str(exc) if isinstance(exc, ExportInvalid) else error_category(exc)
+            )
+            logger.warning("ACL Anthology export refresh failed: %s", category)
+            meta.update(
+                last_refresh_attempt=attempted_at,
+                last_refresh_result="failed",
+                last_refresh_error=category,
+            )
+            if Path(dest_path).is_file():
+                _write_meta(dest_path, meta)
+            return {"result": "failed", "error": category, "exception": exc}
+        meta = {
+            "fetched_at": _utcnow().isoformat(),
+            "source_url": url,
+            "record_count": records,
+            "bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "last_refresh_attempt": attempted_at,
+            "last_refresh_result": "refreshed",
+            "last_refresh_error": None,
+        }
+        _write_meta(dest_path, meta)
+        logger.info("ACL Anthology export refreshed: %d records", records)
+        return {"result": "refreshed", "record_count": records}
+
+
+def download_anthology_export(
+    dest_path: str,
+    force: bool = False,
+    *,
+    max_age_days: int | None = None,
+    min_records: int = 1,
+    url: str = EXPORT_URL,
+) -> dict:
+    """Make sure a usable export is cached, refreshing it when due (D-ACL-CACHE-01).
+
+    A refresh is attempted when the file is missing, when `force` is set, or
+    when it is older than `max_age_days` (None: never by age, the behaviour
+    before the freshness rule). A failed refresh keeps the last known-good
+    file and is reported (``refresh: failed``, ``stale: true``); only when
+    there is no usable file at all does the failure raise, failing the source
+    for the run. Returns the cache status (see `cache_status`) with the
+    refresh outcome: ``not_needed``, ``refreshed``, ``failed`` or ``locked``
+    (another process is refreshing; the current file is used).
+    """
+    before = cache_status(dest_path, max_age_days)
+    due = force or not before["exists"] or bool(before["stale"])
+    if not due:
+        return {**before, "refresh": "not_needed"}
+    outcome = refresh_export(dest_path, url=url, min_records=min_records)
+    after = cache_status(dest_path, max_age_days)
+    if not after["exists"]:
+        exc = outcome.get("exception")
+        if exc is not None:
+            raise exc
+        raise ExportInvalid("ACL Anthology export unavailable")
+    return {
+        **after,
+        "refresh": outcome["result"],
+        "refresh_error": outcome.get("error"),
+    }
+
+
+def main(argv: list[str] | None = None) -> None:
+    """`python -m app.ingestion.sources.acl_anthology --refresh [--force]`.
+
+    The documented, explicit way to refresh the cached export outside a
+    collection: `--refresh` refreshes when the cache is stale or missing,
+    `--force` always. Prints the cache status as JSON; touches nothing else.
+    """
+    import argparse
+
+    from app.core.config import get_settings
+
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    parser.add_argument("--refresh", action="store_true")
+    parser.add_argument("--force", action="store_true")
+    args = parser.parse_args(argv)
+    settings = get_settings()
+    path = settings.acl_anthology_bib_path
+    if args.refresh or args.force:
+        status = download_anthology_export(
+            path,
+            force=args.force,
+            max_age_days=settings.acl_anthology_max_age_days,
+            min_records=settings.acl_anthology_min_records,
+            url=settings.acl_anthology_export_url,
+        )
+    else:
+        status = cache_status(path, settings.acl_anthology_max_age_days)
+    print(json.dumps(status, indent=2))
+
+
+if __name__ == "__main__":
+    main()

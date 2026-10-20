@@ -135,6 +135,66 @@ def label_for_statements(statements: Sequence[GapStatement]) -> str | None:
     return " ".join(chosen) or None
 
 
+def collapse_duplicate_statements(
+    statements: Sequence[GapStatement],
+) -> tuple[list[GapStatement], dict[str, tuple[GapStatement, ...]]]:
+    """One representative per sentence, plus its other label rows (D-06-14).
+
+    Stage 3 can type one sentence both `limitation` and `future_work`, and
+    Stage 5 then indexes it twice with the same vector. A sentence is the same
+    statement when its paper and text are the same; the same words in another
+    paper are that paper's own evidence and stay separate. The representative
+    is the smallest point id, so the choice is reproducible.
+    """
+    groups: dict[tuple[int, str], list[GapStatement]] = {}
+    for statement in sorted(statements, key=lambda item: item.point_id):
+        groups.setdefault((statement.paper_id, statement.text), []).append(statement)
+    representatives = [group[0] for group in groups.values()]
+    aliases = {
+        group[0].point_id: tuple(group[1:])
+        for group in groups.values()
+        if len(group) > 1
+    }
+    return representatives, aliases
+
+
+def cluster_gap_statements(
+    statements: Sequence[GapStatement],
+    min_cluster_size: int,
+    min_samples: int | None = None,
+    max_statements: int | None = None,
+) -> list[StatementCluster]:
+    """Cluster each sentence once, then store every label row with its theme.
+
+    A second label row is the same vector at distance zero, so clustering it
+    counts the sentence twice towards HDBSCAN's density and the label's term
+    weights. Representatives are clustered; their other label rows rejoin
+    their cluster afterwards, so no label is lost.
+    """
+    representatives, aliases = collapse_duplicate_statements(statements)
+    clusters = cluster_statements(
+        representatives,
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+        max_statements=max_statements,
+    )
+    return [
+        StatementCluster(
+            label=cluster.label,
+            members=sorted(
+                [
+                    row
+                    for member in cluster.members
+                    for row in (member, *aliases.get(member.point_id, ()))
+                ],
+                key=lambda member: member.point_id,
+            ),
+            contradictions=cluster.contradictions,
+        )
+        for cluster in clusters
+    ]
+
+
 def cluster_statements(
     statements: Sequence[GapStatement],
     min_cluster_size: int,

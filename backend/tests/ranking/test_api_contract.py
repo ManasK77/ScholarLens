@@ -72,7 +72,16 @@ class TestFrozenHandlerShape:
         keys = [{key.value for key in node.keys} for node in dicts]
 
         assert SIGNAL_FIELDS in keys
-        assert {"cluster_id", "score", "signals"} in keys
+        # Plus the additive S8 scope keys (single-paper themes are exploratory);
+        # derived from `mention_frequency`, so no stored field is added.
+        assert {
+            "cluster_id",
+            "score",
+            "signals",
+            "paper_count",
+            "evidence_scope",
+            "exploratory",
+        } in keys
 
     def test_the_get_handler_passes_its_limit_through(self):
         [call] = [

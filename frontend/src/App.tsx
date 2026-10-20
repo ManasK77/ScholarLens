@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { ApiError, ScholarLensApi } from './api'
-import type { Cluster, CollectDuplicates, DashboardData, Evidence, GapReport, GapRanking, QueryResult } from './types'
+import type { Cluster, CollectCoverage, CollectDuplicates, CollectResult, DashboardData, Evidence, GapReport, GapRanking, QueryResult, ReportJustification, Trend, TrendQualifiers } from './types'
 import './App.css'
 
 const TrendChart = lazy(() => import('./components/TrendChart'))
@@ -67,14 +67,34 @@ function formatSignal(value: number) {
  *  so this is plain text: a title when the corpus still has the paper, its id
  *  otherwise, plus the publication year when one is known. */
 function evidenceLabel(item: Evidence) {
-  return `${item.title || `Paper ${item.paper_id}`}${item.year ? ` · ${item.year}` : ''}`
+  const labels = (item.source_types?.length ?? 0) > 1 ? ` · ${item.source_types!.map((type) => type.replace('_', ' ')).join(', ')}` : ''
+  const cites = item.citation_markers?.length ? ` · cites ${item.citation_markers.join(', ')}` : ''
+  return `${item.title || `Paper ${item.paper_id}`}${item.year ? ` · ${item.year}` : ''}${labels}${cites}`
 }
 
-function connectionMessage(reason: unknown) {
+function connectionMessage(reason: unknown, hasKey = true) {
   if (reason instanceof ApiError && (reason.status === 401 || reason.status === 403)) {
-    return 'The API key was rejected. Check your local .env and reconnect.'
+    return hasKey
+      ? 'The API key was rejected. Check your local .env and reconnect.'
+      : 'Enter the API key from your local .env to connect.'
   }
   return reason instanceof Error ? reason.message : 'Could not reach the local ScholarLens API.'
+}
+
+/** A failed question in words: an auth failure reads as it does on the
+ *  dashboard, and a rate limit says when to try again. Never retried here. */
+function queryErrorMessage(reason: unknown) {
+  if (reason instanceof ApiError && (reason.status === 401 || reason.status === 403)) return connectionMessage(reason)
+  if (reason instanceof ApiError && reason.status === 429 && reason.retryAfter !== undefined) {
+    const wait = Math.max(1, Math.ceil(reason.retryAfter))
+    return `${reason.message} Try again in about ${wait} ${wait === 1 ? 'second' : 'seconds'}.`
+  }
+  // A timeout, an LLM outage or an unreachable API says nothing about what
+  // the literature contains; never let it read like an evidence refusal.
+  if (reason instanceof ApiError && (reason.status === 0 || reason.status >= 500)) {
+    return `${reason.message} This is a service problem, not a finding about the literature.`
+  }
+  return reason instanceof Error ? reason.message : 'The query could not be completed.'
 }
 
 function ConnectionPanel({ currentKey, onSave, onClose }: { currentKey: string; onSave: (key: string) => void; onClose: () => void }) {
@@ -155,8 +175,12 @@ function ReportCard({ report, gap, rank }: { report?: GapReport; gap?: GapRankin
           {gap && <span className="score-pill">Gap score {formatScore(gap.score)}</span>}
           {report && <span className="confidence-pill"><CheckCircle2 size={13} /> {Math.round(report.confidence * 100)}% confidence</span>}
           {gap?.signals.contradiction_flag ? <span className="contradiction-pill">Conflicting evidence</span> : null}
+          {report?.justification?.conflicting_evidence?.basis === 'nli_verified' ? <span className="contradiction-pill">Conflict verified by NLI</span> : null}
+          {gap?.exploratory ? <span className="contradiction-pill">Exploratory · single paper</span> : null}
         </div>
         <h3>{title}</h3>
+        {gap?.exploratory && <p className="subtle">This theme is stated by one paper only: a lead to check, not a gap the literature corroborates.</p>}
+        {report && <p className="subtle">Model-written summary ({report.model || 'language model'}) of the passages below: an interpretation, not a verified finding.</p>}
         {report ? (
           <div className="directions">
             {(report.suggested_directions ?? []).map((direction) => <span key={direction}>{direction}</span>)}
@@ -170,12 +194,15 @@ function ReportCard({ report, gap, rank }: { report?: GapReport; gap?: GapRankin
             {expanded && (
               <>
                 {gap && <SignalBreakdown signals={gap.signals} />}
+                {report?.justification && <ClaimStatuses justification={report.justification} />}
                 {report && (
                   <div className="evidence-list">
+                    <p className="eyebrow">Retrieved passages, quoted verbatim</p>
                     {(report.evidence ?? []).length ? (report.evidence ?? []).map((item, evidenceIndex) => (
                       <blockquote key={item.id ?? item.point_id ?? evidenceIndex}>
-                        <p>{item.text}</p>
+                        <p>{item.text}{item.truncated ? '…' : ''}</p>
                         <cite>{evidenceLabel(item)}</cite>
+                        {item.truncated && <small className="subtle">Shown up to the stored length limit; the passage may continue.</small>}
                       </blockquote>
                     )) : <p className="subtle">No evidence payload is attached to this stored report.</p>}
                   </div>
@@ -192,6 +219,46 @@ function ReportCard({ report, gap, rank }: { report?: GapReport; gap?: GapRankin
 /** The Stage 8 formula's inputs, so a researcher can see *why* a gap ranks where
  *  it does rather than trusting an opaque score. Values are the backend's own —
  *  nothing here is normalised or re-weighted in the UI. */
+const claimNames: [keyof ReportJustification, string][] = [
+  ['problem_evidence', 'The problem exists'],
+  ['solution_insufficiency_evidence', 'Existing solutions fall short'],
+  ['research_gap_evidence', 'A specific gap remains'],
+  ['conflicting_evidence', 'Findings conflict'],
+]
+
+const basisLabels: Record<string, string> = {
+  llm_cited: 'Model judgment, cites retrieved passages',
+  not_supported: 'Not supported by the retrieved passages',
+  nli_verified: 'Verified: cited passages contradict (NLI, both directions)',
+  llm_unverified: 'Asserted by the model, not confirmed by NLI',
+  not_claimed: 'Not claimed',
+}
+
+/** Which parts of the summary the evidence carried, and on what basis (D-09-13). */
+function ClaimStatuses({ justification }: { justification: ReportJustification }) {
+  const rows = claimNames.filter(([key]) => justification[key])
+  if (!rows.length) return null
+  return (
+    <dl className="signal-grid">
+      {rows.map(([key, name]) => {
+        const claim = justification[key]!
+        // No recorded basis (a report from before D-09-13): a conflict claim was
+        // never NLI-checked, so it can only read as unconfirmed.
+        const fallback = key === 'conflicting_evidence'
+          ? (claim.supported ? 'llm_unverified' : 'not_claimed')
+          : (claim.supported ? 'llm_cited' : 'not_supported')
+        const basis = claim.basis ?? fallback
+        return (
+          <div key={key}>
+            <dt>{name}</dt>
+            <dd>{basisLabels[basis] ?? basis}</dd>
+          </div>
+        )
+      })}
+    </dl>
+  )
+}
+
 function SignalBreakdown({ signals }: { signals: GapRanking['signals'] }) {
   return (
     <dl className="signal-grid">
@@ -210,17 +277,20 @@ function SignalBreakdown({ signals }: { signals: GapRanking['signals'] }) {
 
 function ClustersView({ data }: { data: DashboardData }) {
   const sorted = useMemo(() => [...data.clusters].sort((a, b) => b.member_count - a.member_count), [data.clusters])
+  const paperTitles = useMemo(() => new Map(data.papers.filter((paper) => paper.title).map((paper) => [paper.id, paper.title as string])), [data.papers])
 
   if (!sorted.length) {
     return <EmptyState title="No clusters yet">Build the evidence base after collecting papers. Limitations that mean the same thing are grouped here, however differently each author phrased them.</EmptyState>
   }
 
-  return <div className="report-list">{sorted.map((cluster, index) => <ClusterCard key={cluster.id} cluster={cluster} rank={index + 1} />)}</div>
+  return <div className="report-list">{sorted.map((cluster, index) => <ClusterCard key={cluster.id} cluster={cluster} rank={index + 1} paperTitles={paperTitles} />)}</div>
 }
 
-function ClusterCard({ cluster, rank }: { cluster: Cluster; rank: number }) {
+function ClusterCard({ cluster, rank, paperTitles }: { cluster: Cluster; rank: number; paperTitles: Map<number, string> }) {
   const [expanded, setExpanded] = useState(rank === 1)
   const members = cluster.members ?? []
+  const conflicts = cluster.contradictions ?? []
+  const paperLabel = (paperId: number) => paperTitles.get(paperId) || `Paper ${paperId}`
   return (
     <article className="report-card">
       <div className="report-rank">{String(rank).padStart(2, '0')}</div>
@@ -228,11 +298,28 @@ function ClusterCard({ cluster, rank }: { cluster: Cluster; rank: number }) {
         <div className="report-meta">
           <span className="score-pill">{cluster.member_count} {cluster.member_count === 1 ? 'statement' : 'statements'}</span>
           {cluster.contradiction_flag ? <span className="contradiction-pill">Conflicting evidence</span> : null}
+          {cluster.evidence_scope === 'single_paper' ? <span className="contradiction-pill">Exploratory · single paper</span> : null}
         </div>
         <h3>{cluster.label || `Cluster ${cluster.id}`}</h3>
         <button className="text-button" type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
           {expanded ? 'Hide' : 'View'} clustered statements <ChevronDown className={expanded ? 'rotate' : ''} size={17} />
         </button>
+        {expanded && conflicts.length > 0 && (
+          <div className="evidence-list">
+            <p className="eyebrow">Conflicting statements</p>
+            <p className="subtle">Pairs from different papers that the contradiction check found to disagree. Read both before relying on either.</p>
+            {conflicts.map((pair) => (
+              <div className="conflict-pair" key={`${pair.left_point_id}:${pair.right_point_id}`}>
+                {([[pair.left_text, pair.left_paper_id], [pair.right_text, pair.right_paper_id]] as const).map(([text, paperId], side) => (
+                  <blockquote key={side}>
+                    <p>{text || 'The statement text is not stored with this pair.'}</p>
+                    <cite>{paperLabel(paperId)}</cite>
+                  </blockquote>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
         {expanded && (
           <div className="evidence-list">
             {members.length ? members.map((member, memberIndex) => (
@@ -259,17 +346,36 @@ function TrendsView({ data }: { data: DashboardData }) {
         </Suspense>
       </div>
       <aside className="trend-ranking">
-        <p className="eyebrow">Fastest rising</p>
-        <h3>Momentum by cluster</h3>
+        <p className="eyebrow">Highest slope first</p>
+        <h3>Change in this corpus</h3>
+        <TrendCaveats trends={data.trends} />
         {sorted.length ? sorted.slice(0, 8).map((trend, index) => (
           <div className="trend-row" key={trend.cluster_id}>
             <span>{index + 1}</span>
-            <div><strong>{clusterNames.get(trend.cluster_id)}</strong><small>{Object.values(trend.yearly_counts ?? {}).reduce((sum, count) => sum + count, 0)} mentions</small></div>
+            <div><strong>{clusterNames.get(trend.cluster_id)}</strong><small>{paperCount(Object.values(trend.yearly_counts ?? {}).reduce((sum, count) => sum + count, 0))}{trend.qualifiers?.single_year ? ' · one year, no trend' : ''}</small></div>
             <b className={trend.slope >= 0 ? 'positive' : 'negative'}>{trend.slope >= 0 ? '+' : ''}{trend.slope.toFixed(2)}</b>
           </div>
         )) : <p className="subtle">No trend scores are available.</p>}
       </aside>
     </div>
+  )
+}
+
+function paperCount(count: number) {
+  return `${count} ${count === 1 ? 'paper' : 'papers'}`
+}
+
+/** What these slopes can claim (D-07-08): sample size and partial years. */
+function TrendCaveats({ trends }: { trends: Trend[] }) {
+  const qualified = trends.map((trend) => trend.qualifiers).filter((q): q is TrendQualifiers => Boolean(q))
+  if (!qualified.length) return null
+  const maxPerYear = Math.max(...qualified.map((q) => q.max_papers_per_year))
+  const partial = [...new Set(qualified.flatMap((q) => q.partial_years))].sort()
+  return (
+    <>
+      {qualified.some((q) => q.small_sample) && <p className="subtle">Slopes count distinct papers per year, with at most {paperCount(maxPerYear)} in any year: they describe this corpus, not the field.</p>}
+      {partial.length > 0 && <p className="subtle">{partial.join(', ')} {partial.length === 1 ? 'is a partial year' : 'are partial years'}: papers are still being published, so the latest count is incomplete.</p>}
+    </>
   )
 }
 
@@ -296,17 +402,48 @@ function duplicateSummary(duplicates?: CollectDuplicates) {
   return `${duplicates.total} ${duplicates.total === 1 ? 'duplicate' : 'duplicates'}${parts.length ? ` (${parts.join(', ')})` : ''}`
 }
 
+const RUN_STATUS_LABEL: Record<string, string> = {
+  completed_with_warnings: 'Completed with warnings',
+  partial: 'Partly completed: some steps failed',
+  failed: 'Failed',
+}
+
+/** Full-text coverage of the papers a collection touched, as one line. */
+function coverageSummary(coverage?: CollectCoverage) {
+  if (!coverage?.papers) return null
+  const withoutDoi = coverage.metadata_only_without_doi
+    ? ` (${coverage.metadata_only_without_doi} without a DOI)`
+    : ''
+  return `Full text for ${coverage.with_full_text} of ${coverage.papers} ${coverage.papers === 1 ? 'paper' : 'papers'}; ${coverage.metadata_only} metadata only${withoutDoi}`
+}
+
+/** The run's status and warnings: an incomplete or partial run never reads
+ *  as a clean, exhaustive one. */
+function runOutcome(result: CollectResult) {
+  const label = result.status ? RUN_STATUS_LABEL[result.status] : undefined
+  const warnings = (result.warnings ?? []).map((warning) => warning.message)
+  return label ? [label, ...warnings] : warnings
+}
+
+// Longest the UI waits for /pipeline/run before treating the request as lost.
+const PIPELINE_WAIT_MS = 30 * 60 * 1000
+
 function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: DashboardData | null; onRefresh: () => Promise<void> }) {
   const [topic, setTopic] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [collecting, setCollecting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [building, setBuilding] = useState(false)
+  const buildingRef = useRef(false)
+  const buildAbort = useRef<AbortController | null>(null)
+  useEffect(() => () => buildAbort.current?.abort(), [])
   const [deleting, setDeleting] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [generateReports, setGenerateReports] = useState(true)
   const [collectStatus, setCollectStatus] = useState<string | null>(null)
   const [collectDetail, setCollectDetail] = useState<string | null>(null)
+  const [collectCoverage, setCollectCoverage] = useState<string | null>(null)
+  const [collectWarnings, setCollectWarnings] = useState<string[]>([])
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const [pipelineStatus, setPipelineStatus] = useState<string | null>(null)
   const [pipelineWarning, setPipelineWarning] = useState<string | null>(null)
@@ -322,6 +459,8 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
     setCollecting(true)
     setCollectStatus(null)
     setCollectDetail(null)
+    setCollectCoverage(null)
+    setCollectWarnings([])
     setOperationError(null)
     try {
       const result = await api.collect(topic.trim())
@@ -338,6 +477,8 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
           (unreachable.length ? ` · ${unreachable.join(', ')} unreachable this run` : ''),
       )
       setCollectDetail(duplicateSummary(result.duplicates))
+      setCollectCoverage(coverageSummary(result.full_text?.touched))
+      setCollectWarnings(runOutcome(result))
       setDeleteStatus(null)
       setLastOperationIds(result.ids ?? [])
       await onRefresh()
@@ -359,6 +500,8 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
       setLastOperationIds(null)
       setCollectStatus(null)
       setCollectDetail(null)
+      setCollectCoverage(null)
+      setCollectWarnings([])
       setUploadStatus(null)
       setPipelineStatus(null)
       setPipelineWarning(null)
@@ -399,12 +542,20 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
   }
 
   async function buildEvidence() {
+    if (buildingRef.current) return // a real request is already in flight
+    buildingRef.current = true
+    const controller = new AbortController()
+    buildAbort.current = controller
+    // The pipeline is one long request with no progress channel. If the
+    // connection stalls it never settles, which left the button disabled for
+    // good while the backend had long finished; bound the wait.
+    const timer = setTimeout(() => controller.abort(), PIPELINE_WAIT_MS)
     setBuilding(true)
     setPipelineStatus(null)
     setPipelineWarning(null)
     setOperationError(null)
     try {
-      const result = await api.runPipeline(generateReports)
+      const result = await api.runPipeline(generateReports, controller.signal)
       setPipelineStatus(`Evidence base ready · ${result.indexed} passages indexed`)
       const warnings: string[] = []
       const missingCount = result.missing_pdfs?.length ?? 0
@@ -419,12 +570,19 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
         warnings.push(`No gap reports were generated; ${reportRun.failed} failed. Build again to retry.`)
       }
       if (warnings.length) setPipelineWarning(warnings.join(' '))
-      await onRefresh()
     } catch (reason) {
-      setOperationError(reason instanceof Error ? reason.message : 'The evidence pipeline failed.')
+      const aborted = reason instanceof DOMException && reason.name === 'AbortError'
+      setOperationError(aborted
+        ? 'Lost contact with the pipeline request. The backend may still be running it; wait, then reload. A second run is refused while one is in progress.'
+        : reason instanceof Error ? reason.message : 'The evidence pipeline failed.')
     } finally {
+      clearTimeout(timer)
+      buildingRef.current = false
+      if (buildAbort.current === controller) buildAbort.current = null
       setBuilding(false)
     }
+    // Outside the try: a slow refresh must not keep the button disabled.
+    await onRefresh().catch(() => undefined)
   }
 
   // The papers of the *current* operation, in full — never a preview slice. A
@@ -444,7 +602,7 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
     <div className="library-workspace">
       <div className="library-heading">
         <div><p className="eyebrow">Corpus builder</p><h2>Bring the literature in.</h2><p>Find open-access research automatically, upload papers you already have, then turn them into searchable evidence.</p></div>
-        <span className="corpus-count"><Database size={16} />{data?.papers.length ?? 0} papers in corpus</span>
+        <span className="corpus-count"><Database size={16} />{paperCount(data?.papers.length ?? 0)} in corpus</span>
       </div>
 
       {operationError && <div className="error-banner"><AlertCircle size={18} /><span>{operationError}</span></div>}
@@ -463,6 +621,8 @@ function LibraryView({ api, data, onRefresh }: { api: ScholarLensApi; data: Dash
           </button>
           {collectStatus && <p className="success-message"><CheckCircle2 size={16} />{collectStatus}</p>}
           {collectDetail && <p className="subtle">{collectDetail}</p>}
+          {collectCoverage && <p className="subtle">{collectCoverage}</p>}
+          {collectWarnings.map((warning) => <p className="warning-message" key={warning}><AlertCircle size={16} />{warning}</p>)}
           {deleteStatus && <p className="success-message"><CheckCircle2 size={16} />{deleteStatus}</p>}
         </article>
 
@@ -554,12 +714,15 @@ function AskView({ api, corpusSize }: { api: ScholarLensApi; corpusSize: number 
   const [question, setQuestion] = useState('')
   const [exchanges, setExchanges] = useState<Exchange[]>([])
   const [loading, setLoading] = useState(false)
+  const loadingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     const asked = question.trim()
-    if (asked.length < 3) return
+    // One question at a time: a query can run for minutes and costs LLM calls.
+    if (asked.length < 3 || loadingRef.current) return
+    loadingRef.current = true
     setLoading(true)
     setError(null)
     try {
@@ -570,8 +733,9 @@ function AskView({ api, corpusSize }: { api: ScholarLensApi; corpusSize: number 
       setExchanges((previous) => [...previous, { id: previous.length, question: asked, result }])
       setQuestion('')
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'The query could not be completed.')
+      setError(queryErrorMessage(reason))
     } finally {
+      loadingRef.current = false
       setLoading(false)
     }
   }
@@ -613,17 +777,54 @@ function AskView({ api, corpusSize }: { api: ScholarLensApi; corpusSize: number 
   )
 }
 
+const OUTCOME_LABEL: Record<string, string> = {
+  grounded_answer: 'Grounded answer',
+  no_indexed_evidence: 'No indexed evidence',
+  insufficient_evidence: 'Evidence incomplete',
+  grounding_failed: 'Answer not verified',
+}
+
 function AnswerCard({ exchange: { question, result } }: { exchange: Exchange }) {
-  const citations = result.citations ?? []
+  // Sources are listed only for a grounded answer. Beside a refusal they would
+  // read as support for an answer that does not exist.
+  const citations = result.grounded ? result.citations ?? [] : []
+  const status = (result.outcome && OUTCOME_LABEL[result.outcome])
+    ?? (result.grounded ? 'Grounded answer' : (result.citations ?? []).length === 0 ? 'No indexed evidence' : 'Evidence incomplete')
+  const retries = result.retry_count
+    ? `${result.retry_count} retrieval ${result.retry_count === 1 ? 'retry' : 'retries'}`
+    : 'First-pass retrieval'
+  // A grounded answer *is* its checked claims (`answer_from_claims`), so each
+  // claim is shown with the numbers of the cited passages it was checked
+  // against. An evidence id the citations do not carry gets no number.
+  const citationNumber = new Map(citations.map((citation, index) => [citation.id ?? citation.point_id, index + 1]))
+  const claims = result.grounded ? (result.claims ?? []).filter((claim) => claim.text?.trim()) : []
+  // Claims the checks rejected are withheld, never shown; the count says the
+  // answer may not cover everything the draft attempted.
+  const withheld = result.grounded ? Math.max(0, result.removed_claim_count ?? 0) : 0
   return (
     <article className="answer-card">
       <p className="asked-question">{question}</p>
       <div className="answer-status">
-        <span className={result.grounded ? 'grounded' : 'ungrounded'}>{result.grounded ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}{result.grounded ? 'Grounded answer' : citations.length === 0 ? 'No indexed evidence' : 'Evidence incomplete'}</span>
-        <small>{result.retry_count ? `${result.retry_count} retrieval retry` : 'First-pass retrieval'} · {result.model}</small>
+        <span className={result.grounded ? 'grounded' : 'ungrounded'}>{result.grounded ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}{status}</span>
+        <small>{[retries, result.model].filter(Boolean).join(' · ')}</small>
       </div>
-      <p className="answer-text">{result.answer}</p>
-      {citations.length > 0 && <div className="citation-list"><h3>Sources</h3>{citations.map((citation, index) => (
+      {claims.length ? (
+        <p className="answer-text">
+          {claims.map((claim, index) => {
+            const text = claim.text.split(/\s+/).join(' ').trim()
+            const numbers = [...new Set((claim.evidence_ids ?? []).map((id) => citationNumber.get(id)).filter((n): n is number => n !== undefined))].sort((a, b) => a - b)
+            return (
+              <span key={index}>
+                {index > 0 && ' '}
+                <span className="answer-claim">{/[.!?]$/.test(text) ? text : `${text}.`}{numbers.map((n) => <sup key={n} aria-label={`cited passage ${n}`}>[{n}]</sup>)}</span>
+              </span>
+            )
+          })}
+        </p>
+      ) : <p className="answer-text">{result.answer}</p>}
+      {result.grounded && <p className="subtle">Each statement was checked automatically against the cited passages; not verified by a person. Read the passages before relying on it.</p>}
+      {withheld > 0 && <p className="subtle" role="note">{withheld === 1 ? '1 statement from the draft was withheld because its cited passages did not support it' : `${withheld} statements from the draft were withheld because their cited passages did not support them`}; this answer may be incomplete.</p>}
+      {citations.length > 0 && <div className="citation-list"><h3>Cited passages</h3>{citations.map((citation, index) => (
         <div className="citation" key={citation.id ?? citation.point_id ?? index}>
           <span>{index + 1}</span>
           <div><strong>{citation.title || `Paper ${citation.paper_id}`}</strong>{citation.year ? <small>{citation.year}</small> : null}<p>{citation.text}</p></div>
@@ -648,36 +849,46 @@ function App() {
     try {
       setData(await api.dashboard())
     } catch (reason) {
-      setError(connectionMessage(reason))
+      setError(connectionMessage(reason, Boolean(apiKey)))
     } finally {
       setLoading(false)
     }
-  }, [api])
+  }, [api, apiKey])
 
   useEffect(() => {
     let active = true
     api.dashboard().then((nextData) => {
       if (active) setData(nextData)
     }).catch((reason: unknown) => {
-      if (active) setError(connectionMessage(reason))
+      if (active) setError(connectionMessage(reason, Boolean(apiKey)))
     }).finally(() => {
       if (active) setLoading(false)
     })
     return () => { active = false }
-  }, [api])
+  }, [api, apiKey])
 
   function saveApiKey(key: string) {
     sessionStorage.setItem('scholarlens-api-key', key)
-    setApiKey(key)
     setShowConnection(false)
+    // The same key builds no new client, so the load effect would not re-run.
+    if (key === apiKey) {
+      void loadDashboard()
+      return
+    }
+    // A new key re-runs the load effect. Clear the previous outcome first, or
+    // a rejected key's error outlives the key that replaced it.
+    setError(null)
+    setLoading(true)
+    setApiKey(key)
   }
 
   // Stable identity: the dialog's focus/Escape effect keys off this handler, and
   // a fresh closure each render would tear that effect down mid-interaction.
   const closeConnection = useCallback(() => setShowConnection(false), [])
 
-  const pageTitle = { reports: 'Evidence, not guesswork.', library: 'Build your research corpus.', trends: 'See where the field is moving.', clusters: 'One gap, many phrasings.', graph: 'Trace the research landscape.', ask: 'Question the corpus directly.' }[view]
-  const reportsCount = data?.reports.length ?? 0
+  const pageTitle = { reports: 'Evidence, not guesswork.', library: 'Build your research corpus.', trends: 'See how this corpus changes over time.', clusters: 'One gap, many phrasings.', graph: 'Trace the research landscape.', ask: 'Question the corpus directly.' }[view]
+  // Archived snapshot rows (`stale`) are history, not current ranked reports.
+  const reportsCount = data?.reports.filter((report) => !report.stale).length ?? 0
 
   return (
     <div className="app-shell">
@@ -709,7 +920,9 @@ function App() {
           {!loading && !error && data && view === 'trends' && <TrendsView data={data} />}
           {!loading && !error && data && view === 'clusters' && <ClustersView data={data} />}
           {!loading && !error && data && view === 'graph' && <GraphView data={data} />}
-          {!error && <div hidden={view !== 'library' || (loading && !data)}><LibraryView api={api} data={data} onRefresh={loadDashboard} /></div>}
+          {/* Hidden, not unmounted, on a dashboard error: unmounting aborts the
+              Library view's in-flight pipeline request, which the backend keeps running. */}
+          <div hidden={Boolean(error) || view !== 'library' || (loading && !data)}><LibraryView api={api} data={data} onRefresh={loadDashboard} /></div>
           {!error && <div hidden={view !== 'ask' || (loading && !data)}><AskView api={api} corpusSize={data?.papers.length ?? 0} /></div>}
         </section>
       </main>

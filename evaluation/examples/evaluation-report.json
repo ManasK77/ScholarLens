@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-09-06T05:56:08.437391+00:00",
+  "generated_at": "2026-10-13T11:02:17.847567+00:00",
   "configuration": {
     "similarity_threshold": 0.15
   },
   "summary": {
     "gaps_evaluated": 3,
-    "validity_index": 0.7222,
+    "validity_index": 0.7083,
     "interpretation": "Composite of later-paper confirmation, survey agreement, and normalized expert validity."
   },
   "time_shift": {

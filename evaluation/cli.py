@@ -11,12 +11,31 @@ def parser() -> argparse.ArgumentParser:
         description="Evaluate ScholarLens research-gap reports"
     )
     command.add_argument("--gaps", required=True, type=Path)
-    command.add_argument("--future-papers", required=True, type=Path)
-    command.add_argument("--surveys", required=True, type=Path)
-    command.add_argument("--expert-scores", required=True, type=Path)
+    # Independent evidence. A method whose input is missing is reported as
+    # unavailable, not scored as zero.
+    command.add_argument("--future-papers", type=Path)
+    command.add_argument("--surveys", type=Path)
+    command.add_argument("--expert-scores", type=Path)
     command.add_argument("--output", required=True, type=Path)
     command.add_argument("--similarity-threshold", type=float, default=0.2)
     return command
+
+
+def print_summary(report: dict, output: Path) -> None:
+    summary = report["summary"]
+    print(f"Evaluated {summary['gaps_evaluated']} gaps")
+    index = summary["validity_index"]
+    print(
+        f"Validity index: {index:.3f} (from {', '.join(summary['components_used'])})"
+        if index is not None
+        else "Validity index: not computable -- no independent evidence supplied"
+    )
+    for method, state in report["availability"].items():
+        if state["status"] != "computed":
+            print(
+                f"  {method}: unavailable ({state['reason']}); needs {state['requires']}"
+            )
+    print(f"Report: {output}")
 
 
 def main() -> None:
@@ -29,10 +48,7 @@ def main() -> None:
         args.output,
         args.similarity_threshold,
     )
-    summary = report["summary"]
-    print(f"Evaluated {summary['gaps_evaluated']} gaps")
-    print(f"Validity index: {summary['validity_index']:.3f}")
-    print(f"Report: {args.output}")
+    print_summary(report, args.output)
 
 
 if __name__ == "__main__":

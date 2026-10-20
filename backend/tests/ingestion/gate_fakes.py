@@ -69,5 +69,8 @@ class PermissiveGate:
     def prefilter_terms(self):
         return self._real.prefilter_terms()
 
+    def query_groups(self):
+        return self._real.query_groups()
+
     def describe(self):
         return self._real.describe()

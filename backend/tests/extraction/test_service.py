@@ -113,6 +113,95 @@ def test_fallback_paragraph_text_is_sentence_segmented() -> None:
     assert [statement.sentence_index for statement in future] == [0, 1]
 
 
+def _single_sentence_section(heading: str, section_type: str, sentence: str) -> list:
+    return [
+        {
+            "heading": heading,
+            "type": section_type,
+            "paragraphs": [{"text": sentence, "sentences": [sentence]}],
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("heading", "section_type", "sentence"),
+    [
+        # Real headings from the multilingual prompt injection corpus that the
+        # SciBERT nearest-label fallback assigned to a gap section.
+        (
+            "Ethics Statement",
+            "Limitations",
+            (
+                "In this work, we investigate the vulnerability of LLMs to Prompt "
+                "Injection Attacks."
+            ),
+        ),
+        (
+            "LLMs misuse & Jailbreak prompts",
+            "Limitations",
+            (
+                "Against this backdrop, the hallucination problem provides an "
+                "exploitable opportunity for model misuse."
+            ),
+        ),
+        (
+            "Prompts: Two sides.",
+            "Limitations",
+            (
+                'After presenting the hidden attack question, we append a novel "Two '
+                'Sides" instruction to the prompt.'
+            ),
+        ),
+        (
+            "GPT-4o DeepSeek-R1 Gemini-1.5-Pro Qwen-Max Forbidden question",
+            "Future Work",
+            "QN-1 0.92 0.08 0.12 1.00 0.88 0.28 1.00",
+        ),
+    ],
+)
+def test_semantically_guessed_gap_section_is_not_a_blanket_label(
+    heading: str, section_type: str, sentence: str
+) -> None:
+    """A heading that does not name a gap section must not label every sentence.
+
+    Stage 2 maps any heading its keywords miss onto the nearest of seven labels,
+    so an ethics statement or a table header can arrive typed `Limitations` or
+    `Future Work`. That guess is not evidence that each sentence beneath it is a
+    limitation; the sentence is left to its own cues and the semantic classifier.
+    """
+    semantic = Mock()
+    semantic.classify_many.return_value = [None]
+
+    statements = service.extract_sections(
+        _single_sentence_section(heading, section_type, sentence), semantic
+    )
+
+    gap_types = {FactType.LIMITATION, FactType.FUTURE_WORK}
+    assert not [s for s in statements if s.fact_type in gap_types]
+
+
+@pytest.mark.parametrize(
+    ("heading", "section_type", "expected"),
+    [
+        ("Limitations", "Limitations", FactType.LIMITATION),
+        ("F. Limitations of Sentra-Guard", "Limitations", FactType.LIMITATION),
+        ("Future Directions", "Future Work", FactType.FUTURE_WORK),
+        ("VIII. CONCLUSION AND FUTURE WORK", "Future Work", FactType.FUTURE_WORK),
+    ],
+)
+def test_heading_that_names_the_gap_section_keeps_its_prior(
+    heading: str, section_type: str, expected: FactType
+) -> None:
+    sentence = "The evaluation covers only four languages."
+    statements = service.extract_sections(
+        _single_sentence_section(heading, section_type, sentence), Mock()
+    )
+
+    assert [(s.fact_type, s.extraction_method) for s in statements] == [
+        (expected, "rule")
+    ]
+
+
 def test_extract_and_store_reads_phase2_document(session: Session) -> None:
     paper = _paper(session)
     upsert_parsed_document(session, paper.id, _sections(), "grobid")

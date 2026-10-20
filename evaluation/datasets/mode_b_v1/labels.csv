@@ -1,0 +1,131 @@
+question_id,label,question_type,papers_needed,relevant_paper_ids,relevant_passage_ids,rationale
+p001,relevant,factual,1,1,83bb292f-35de-53bc-a550-edc9d606a336;641fffba-904c-519a-8448-032856612d44;c09fda94-9f7c-5c7e-bfcf-d75d547f9ef9,"English instruction translated into Japanese, Chinese and Arabic."
+p002,relevant,numeric,1,1,e36c6671-0353-5e0c-a94e-e5a60e597b6e,484 ICML 2025 papers from OpenReview.
+p003,relevant,causal_explanation,1,1,924957e8-21b9-50ac-9c76-b1f7565611c1;641fffba-904c-519a-8448-032856612d44;8184dc4b-c816-5175-9ecb-a2fd238835f7,The paper gives a plausible explanation (uneven English-centric alignment); it is a hypothesis in the paper.
+p004,relevant,limitations,1,1,dbf268c7-8edf-55bd-97a2-302d530b1db7;4120f924-bb1a-5a44-b470-cb8534322573;5a8cc123-3e89-5adc-a129-255001b012b0;973bd52c-d278-5c6e-b517-e7b312af78d4,"Single conference and LLM, one review per condition, fixed injection, 6,000-character truncation."
+p005,relevant,factual,1,2,38787298-e281-5154-8bd4-850f612eecfe;e9ccd070-6c7a-5813-891d-526f624d1d2e;000e2d7d-2a1d-5de0-a62c-b111a8fc75fd;ec74012f-f887-5ec7-b7e7-cf21849931e5,English and Bangla only.
+p006,relevant,limitations,1,2,88d0a389-4682-53de-a878-a2f76e5e0384;ca9c3a6d-e092-5633-a530-6abb744db885;92859ba9-c001-54d2-81d6-d385d6633ed5;e173a4a9-d707-5c7b-bece-1ceaa4b7c027,NLLB-200 machine translation; may preserve directives less faithfully and add lexical artifacts.
+p007,relevant,numeric,1,2,c084406a-8546-5b97-a401-b6ef64c57acc;d83f2c7f-5a7a-59e3-888d-9c449542461f;ae683d43-45ef-5f7a-983b-3bbd621c878e,Hybrid F1 0.9205 vs XLPID 0.8939.
+p008,relevant,factual,1,2,53dffc17-331a-5cc7-be70-7767d27bf26b,Emoji Substitution (0.458) and Cryptocurrency Mining (0.405) residuals.
+p009,relevant,factual,1,2,f3e220c1-e1ff-54ed-a8ef-cb03326944bb;f813ab24-b031-57db-a77a-90c6480d2fd6,"Lowest recall (0.7025), a 30% miss rate."
+p010,relevant,future_work,1,2,43c6169a-e5e7-53d9-88b9-49f00ffe1d21;dd60be59-3a43-5769-bbd1-98dc99f1eb50;1cb80fc8-6123-51cb-956f-4fcdab1aa3b6;a523451a-2936-58e4-813d-cd24fa33409e,"Adversarial rephrasing robustness, realistic threshold calibration, language-balanced training."
+p011,relevant,numeric,1,3,58ae75bf-525b-50a1-afbe-87eea5ba6419;765c35f8-109c-50a3-a9fa-4e87bd464062;76dc12ba-3f1a-5ca6-b3cb-c150ce49b39f,68.76% full compliance of 15540 responses.
+p012,relevant,numeric,1,3,b77a41e9-5293-53e5-8681-48fc220b28c9,Turkish (80.18%).
+p013,relevant,factual,1,3,40efb42c-0311-567b-b987-223f0d506260;a729a233-e6c2-5114-be5f-1d5837aca714,Encodings reduce but do not prevent; Hex still 54.41%.
+p014,relevant,comparison,1,3,b8628874-8658-59f4-b297-9e387ce3eca2;91844912-9299-5b99-88c5-1d6b91e9bc82;a0ddf8d7-1e3d-53a6-baaf-d6232293e5b3,Elaborate 76.69% vs direct 62.01% full compliance.
+p015,relevant,numeric,1,3,bdbe7811-62f3-5f38-b043-7393ecb45ab9;fea434e9-bc5d-5215-89e7-febab2586222,GPT-5 Mini (44.09% full compliance).
+p016,relevant,limitations,1,4,15f123c1-227e-5b98-8a38-be1191a4a63b;076dd73f-d376-5a82-889c-de425ca36a43;1b889f2b-ff49-5b60-ba3a-9e2fd51ebd89;827ae117-6b33-51a4-affd-35d614d03013;26d30f8c-c647-5d6f-9623-f7f5f2da9faf;c74c9994-0abc-5615-9e42-11594f03a28e;c92afef4-62bc-5b0f-a7cc-4c37de48a33f;210c0395-d90f-57e6-a961-1a6312f0da79,"Single-round single-line format, GPT-4 evaluation mistakes, no human evaluation, reproducibility, no single metric."
+p017,relevant,factual,1,4,69fe59af-a70b-52d2-be56-30f94f62c494;5bbe917f-5cd8-5259-b7ee-8045e775d6ed,Commercial online MT systems; MT-fine-tuned LLMs similar.
+p018,relevant,factual,1,4,328c30fe-ed82-58c4-a489-0dc890721bfa,Positive scaling between robustness and clean BLEU.
+p019,relevant,factual,1,5,94b6ea45-7cb6-57f2-8a0f-2bb9db71cb48;6d71b6c8-5490-5685-89fd-c595fb779cc5;3063d26e-9f06-5893-acf1-4d06a91e0fd5,Positive/flat scaling on clean data; inverse or non-monotonic under injection.
+p020,relevant,factual,1,5,71731fe0-93d7-5899-9db2-c900b591a389;d4223abb-4f63-54bf-924c-852f5b2e9073,Training on code / instruction tuning; a single in-context example.
+p021,relevant,factual,1,5,046dafb3-8b82-5602-b709-b259befd00fe,"German, French, Romanian and Russian with mBART-50."
+p022,relevant,factual,1,6,35d06d98-46f9-5da9-af04-2a8359f62fde;2c3e654c-f6d6-5cd5-817d-025a4eb4b90d;a346bce8-0f93-54fb-808b-8900c08bad26,Stated intent aligned with outcome in 20 non-empty traces (17 benign / 3 attack).
+p023,relevant,limitations,1,6,403b2325-96dc-5fb5-8c2b-0946eaac7262;fddda74f-6443-5ce2-bc5d-add255e6fc53;586c2133-e47e-5113-987f-9a0964d1ed10;d073b51a-a4a8-54c2-987c-96bd920772a8;2a2e0294-55ea-5914-8743-d0cff8a7808c;40a1d2ea-31a3-5f1c-8481-6bebdbc7b1ed,"Eight scenarios, one model, one annotator, synthetic exact-string tasks, possibly unfaithful reasoning."
+p024,relevant,numeric,1,6,4d314b98-1c6f-5051-afd8-cbfb28111d7f,"5/16 English, 1/16 Tamil, 5/15 Tanglish; denominators too small to compare."
+p025,relevant,factual,1,7,21c9127d-bab9-50b4-b6eb-1c4e934acfb1;a9319f31-1687-52ba-8144-8886b2c9a3f8;1568aa07-78f5-5953-a435-1aa77809e16c;e436ef7d-e5ea-52cf-b650-5d6636d67639,Reduces instruction-based attacks but fails on content-based variants.
+p026,relevant,numeric,1,8,08139c9d-7f22-533f-b330-d40ef02dca42;17f893f3-af26-50af-96f0-179a9cc81182;4ecd46b9-5836-5778-9101-b0b1d79f66f1,"99.98% accuracy, AUC 1.00, ASR 0.004%, 47 ms."
+p027,relevant,factual,1,8,3a52d238-330c-5be2-b54d-86b8d4e2ed62;1849ed32-856e-5d25-b536-f1f8033975eb,"English, French, Spanish, Arabic and Hindi."
+p028,relevant,limitations,1,8,15e647ae-2808-52c1-bd25-8a24e8dae28b;c4ede2e7-bf6c-58f3-9aee-e253bf391f73;6a1226eb-87f4-5a9f-94ac-92fe86befd5c,No homoglyph resolution; NMT quality for low-resource/code-mixed languages.
+p029,relevant,factual,1,9,80490beb-2c96-5b87-8921-13afff903ff7;7a03fa36-478f-5810-b8d8-c112adefbce1;d3467607-f8c5-5f7c-a803-0297dac85a10;674533e8-ddaa-5f3b-aaaf-3f60366fff87;5599d2c2-d7ab-52a8-9caa-e9e967619bc4,"Injection regex heuristics, topic boundary, relevance check, intent router, privilege isolation."
+p030,relevant,numeric,1,9,d3467607-f8c5-5f7c-a803-0297dac85a10;c4fca927-7e89-5169-a8d9-c67e05633c88,tau = 0.70 cosine.
+p031,relevant,numeric,1,10,41cb089b-e463-552d-b687-4d4b1563b10f,"121 languages, 7,892 Q&A data points."
+p032,relevant,numeric,1,10,4fc80d03-b1c4-540e-96e0-34292845515c;0240e693-b952-5bdb-98e4-41c0ab97ecab;7ad10f8c-88a1-5ce9-96d3-0bcb85bd5ca2,Yes: e.g. 5.07% to 25.67% for the RQ1 strategy.
+p033,relevant,numeric,1,20,37affec2-6b60-5cb0-8561-611374d37f56;8319048a-4614-5715-8956-500ca35cdda5,Grok-3 (ASR 12.3%).
+p034,relevant,numeric,1,20,6bd45f38-3968-5458-8e3a-75bc888c2d2d;318409dc-7c65-5b9a-aec4-8106e182e4b4;7b1e0fb6-df20-53a3-b3d2-18ac49e7e9a7,FPR rises for all three models; Claude Sonnet 4 2.4% to 24.1%.
+p035,relevant,synthesis,2,1;3;10,51855923-b1f5-5873-b021-6d5834a7de37;924957e8-21b9-50ac-9c76-b1f7565611c1;a61a1ab2-0758-5efe-9694-069de4316a5b;b6620f6d-b756-54e8-91ae-6771d2799a11;6f2edf7b-7734-57ed-8498-e50c8b83d666;62047eb2-3922-5293-b826-b74a8b05bdeb,"Papers 1, 3 and 10 each report weaker non-English safety/compliance behaviour."
+p036,relevant,synthesis,2,2;6;8;10,88d0a389-4682-53de-a878-a2f76e5e0384;65ec5a4b-b9aa-50a2-a446-b7814c9b7652;6a1226eb-87f4-5a9f-94ac-92fe86befd5c;00f4c699-61bd-5fa7-a13a-d1705f6404ca,"MT artifacts (2), translation naturalness (6), NMT quality (8), translation inaccuracies (10)."
+p037,relevant,synthesis,2,4;5,64da6a31-5a0a-51ab-b299-492377face4f;faac0613-2b23-50f3-a216-8f66c46a7841;b03a50cf-4f7b-54c6-9c30-44e94edd9255;765af0e8-27e0-5e85-b999-0e09a5da2ad8,TruthfulQA-based adversarial prefixes in both MT papers.
+p038,relevant,synthesis,2,2;7;8;9,536e6af4-44b2-5b9e-b377-793b9453177f;21c9127d-bab9-50b4-b6eb-1c4e934acfb1;15e647ae-2808-52c1-bd25-8a24e8dae28b;0c34d64d-9748-5394-9104-1953d964ad9a,"Each defense paper reports limitations (synthetic distribution, reactive filtering, obfuscation, untested threats)."
+p039,relevant,synthesis,2,2;4;6,1b889f2b-ff49-5b60-ba3a-9e2fd51ebd89;210c0395-d90f-57e6-a961-1a6312f0da79;23112e2b-b6fa-54d8-9e1b-5d50c88e382d;e888c423-9e00-5dd5-b826-01391ddd5ea7,GPT-4 evaluation makes mistakes (4); judge ensemble (2); exact-match grading to avoid an LLM judge (6).
+p040,relevant,absence_stated,1,20,34d0a813-37cd-5ab8-bdbb-f1be920bea67,The paper states its sample did not allow that assessment.
+p041,relevant,synthesis,2,3;4;6;10,57829aef-60f5-52c6-a13e-6639bd8fc311;1b889f2b-ff49-5b60-ba3a-9e2fd51ebd89;c071d0f1-7b90-52da-9fe2-4486ce94addf;22f13df2-f260-524e-b0f1-dfc6e72b8af0;b65e04ba-d7d0-5a94-b14f-5fd8a79f5763,"Human expert rubric (3), no human eval (4), one annotator (6), four-participant three-round labelling (10)."
+p042,partially_relevant,partial_single_paper,1,2,38787298-e281-5154-8bd4-850f612eecfe;e9ccd070-6c7a-5813-891d-526f624d1d2e;6735cd1b-3d80-53db-bb42-ef3951d0bfee,Only that MIPIAD was validated on English and Bangla; no Hindi/Tamil results exist.
+p043,partially_relevant,comparison,2,2;8,17f893f3-af26-50af-96f0-179a9cc81182;ae683d43-45ef-5f7a-983b-3bbd621c878e,Each reports results on its own benchmark; no head-to-head comparison.
+p044,partially_relevant,partial_single_paper,1,2;8,90bf3679-7820-5358-9491-eb843f4c7f63;7db38a32-6399-543b-b2c4-10d9fea5835f;1b695ad9-2b41-5513-b107-94bfba0fb7b8,Test ratios and the need for production evaluation are discussed; no production FPR is measured.
+p045,partially_relevant,partial_single_paper,1,10,b4745677-979b-5e31-86f7-077dd34d80ed;65c1ff5f-e2e7-58e7-b5cd-886394590c05;6f2edf7b-7734-57ed-8498-e50c8b83d666,"Language support varies, English training data is discussed; the highest-rate language is not stated in the passages."
+p046,partially_relevant,partial_single_paper,1,8;6,9ca818ea-eff0-5608-9aa0-ed1f0f6b6221;6a1226eb-87f4-5a9f-94ac-92fe86befd5c;89177ed6-c093-51b1-879c-03cef1871290,Sentra-Guard claims code-mixed handling and lists it as a limitation; no Hinglish result.
+p047,partially_relevant,partial_single_paper,1,7,3c808c8a-c2d5-5a6a-813a-352d82f65c45;e436ef7d-e5ea-52cf-b650-5d6636d67639,Effects hold across tested languages; Hindi is not named.
+p048,partially_relevant,synthesis,2,2;20;8;6,ec74012f-f887-5ec7-b7e7-cf21849931e5;88d0a389-4682-53de-a878-a2f76e5e0384;3bb03506-28a2-5c93-87d6-437a0990fe9e;1d145512-ce1b-5f4a-82f8-9f5daeb0d744;a8c440ca-2ba3-5690-8f0e-2b4182356b26,Datasets are listed; most non-English attacks are machine translated; human-written attacks are not established.
+p049,partially_relevant,comparison,2,4;8,8f43c065-a981-5242-805a-e9cb5bcdd99d;1849ed32-856e-5d25-b536-f1f8033975eb,Both appear in tables but under different tasks and metrics; no like-for-like comparison.
+p050,partially_relevant,synthesis,2,2;3;8,1cb80fc8-6123-51cb-956f-4fcdab1aa3b6;a729a233-e6c2-5114-be5f-1d5837aca714;0dcb933c-9098-59b0-9239-ff576d2cdb6e,Mitigations are proposed as future work; effectiveness is not shown.
+p051,partially_relevant,comparison,2,5,71731fe0-93d7-5899-9db2-c900b591a389,Supported for MT only; the phishing paper does not study instruction tuning.
+p052,partially_relevant,partial_single_paper,1,8,1b695ad9-2b41-5513-b107-94bfba0fb7b8;0e287678-4815-5ab5-a972-abb7237d7b65,HITL adaptation is described; live-deployment FPR is not measured.
+p053,partially_relevant,numeric,1,20,7b1e0fb6-df20-53a3-b3d2-18ac49e7e9a7;318409dc-7c65-5b9a-aec4-8106e182e4b4;6bd45f38-3968-5458-8e3a-75bc888c2d2d;47766aa3-23d4-546c-9e13-46df87731dc5,FPR degradation per language is reported; no defense is evaluated (future work).
+p054,partially_relevant,partial_single_paper,1,6,a3664799-b809-5bdc-807f-7908522efc71;2a2e0294-55ea-5914-8743-d0cff8a7808c,One model with and without reasoning; the paper declines to claim a causal or cross-language effect.
+p055,partially_relevant,partial_single_paper,1,9,a41ba25c-2cd1-54c7-9b65-3bbdf488c8b8,A failure mode is described; frequency is not given.
+p056,partially_relevant,overgeneralization_trap,2,3;8;10,fea434e9-bc5d-5215-89e7-febab2586222;d605e20b-483b-5919-8c27-7e00e2f9e519;7491e03e-bc8f-5212-bbec-4dd3d27e4f0f,Per-study model rankings exist; a cross-study ranking is not supported.
+p057,partially_relevant,partial_single_paper,1,1,4120f924-bb1a-5a44-b470-cb8534322573;2a1a943a-9444-5558-9436-8d0f157ff9ff,The study covers ICML only; other venues are future work.
+p058,partially_relevant,partial_single_paper,1,8,08139c9d-7f22-533f-b330-d40ef02dca42;e86cfa16-538e-534c-a965-517b12bf0182,Latency is reported (47 ms; ensembles ~600 ms); energy is not.
+p059,partially_relevant,causal_explanation,1,4,69fe59af-a70b-52d2-be56-30f94f62c494;5bbe917f-5cd8-5259-b7ee-8045e775d6ed,Robustness is reported; the reason is not.
+p060,partially_relevant,partial_single_paper,1,3,c341dbaf-d770-5b45-a1f5-425ed6030456;800784b2-42b9-5941-a5ef-88c38fb8c5e8,Warning rate 54.72% is reported; real-world harm reduction is not studied.
+p061,partially_relevant,comparison,1,3,40efb42c-0311-567b-b987-223f0d506260;a7677839-1bd4-54a6-b385-acc606842a69;c4dfa0b5-126d-5374-a273-7c4c0ad5ea86,Encodings vs the four natural languages are compared; low-resource languages only via cited prior work.
+p062,partially_relevant,partial_single_paper,1,1,641fffba-904c-519a-8448-032856612d44;35ec139a-e90b-5c6a-9502-be65910c3b0f,Japanese is studied; Korean is not.
+p063,partially_relevant,future_work,1,7;9,b735c61d-310d-5c6a-ac47-735d44137e64;16b19491-6f13-5d21-9480-d7f1b8a30c9f,Downstream RAG effects are future work in paper 7; nothing specific to multilingual RAG pipelines.
+p064,partially_relevant,partial_single_paper,1,1,c99eb236-47fd-5c7d-9f9d-3a2f1e4f2b54;4120f924-bb1a-5a44-b470-cb8534322573,Only llama3 was evaluated; GPT-4 reviewers were not.
+p065,partially_relevant,partial_single_paper,1,2,19aa116e-38c8-5d41-957e-70f139a9c997;908ceee6-3136-5d03-807e-732b88e7ce5a,XLPID uses LoRA; no comparison with full fine-tuning.
+p066,partially_relevant,partial_single_paper,1,4,f7a8ca61-5cc1-5e3b-8037-8a105ea9dac1;45bda171-dd70-5f7a-9b91-09582429ba88,English vs source-language deltas are reported for the two pairs; Arabic is not studied.
+p067,partially_relevant,synthesis,2,2;8,43c6169a-e5e7-53d9-88b9-49f00ffe1d21;81c9381c-74e8-5b15-b961-38c1a227e080;0dcb933c-9098-59b0-9239-ff576d2cdb6e,Threshold calibration is named as a limitation/future work; no recommended practice.
+p068,partially_relevant,partial_single_paper,1,2,218758fd-3453-5d6d-bb73-c47d98c7d3a6;be76e64b-51e9-5079-be72-b80af8c45fa8,Per-victim reductions exist; no analysis by model size.
+p069,partially_relevant,partial_single_paper,1,9,d17d103d-5fd7-5fdf-9084-96b820542661;4f9e1f62-53aa-5ec6-8a1e-38de208bf124,Test set sizes and qualitative variant effects; per-variant block rates are not in the passages.
+p070,weak,misleading_overlap,1,,,Tool actions are mentioned only as a risk; no study of multilingual agentic tool use.
+p071,weak,misleading_overlap,1,,,The Turkish benchmark paper (15) has no indexed full text; paper 3's Turkish result is malicious-request compliance.
+p072,weak,not_in_index,1,,,Paper 11 is metadata-only; no indexed passage.
+p073,weak,not_in_index,1,,,Paper 12 is metadata-only; no Marathi/Telugu results.
+p074,weak,not_in_index,1,,,Paper 13 is metadata-only; no reranking-stage analysis is indexed.
+p075,weak,not_in_index,1,,,Paper 16 (SemGuard) is metadata-only.
+p076,weak,not_in_index,1,,,Paper 18 (XRXNet) is metadata-only.
+p077,weak,not_in_index,1,,,Paper 19 is metadata-only.
+p078,weak,adjacent_topic,1,,,Adjacent NLP topic; not covered.
+p079,weak,adjacent_topic,1,,,Adjacent LLM topic; not covered.
+p080,weak,adjacent_topic,1,,,Adjacent LLM security topic; not covered.
+p081,weak,adjacent_topic,1,,,Adjacent LLM security topic; not covered.
+p082,weak,adjacent_topic,1,,,Adjacent LLM security topic; not covered.
+p083,weak,misleading_overlap,1,,,Sentra-Guard only says multimodal inputs are not addressed.
+p084,weak,adjacent_topic,1,,,Systems topic; not covered.
+p085,weak,misleading_overlap,1,,,The tourism paper only notes dynamic updates are needed.
+p086,weak,misleading_overlap,1,,,Arabic appears in papers 1 and 8 but tokenization defenses are not studied.
+p087,weak,adjacent_topic,1,,,Not covered.
+p088,weak,misleading_overlap,1,,,CoT appears only as a phishing-classification prompt.
+p089,weak,adjacent_topic,1,,,Not covered.
+p090,weak,misleading_overlap,1,,,Paper 1 hides text from humans but does not test human detection.
+p091,weak,adjacent_topic,1,,,Not covered.
+p092,weak,adjacent_topic,1,,,Not covered.
+p093,weak,misleading_overlap,1,,,Paper 3 studies malware generation compliance; not code vulnerability rates.
+p094,weak,misleading_overlap,1,,,NLLB-200 is named as a translation tool only.
+p095,weak,misleading_overlap,1,,,BLEU/chrF++ appear; BERTScore and human correlation do not.
+p096,weak,misleading_overlap,1,,,Tamil appears in paper 6 for prompt injection only.
+p097,weak,adjacent_topic,1,,,Not covered.
+p098,weak,misleading_overlap,1,,,Bangla appears for prompt injection and phishing only.
+p099,weak,misleading_overlap,1,,,Tool actions are mentioned as a risk; no sandboxing study.
+p100,weak,misleading_overlap,1,,,Paper 10 describes labelling rounds but the passages report no agreement statistic for Armenian.
+p101,unrelated,off_topic,1,,,
+p102,unrelated,off_topic,1,,,
+p103,unrelated,off_topic,1,,,
+p104,unrelated,off_topic,1,,,
+p105,unrelated,off_topic,1,,,
+p106,unrelated,off_topic,1,,,
+p107,unrelated,off_topic,1,,,
+p108,unrelated,off_topic,1,,,
+p109,unrelated,off_topic,1,,,
+p110,unrelated,off_topic,1,,,
+p111,unrelated,off_topic,1,,,
+p112,unrelated,off_topic,1,,,
+p113,unrelated,off_topic,1,,,
+p114,unrelated,off_topic,1,,,
+p115,unrelated,off_topic,1,,,
+p116,unrelated,off_topic,1,,,
+p117,unrelated,off_topic,1,,,
+p118,unrelated,off_topic,1,,,
+p119,unrelated,off_topic,1,,,
+p120,unrelated,off_topic,1,,,
+p121,unrelated,off_topic,1,,,
+p122,unrelated,off_topic,1,,,
+p123,unrelated,off_topic,1,,,
+p124,unrelated,off_topic,1,,,
+p125,unrelated,off_topic,1,,,
+p126,unrelated,off_topic,1,,,
+p127,unrelated,off_topic,1,,,
+p128,unrelated,off_topic,1,,,
+p129,unrelated,off_topic,1,,,
+p130,unrelated,off_topic,1,,,

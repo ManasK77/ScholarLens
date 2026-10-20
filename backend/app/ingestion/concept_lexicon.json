@@ -1,6 +1,6 @@
 {
-  "version": "2026-09-24.1",
-  "description": "S1 relevance-gate concept lexicon (D-S1-GATE-01). Each concept lists the normalized surface forms (lowercase; hyphens, underscores and slashes read as spaces; a trailing plural 's'/'es' is always accepted) that count as evidence for it. A topic phrase matching any form becomes that concept's facet. 'sense' names a concept's head word and the modifiers that keep its meaning, so the head word used with any other modifier ('error injection') is recorded as a different sense. 'min_language_names' lets a concept be evidenced by that many distinct names from 'language_names'. Bump 'version' on every edit: it is stored with each collection run.",
+  "version": "2026-10-12.2",
+  "description": "S1 relevance-gate concept lexicon (D-S1-GATE-01). Each concept lists the normalized surface forms (lowercase; hyphens, underscores and slashes read as spaces; a trailing plural 's'/'es' is always accepted) that count as evidence for it. A topic phrase matching any form becomes that concept's facet. 'sense' names a concept's head word and the modifiers that keep its meaning, so the head word used with any other modifier ('error injection') is recorded as a different sense. 'min_language_names' lets a concept be evidenced by that many distinct names from 'language_names'. Bump 'version' on every edit: it is stored with each collection run. Gate v2 (S1 audit, 2026-10-10) adds four optional keys. 'benign_sense' lists a concept's 'technique_context' forms and 'threat_context' word stems: a text that uses the concept alongside a technique form and no threat stem uses it in a benign sense. 'distinct_neighbours' names concepts for a related but distinct topic: a text whose title names a neighbour and not this concept, and which mentions the neighbour at least as often, is adjacent. 'incidental_followers' are words that make a form name a tool ('multilingual BERT'), not the subject. 'component_followers' do the same for a generic component noun ('multilingual embeddings') unless one of the 'component_target_cues' word stems occurs within the four words before the form: then the component is what is attacked ('attacks on multilingual embedding models') and the form counts. 'query_forms' are the forms validated as retrieval synonyms for source queries; each is sent as a quoted phrase (2026-10-12.2: the prompt-injection forms replace the separate words 'prompt' AND 'injection', which matched 59 arXiv records against 28 for the phrases, with all 20 gate-passing records in both). Top-level 'future_work_markers' mark sentences whose evidence does not count.",
   "concepts": {
     "prompt injection": {
       "forms": [
@@ -11,7 +11,69 @@
         "prompt hijacking",
         "goal hijacking"
       ],
-      "sense": {"head": "injection", "same_sense_modifiers": ["prompt", "instruction"]}
+      "sense": {
+        "head": "injection",
+        "same_sense_modifiers": [
+          "prompt",
+          "instruction"
+        ]
+      },
+      "benign_sense": {
+        "technique_context": [
+          "fine tuning",
+          "finetuning",
+          "prompt tuning",
+          "soft prompt",
+          "prefix tuning",
+          "instruction tuning",
+          "parameter efficient",
+          "knowledge transfer",
+          "knowledge injection",
+          "freezing"
+        ],
+        "threat_context": [
+          "attack",
+          "adversar",
+          "malicious",
+          "defen",
+          "vulnerab",
+          "secur",
+          "threat",
+          "exploit",
+          "jailbreak",
+          "harm",
+          "unsafe",
+          "safety",
+          "hijack",
+          "poison",
+          "guardrail",
+          "subver",
+          "manipulat",
+          "evad",
+          "evasion",
+          "risk",
+          "privacy",
+          "leak",
+          "phish",
+          "malware",
+          "abuse",
+          "misuse"
+        ]
+      },
+      "distinct_neighbours": [
+        "jailbreak"
+      ],
+      "query_forms": [
+        "prompt injection",
+        "prompt injections",
+        "instruction injection",
+        "injected instruction",
+        "injected instructions",
+        "injected prompt",
+        "injected prompts",
+        "prompt hijacking",
+        "goal hijacking"
+      ]
     },
     "multilingual": {
       "forms": [
@@ -31,18 +93,88 @@
         "different languages",
         "language pair"
       ],
-      "min_language_names": 2
+      "min_language_names": 2,
+      "incidental_followers": [
+        "bert",
+        "mbert",
+        "distilbert",
+        "roberta",
+        "xlm",
+        "xlm r",
+        "t5",
+        "mt5",
+        "bart",
+        "mbart",
+        "e5",
+        "minilm"
+      ],
+      "component_followers": [
+        "encoder",
+        "embedding",
+        "tokenizer",
+        "sentence transformer",
+        "backbone"
+      ],
+      "component_target_cues": [
+        "attack",
+        "adversar",
+        "poison",
+        "backdoor",
+        "vulnerab",
+        "exploit",
+        "manipulat",
+        "fool",
+        "hijack",
+        "jailbreak",
+        "compromis"
+      ],
+      "query_forms": [
+        "multilingual",
+        "multi-lingual",
+        "cross-lingual",
+        "crosslingual",
+        "code-switching",
+        "code-mixed",
+        "low-resource language",
+        "machine translation"
+      ]
     },
     "jailbreak": {
-      "forms": ["jailbreak", "jailbreaking", "jailbroken"]
+      "forms": [
+        "jailbreak",
+        "jailbreaking",
+        "jailbroken"
+      ]
     },
     "large language model": {
-      "forms": ["large language model", "llm"]
+      "forms": [
+        "large language model",
+        "llm"
+      ]
     },
     "retrieval augmented generation": {
-      "forms": ["retrieval augmented generation", "rag"]
+      "forms": [
+        "retrieval augmented generation",
+        "rag"
+      ]
     }
   },
+  "future_work_markers": [
+    "future work",
+    "future research",
+    "future studies",
+    "future direction",
+    "in the future",
+    "should explore",
+    "should investigate",
+    "could explore",
+    "will explore",
+    "we plan to",
+    "left for future",
+    "remains to be explored",
+    "remain to be explored",
+    "is left as"
+  ],
   "language_names": [
     "afrikaans", "albanian", "amharic", "arabic", "armenian", "assamese", "azerbaijani",
     "bangla", "basque", "bengali", "bulgarian", "burmese", "cantonese", "catalan", "chinese",

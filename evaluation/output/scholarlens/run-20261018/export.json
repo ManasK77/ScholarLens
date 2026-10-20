@@ -1,0 +1,446 @@
+{
+ "corpus": {
+  "max_year": 2026,
+  "min_year": 2023,
+  "papers": 20
+ },
+ "export_digest": "baa794fa7d099ed94d49eb7ae03c17d44ed369325eca5c25db1409ebc864a386",
+ "export_schema": "scholarlens-gap-export/1",
+ "reports": [
+  {
+   "cluster_id": 11,
+   "cluster_label": "attacks adversarial attack",
+   "cluster_paper_ids": [
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    9,
+    20
+   ],
+   "content_sha256": "6d4a0794f10003a9559b3a4137683f4da241fe9d829e0171cebb9d308dd0ddc1",
+   "created_at": "2026-10-12T19:15:48.925347",
+   "evidence": [
+    {
+     "evidence_id": "2a1a943a-9444-5558-9436-8d0f157ff9ff",
+     "paper_id": 1,
+     "source_type": "future_work",
+     "title": "Multilingual Hidden Prompt Injection Attacks on LLM-Based Academic Reviewing",
+     "year": 2025
+    },
+    {
+     "evidence_id": "dbf268c7-8edf-55bd-97a2-302d530b1db7",
+     "paper_id": 1,
+     "source_type": "paragraph",
+     "title": "Multilingual Hidden Prompt Injection Attacks on LLM-Based Academic Reviewing",
+     "year": 2025
+    },
+    {
+     "evidence_id": "1bca23b7-73a8-5efa-b344-3664bebfdfff",
+     "paper_id": 8,
+     "source_type": "paragraph",
+     "title": "Sentra-Guard: A Real-Time Multilingual Defense Against Adversarial LLM Prompts",
+     "year": 2025
+    },
+    {
+     "evidence_id": "15e647ae-2808-52c1-bd25-8a24e8dae28b",
+     "paper_id": 8,
+     "source_type": "paragraph",
+     "title": "Sentra-Guard: A Real-Time Multilingual Defense Against Adversarial LLM Prompts",
+     "year": 2025
+    },
+    {
+     "evidence_id": "220b98dd-3e3d-558f-bfc7-965f223dadc9",
+     "paper_id": 7,
+     "source_type": "paragraph",
+     "title": "The Effect of Multi-Lingual and Keyword Adversarial Injection on LLM Relevance Judgment",
+     "year": 2026
+    },
+    {
+     "evidence_id": "21c9127d-bab9-50b4-b6eb-1c4e934acfb1",
+     "paper_id": 7,
+     "source_type": "paragraph",
+     "title": "The Effect of Multi-Lingual and Keyword Adversarial Injection on LLM Relevance Judgment",
+     "year": 2026
+    },
+    {
+     "evidence_id": "68a4059a-a8c9-5ae8-87fe-1223d92d711a",
+     "paper_id": 2,
+     "source_type": "paragraph",
+     "title": "MIPIAD: Multilingual Indirect Prompt Injection Attack Defense with Qwen -- TF-IDF Hybrid and Meta-Ensemble Learning",
+     "year": 2026
+    }
+   ],
+   "generated": {
+    "claims": {
+     "conflicting_evidence": {
+      "basis": "not_claimed",
+      "evidence_ids": [],
+      "supported": false
+     },
+     "problem_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "2a1a943a-9444-5558-9436-8d0f157ff9ff",
+       "dbf268c7-8edf-55bd-97a2-302d530b1db7",
+       "1bca23b7-73a8-5efa-b344-3664bebfdfff",
+       "15e647ae-2808-52c1-bd25-8a24e8dae28b",
+       "220b98dd-3e3d-558f-bfc7-965f223dadc9",
+       "21c9127d-bab9-50b4-b6eb-1c4e934acfb1",
+       "68a4059a-a8c9-5ae8-87fe-1223d92d711a"
+      ],
+      "supported": true
+     },
+     "research_gap_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "2a1a943a-9444-5558-9436-8d0f157ff9ff",
+       "dbf268c7-8edf-55bd-97a2-302d530b1db7",
+       "15e647ae-2808-52c1-bd25-8a24e8dae28b",
+       "68a4059a-a8c9-5ae8-87fe-1223d92d711a"
+      ],
+      "supported": true
+     },
+     "solution_insufficiency_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "15e647ae-2808-52c1-bd25-8a24e8dae28b",
+       "220b98dd-3e3d-558f-bfc7-965f223dadc9",
+       "21c9127d-bab9-50b4-b6eb-1c4e934acfb1",
+       "68a4059a-a8c9-5ae8-87fe-1223d92d711a"
+      ],
+      "supported": true
+     }
+    },
+    "gap": "Despite the existence of adversarial prompt injection attacks and some defenses, there remains a gap in evaluating defenses on Bangla and large‑scale multilingual indirect injection benchmarks, and in exploring diverse injection strategies and mitigation techniques.",
+    "model": "openai/gpt-oss-20b",
+    "model_confidence": 0.8,
+    "provider": "groq",
+    "suggested_directions": [
+     "Bangla defense evaluation",
+     "Multilingual indirect injection benchmarks",
+     "Diverse injection strategy exploration",
+     "Homoglyph resolution development",
+     "Adaptive threshold tuning"
+    ]
+   },
+   "ranking": {
+    "evidence_scope": "corroborated",
+    "paper_count": 9,
+    "rank": 1,
+    "score": -0.373333
+   },
+   "report_id": 10,
+   "supporting_paper_ids": [
+    1,
+    2,
+    7,
+    8
+   ]
+  },
+  {
+   "cluster_id": 12,
+   "cluster_label": "languages multilingual translation",
+   "cluster_paper_ids": [
+    2,
+    4,
+    5,
+    6,
+    9,
+    10
+   ],
+   "content_sha256": "6ee24cc7ff686f2e9ddcb76d458c5291c89f2d57b12403596bf052a96d8b61bf",
+   "created_at": "2026-10-12T19:15:48.925347",
+   "evidence": [
+    {
+     "evidence_id": "e9ccd070-6c7a-5813-891d-526f624d1d2e",
+     "paper_id": 2,
+     "source_type": "paragraph",
+     "title": "MIPIAD: Multilingual Indirect Prompt Injection Attack Defense with Qwen -- TF-IDF Hybrid and Meta-Ensemble Learning",
+     "year": 2026
+    },
+    {
+     "evidence_id": "1b1eb9cc-39c2-5382-9d72-c9d51f83cae9",
+     "paper_id": 10,
+     "source_type": "limitation",
+     "title": "Comprehensive Evaluation of ChatGPT Reliability Through Multilingual Inquiries",
+     "year": 2023
+    },
+    {
+     "evidence_id": "c54d8dcf-11bd-554a-afbc-5aa4d35beb8a",
+     "paper_id": 5,
+     "source_type": "limitation",
+     "title": "Scaling Behavior of Machine Translation with Large Language Models under Prompt Injection Attacks",
+     "year": 2024
+    },
+    {
+     "evidence_id": "65ec5a4b-b9aa-50a2-a446-b7814c9b7652",
+     "paper_id": 6,
+     "source_type": "limitation",
+     "title": "Visible Reasoning and Indirect Prompt-Injection Monitorability Across English, Tamil, and Tanglish",
+     "year": 2026
+    },
+    {
+     "evidence_id": "e3ac4baa-113e-59ca-8d46-fa23514eb3a7",
+     "paper_id": 9,
+     "source_type": "limitation",
+     "title": "Design and Implementation of a Secure RAG-Enhanced AI Chatbot for Smart Tourism Customer Service: Defending Against Prompt Injection Attacks -- A Case Study of Hsinchu, Taiwan",
+     "year": 2025
+    },
+    {
+     "evidence_id": "c6d815bb-a71e-503e-b819-3f472b9ac12d",
+     "paper_id": 8,
+     "source_type": "paragraph",
+     "title": "Sentra-Guard: A Real-Time Multilingual Defense Against Adversarial LLM Prompts",
+     "year": 2025
+    }
+   ],
+   "generated": {
+    "claims": {
+     "conflicting_evidence": {
+      "basis": "not_claimed",
+      "evidence_ids": [],
+      "supported": false
+     },
+     "problem_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "e9ccd070-6c7a-5813-891d-526f624d1d2e",
+       "1b1eb9cc-39c2-5382-9d72-c9d51f83cae9",
+       "c54d8dcf-11bd-554a-afbc-5aa4d35beb8a",
+       "65ec5a4b-b9aa-50a2-a446-b7814c9b7652",
+       "e3ac4baa-113e-59ca-8d46-fa23514eb3a7"
+      ],
+      "supported": true
+     },
+     "research_gap_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "c6d815bb-a71e-503e-b819-3f472b9ac12d",
+       "e9ccd070-6c7a-5813-891d-526f624d1d2e"
+      ],
+      "supported": true
+     },
+     "solution_insufficiency_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "c6d815bb-a71e-503e-b819-3f472b9ac12d",
+       "e9ccd070-6c7a-5813-891d-526f624d1d2e",
+       "1b1eb9cc-39c2-5382-9d72-c9d51f83cae9"
+      ],
+      "supported": true
+     }
+    },
+    "gap": "Limited multilingual coverage and evaluation, coupled with insufficient solutions, leaves an open gap for scalable, production‑grade multilingual defenses that address inference latency and cross‑lingual generalization.",
+    "model": "openai/gpt-oss-20b",
+    "model_confidence": 0.7,
+    "provider": "groq",
+    "suggested_directions": [
+     "Scalable multilingual defense",
+     "Dynamic knowledge base",
+     "Inference latency optimization",
+     "Cross‑lingual generalization",
+     "Zero‑shot reasoning"
+    ]
+   },
+   "ranking": {
+    "evidence_scope": "corroborated",
+    "paper_count": 6,
+    "rank": 2,
+    "score": -1.73
+   },
+   "report_id": 11,
+   "supporting_paper_ids": [
+    2,
+    5,
+    6,
+    8,
+    9,
+    10
+   ]
+  },
+  {
+   "cluster_id": 14,
+   "cluster_label": "answer complementary consider",
+   "cluster_paper_ids": [
+    3,
+    4,
+    10
+   ],
+   "content_sha256": "d32ff88923a26b03710caece4bddea507a7ceed623732aed0a5eb4efa841b04f",
+   "created_at": "2026-10-12T19:15:48.925347",
+   "evidence": [
+    {
+     "evidence_id": "a471b923-c9b0-539b-ae8a-1e03075aecae",
+     "paper_id": 3,
+     "source_type": "future_work",
+     "title": "An Empirical Evaluation of Prompt Injection Vulnerabilities in Large Language Models Across Multilingual and Obfuscated Attack Scenarios",
+     "year": 2026
+    },
+    {
+     "evidence_id": "6283f4f6-b4de-5fc4-9b32-9133ce7bb380",
+     "paper_id": 1,
+     "source_type": "paragraph",
+     "title": "Multilingual Hidden Prompt Injection Attacks on LLM-Based Academic Reviewing",
+     "year": 2025
+    }
+   ],
+   "generated": {
+    "claims": {
+     "conflicting_evidence": {
+      "basis": "not_claimed",
+      "evidence_ids": [],
+      "supported": false
+     },
+     "problem_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "6283f4f6-b4de-5fc4-9b32-9133ce7bb380"
+      ],
+      "supported": true
+     },
+     "research_gap_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "a471b923-c9b0-539b-ae8a-1e03075aecae"
+      ],
+      "supported": true
+     },
+     "solution_insufficiency_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "a471b923-c9b0-539b-ae8a-1e03075aecae"
+      ],
+      "supported": true
+     }
+    },
+    "gap": "There is a lack of response-quality evaluation in current prompt injection defenses, indicating a research gap.",
+    "model": "openai/gpt-oss-20b",
+    "model_confidence": 0.6,
+    "provider": "groq",
+    "suggested_directions": [
+     "Integrate response-quality evaluation",
+     "Develop response-quality metrics",
+     "Assess multilingual impact"
+    ]
+   },
+   "ranking": {
+    "evidence_scope": "corroborated",
+    "paper_count": 3,
+    "rank": 3,
+    "score": -5.633333
+   },
+   "report_id": 12,
+   "supporting_paper_ids": [
+    1,
+    3
+   ]
+  },
+  {
+   "cluster_id": 13,
+   "cluster_label": "adaptive adversarial defense",
+   "cluster_paper_ids": [
+    8
+   ],
+   "content_sha256": "b4aea628547150e68434df457ed1dd11447ba881e744d970a475d983585dba94",
+   "created_at": "2026-10-12T19:15:48.925347",
+   "evidence": [
+    {
+     "evidence_id": "08139c9d-7f22-533f-b330-d40ef02dca42",
+     "paper_id": 8,
+     "source_type": "paragraph",
+     "title": "Sentra-Guard: A Real-Time Multilingual Defense Against Adversarial LLM Prompts",
+     "year": 2025
+    },
+    {
+     "evidence_id": "21c9127d-bab9-50b4-b6eb-1c4e934acfb1",
+     "paper_id": 7,
+     "source_type": "paragraph",
+     "title": "The Effect of Multi-Lingual and Keyword Adversarial Injection on LLM Relevance Judgment",
+     "year": 2026
+    },
+    {
+     "evidence_id": "bacebe98-f874-5ba1-93b8-a88c388a656d",
+     "paper_id": 7,
+     "source_type": "paragraph",
+     "title": "The Effect of Multi-Lingual and Keyword Adversarial Injection on LLM Relevance Judgment",
+     "year": 2026
+    },
+    {
+     "evidence_id": "68a4059a-a8c9-5ae8-87fe-1223d92d711a",
+     "paper_id": 2,
+     "source_type": "paragraph",
+     "title": "MIPIAD: Multilingual Indirect Prompt Injection Attack Defense with Qwen -- TF-IDF Hybrid and Meta-Ensemble Learning",
+     "year": 2026
+    }
+   ],
+   "generated": {
+    "claims": {
+     "conflicting_evidence": {
+      "basis": "not_claimed",
+      "evidence_ids": [],
+      "supported": false
+     },
+     "problem_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "21c9127d-bab9-50b4-b6eb-1c4e934acfb1",
+       "bacebe98-f874-5ba1-93b8-a88c388a656d"
+      ],
+      "supported": true
+     },
+     "research_gap_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "68a4059a-a8c9-5ae8-87fe-1223d92d711a",
+       "08139c9d-7f22-533f-b330-d40ef02dca42"
+      ],
+      "supported": true
+     },
+     "solution_insufficiency_evidence": {
+      "basis": "llm_cited",
+      "evidence_ids": [
+       "21c9127d-bab9-50b4-b6eb-1c4e934acfb1",
+       "68a4059a-a8c9-5ae8-87fe-1223d92d711a"
+      ],
+      "supported": true
+     }
+    },
+    "gap": "Adaptive adversarial defense research lacks comprehensive multilingual evaluation, especially for Bangla, and fails to fully mitigate false positives under distribution shift.",
+    "model": "openai/gpt-oss-20b",
+    "model_confidence": 0.75,
+    "provider": "groq",
+    "suggested_directions": [
+     "Multilingual benchmark",
+     "Bangla evaluation",
+     "Adaptive thresholding",
+     "Multi-turn monitoring",
+     "Distribution shift mitigation"
+    ]
+   },
+   "ranking": {
+    "evidence_scope": "single_paper",
+    "paper_count": 1,
+    "rank": 4,
+    "score": -24.0
+   },
+   "report_id": 13,
+   "supporting_paper_ids": [
+    2,
+    7,
+    8
+   ]
+  }
+ ],
+ "source": {
+  "derived_state": {
+   "s6-s8": "e2e241cc604a0d817af3658c8483ba8244bbaf8c4c68a6aed81d5b1f06d22c28",
+   "s9": "917e22a057436862d1514015a9df7b71f5e18f082689291bc1a3d878bdb8690c",
+   "s9-partial": "917e22a057436862d1514015a9df7b71f5e18f082689291bc1a3d878bdb8690c"
+  },
+  "table": "gap_reports"
+ }
+}

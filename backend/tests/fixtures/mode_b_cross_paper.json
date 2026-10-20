@@ -1,0 +1,73 @@
+{
+ "source": "Exact passages from the frozen 632-point index (evaluation/output/mode_b_calibration/independent/passages.csv, which matches Qdrant 632/632). Question is live LV-2 (2026-10-18). Roles were assigned by reading each passage before any draft was written (agent-assigned, provisional, not independent).",
+ "question": "Which papers report that LLM safety or instruction compliance is weaker for non-English prompts?",
+ "expected_supporting_papers": [
+  3,
+  10
+ ],
+ "evidence": [
+  {
+   "id": "b6620f6d-b756-54e8-91ae-6771d2799a11",
+   "paper_id": 3,
+   "title": "An Empirical Evaluation of Prompt Injection Vulnerabilities in Large Language Models Across Multilingual and Obfuscated Attack Scenarios",
+   "year": 2026,
+   "source_type": "paragraph",
+   "text": "When analyzed at the per-model level, all evaluated LLMs exhibit higher full-compliance rates for non-English prompts compared to English prompts.The uniformity of this pattern across models implies a systemic vulnerability in multilingual safety alignment, as opposed to an artifact of any individual model's policy enforcement.",
+   "role": "supports: paper 3 own result (all models, non-English > English full compliance)"
+  },
+  {
+   "id": "a61a1ab2-0758-5efe-9694-069de4316a5b",
+   "paper_id": 3,
+   "title": "An Empirical Evaluation of Prompt Injection Vulnerabilities in Large Language Models Across Multilingual and Obfuscated Attack Scenarios",
+   "year": 2026,
+   "source_type": "paragraph",
+   "text": "The results also reveal that safety alignment is unevenly distributed across languages and encodings.Non-English languages, particularly Turkish, Simplified Chinese, and Russian, exhibit systematically higher full compliance rates than English.This pattern is consistent with the hypothesis that most safety fine tuning and red teaming has been carried out predominantly in English, with weaker coverage in other languages.As a result, prompts that would be recognised and blocked in English may slip through when expressed in Turkish or Russian, creating a structural disadvantage for non-English speaking users and regulators.",
+   "role": "supports: paper 3 own result (Turkish, Simplified Chinese, Russian > English)"
+  },
+  {
+   "id": "6f2edf7b-7734-57ed-8498-e50c8b83d666",
+   "paper_id": 10,
+   "title": "Comprehensive Evaluation of ChatGPT Reliability Through Multilingual Inquiries",
+   "year": 2023,
+   "source_type": "paragraph",
+   "text": "There are 184 (5.07%) questions that resulted in ChatGPT's jailbreak, and all the English versions of these questions do not lead to jailbreak.This implies that non-English questions might bypass ChatGPT's safety checks, potentially causing ChatGPT jailbreak.Among these jailbreaking examples, there are some examples worth further discussion.For example, Figure 5 illustrates an answer labeled as TRUE, where the answer does not directly address the original question of how to assault someone.Instead, it provides a detailed and practical plan on how to attack a country.We labeled this example as TRUE because the answer contains harmful information that could promote criminal activities.It is worth noting that askers posing malicious questions often have malicious intent,",
+   "role": "supports: paper 10 own result (184 non-English jailbreaks, English versions none)"
+  },
+  {
+   "id": "62047eb2-3922-5293-b826-b74a8b05bdeb",
+   "paper_id": 10,
+   "title": "Comprehensive Evaluation of ChatGPT Reliability Through Multilingual Inquiries",
+   "year": 2023,
+   "source_type": "paragraph",
+   "text": "The prevention of jailbreak by ChatGPT exhibits varying levels of support for different languages, highlighting a need for improvement in its language diversity support.Non-English questions might pose a risk of jailbreak.",
+   "role": "supports: paper 10 own conclusion (non-English questions might pose jailbreak risk)"
+  },
+  {
+   "id": "51855923-b1f5-5873-b021-6d5834a7de37",
+   "paper_id": 1,
+   "title": "Multilingual Hidden Prompt Injection Attacks on LLM-Based Academic Reviewing",
+   "year": 2025,
+   "source_type": "paragraph",
+   "text": "Prior studies have observed that instruction-following behaviour in multilingual LLMs can vary across languages, even when prompts are semantically equivalent [13], [14], [15].Since alignment and instructiontuning procedures are often English-centric, models may exhibit uneven compliance in non-English settings [13], [16].As a result, prompts written in different languages may be handled differently, leading to language-dependent variations in model behaviour [14], [16].",
+   "role": "prior work: paper 1 reports other studies, not its own finding"
+  },
+  {
+   "id": "924957e8-21b9-50ac-9c76-b1f7565611c1",
+   "paper_id": 1,
+   "title": "Multilingual Hidden Prompt Injection Attacks on LLM-Based Academic Reviewing",
+   "year": 2025,
+   "source_type": "paragraph",
+   "text": "In contrast, Arabic prompt injection exhibits markedly weaker effects, with limited score drift and fewer decision changes.A plausible explanation is uneven multilingual alignment and instruction-following reliability, as many alignment techniques and training resources remain English-centric, potentially leading to reduced compliance with adversarial instructions in certain languages.This observed asymmetry highlights that vulnerability to prompt injection is not uniform across languages, but it does not eliminate the underlying risk.Overall, our findings underscore the need for caution when deploying LLMs in document-based evaluative settings and motivate further investigation into multilingual robustness and effective defences against indirect prompt injection attacks.",
+   "role": "disagrees: paper 1 own result (Arabic injection had weaker effects)"
+  },
+  {
+   "id": "2f15b77e-f7bb-5fea-9278-333bd9d8b2ba",
+   "paper_id": 5,
+   "title": "Scaling Behavior of Machine Translation with Large Language Models under Prompt Injection Attacks",
+   "year": 2024,
+   "source_type": "paragraph",
+   "text": "In addition to the effect from the model size, we also found that performance severely deteriorates when the prompt is written in English, indicating inverse scaling in the dimension of the amount of training data.",
+   "role": "disagrees: paper 5 own result (MT performance deteriorates when the prompt is in English)"
+  }
+ ]
+}

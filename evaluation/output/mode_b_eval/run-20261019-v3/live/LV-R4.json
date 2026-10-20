@@ -1,0 +1,192 @@
+{
+ "mode": "live",
+ "sent": true,
+ "test_id": "LV-R4",
+ "question": "Which sandboxing defenses protect browsing agents with tool access from prompt injection, and how effective are they?",
+ "started_at": "2026-10-18T19:29:32Z",
+ "http_status": 200,
+ "elapsed_seconds": 71.79,
+ "outcome": "grounded_answer",
+ "expected_outcome": "grounding_failed",
+ "outcome_as_expected": false,
+ "verdict": "PASS",
+ "checks": {
+  "http_200": {
+   "ok": true,
+   "detail": 200
+  },
+  "response_schema": {
+   "ok": true,
+   "detail": null
+  },
+  "answer_non_empty": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_structure": {
+   "ok": true,
+   "detail": null
+  },
+  "claims_cite_returned_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "citations_cited_by_claims": {
+   "ok": true,
+   "detail": null
+  },
+  "removed_claim_count_valid": {
+   "ok": true,
+   "detail": 0
+  },
+  "citations_match_stored_sources": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_titles_match_corpus": {
+   "ok": true,
+   "detail": null
+  },
+  "grounded_answer_has_claims_and_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "loop_bounds": {
+   "ok": true,
+   "detail": {
+    "retrieval_rounds": 1,
+    "retry_count": 0,
+    "regeneration_count": 0
+   }
+  }
+ },
+ "workflow": {
+  "retrieval_rounds": 1,
+  "assessments": [
+   "sufficient=True;relevant=12;papers=6;scope=unspecified;required_papers=2;uncovered_subjects=0"
+  ],
+  "reformulations": 0,
+  "invalid_reformulations": 0,
+  "grounding_reasons": [
+   "ok"
+  ],
+  "veto_codes": [
+   [
+    [],
+    [],
+    [],
+    []
+   ]
+  ],
+  "llm_calls": 2,
+  "reranked": true,
+  "generations": 1,
+  "regenerations": 0,
+  "grounding_checks": [
+   "structural=True;grounded=True;claims=4;cited=5;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;kept=4;verified=1;answers=1;prose_uncovered=1;veto_codes=-,-,-,-"
+  ],
+  "terminal": "grounding:structural=True;grounded=True;claims=4;cited=5;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;kept=4;verified=1;answers=1;prose_uncovered=1;veto_codes=-,-,-,-"
+ },
+ "llm_calls": 2,
+ "expected_paper_ids": [
+  2,
+  4,
+  6,
+  9,
+  10
+ ],
+ "expected_paper_overlap": [
+  9
+ ],
+ "response": {
+  "answer": "Rule‑based filtering is a straightforward defense mechanism that detects and removes keywords commonly associated with prompt injection, but it is increasingly ineffective in modern settings. Guardrails such as role‑playing defenses, attention shifts, permission elevations, filters, semantic judgments, adaptive policies, and honeypots are used to protect browsing agents with tool access. Sentra‑Guard is a real‑time multilingual defense that achieves real‑time defense capability with enterprise‑grade reliability and operational transparency. Rule‑based filtering fails to detect and remove manipulations in many cases, as shown by its inability to mitigate attacks in the evaluated scenarios.",
+  "claims": [
+   {
+    "text": "Rule‑based filtering is a straightforward defense mechanism that detects and removes keywords commonly associated with prompt injection, but it is increasingly ineffective in modern settings.",
+    "evidence_ids": [
+     "220b98dd-3e3d-558f-bfc7-965f223dadc9"
+    ]
+   },
+   {
+    "text": "Guardrails such as role‑playing defenses, attention shifts, permission elevations, filters, semantic judgments, adaptive policies, and honeypots are used to protect browsing agents with tool access.",
+    "evidence_ids": [
+     "ff4ea276-a096-5679-809d-50692ad0634d"
+    ]
+   },
+   {
+    "text": "Sentra‑Guard is a real‑time multilingual defense that achieves real‑time defense capability with enterprise‑grade reliability and operational transparency.",
+    "evidence_ids": [
+     "3c0a4949-4fe9-5c14-bcfd-9fc9f15342f8"
+    ]
+   },
+   {
+    "text": "Rule‑based filtering fails to detect and remove manipulations in many cases, as shown by its inability to mitigate attacks in the evaluated scenarios.",
+    "evidence_ids": [
+     "a9319f31-1687-52ba-8144-8886b2c9a3f8",
+     "f093a80a-af06-5931-89f5-f19bb9440371"
+    ]
+   }
+  ],
+  "citations": [
+   {
+    "id": "220b98dd-3e3d-558f-bfc7-965f223dadc9",
+    "paper_id": 7,
+    "title": "The Effect of Multi-Lingual and Keyword Adversarial Injection on LLM Relevance Judgment",
+    "year": 2026,
+    "source_type": "paragraph",
+    "text_chars": 493,
+    "text_start": "The most straightforward defense mechanism is rule-based filtering, which detects and removes keywords commonly associated with prompt injection (e.g., \"ignore\""
+   },
+   {
+    "id": "ff4ea276-a096-5679-809d-50692ad0634d",
+    "paper_id": 9,
+    "title": "Design and Implementation of a Secure RAG-Enhanced AI Chatbot for Smart Tourism Customer Service: Defending Against Prompt Injection Attacks -- A Case Study of Hsinchu, Taiwan",
+    "year": 2025,
+    "source_type": "paragraph",
+    "text_chars": 281,
+    "text_start": "Guardrails include role-playing defenses, attention shifts, permission elevations, filters, semantic judgments, adaptive policies, and honeypots [1].Recent inci"
+   },
+   {
+    "id": "3c0a4949-4fe9-5c14-bcfd-9fc9f15342f8",
+    "paper_id": 8,
+    "title": "Sentra-Guard: A Real-Time Multilingual Defense Against Adversarial LLM Prompts",
+    "year": 2025,
+    "source_type": "paragraph",
+    "text_chars": 895,
+    "text_start": "• Delivered as an open-source, backend-agnostic toolkit, Sentra-Guard achieves real-time defense capability with enterprise-grade reliability and operational tr"
+   },
+   {
+    "id": "a9319f31-1687-52ba-8144-8886b2c9a3f8",
+    "paper_id": 7,
+    "title": "The Effect of Multi-Lingual and Keyword Adversarial Injection on LLM Relevance Judgment",
+    "year": 2026,
+    "source_type": "limitation",
+    "text_chars": 79,
+    "text_start": "Thus, in most cases, PromptArmor fails to detect and remove such manipulations."
+   },
+   {
+    "id": "f093a80a-af06-5931-89f5-f19bb9440371",
+    "paper_id": 7,
+    "title": "The Effect of Multi-Lingual and Keyword Adversarial Injection on LLM Relevance Judgment",
+    "year": 2026,
+    "source_type": "limitation",
+    "text_chars": 95,
+    "text_start": "We also evaluate existing defense mechanisms and find that they fail to mitigate these attacks."
+   }
+  ],
+  "grounded": true,
+  "retrieval_rounds": 1,
+  "retry_count": 0,
+  "regeneration_count": 0,
+  "removed_claim_count": 0,
+  "trace": [
+   "retrieve:round=1;vector=12;graph=3;total=15",
+   "assess:sufficient=True;relevant=12;papers=6;scope=unspecified;required_papers=2;uncovered_subjects=0",
+   "rerank",
+   "generate:strict=False",
+   "grounding:structural=True;grounded=True;claims=4;cited=5;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;kept=4;verified=1;answers=1;prose_uncovered=1;veto_codes=-,-,-,-"
+  ],
+  "provider": "groq",
+  "model": "openai/gpt-oss-20b"
+ }
+}

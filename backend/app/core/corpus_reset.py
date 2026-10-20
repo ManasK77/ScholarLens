@@ -44,7 +44,11 @@ from app.clustering.storage import Cluster, _dependent_tables
 from app.core.pipeline import DerivedState, PaperStageState, current_run, pipeline_run
 from app.explanation.storage import ReportSnapshot
 from app.extraction.storage import ExtractedFact
-from app.ingestion.collection_audit import CandidateDecision, CollectionRun
+from app.ingestion.collection_audit import (
+    CandidateDecision,
+    CollectionRun,
+    FulltextAttempt,
+)
 from app.ingestion.corpus import Paper, get_engine
 from app.parsing.storage import ParsedDocument
 
@@ -195,7 +199,11 @@ def reset_corpus(
         delete(PaperStageState)
     ).rowcount
     # The collection audit trail (D-S1-GATE-01) describes the corpus being
-    # wiped, and `candidate_decisions` references `papers`: children first.
+    # wiped, and `candidate_decisions` and `fulltext_attempts` (D-FULLTEXT-01)
+    # reference `papers` and `collection_runs`: children first.
+    postgres_records[FulltextAttempt.__tablename__] = session.execute(
+        delete(FulltextAttempt)
+    ).rowcount
     postgres_records[CandidateDecision.__tablename__] = session.execute(
         delete(CandidateDecision)
     ).rowcount
@@ -220,6 +228,7 @@ def reset_corpus(
             ExtractedFact.__table__,
             ParsedDocument.__table__,
             PaperStageState.__table__,
+            FulltextAttempt.__table__,
             CandidateDecision.__table__,
             CollectionRun.__table__,
             Paper.__table__,

@@ -1,0 +1,121 @@
+{
+ "mode": "live",
+ "sent": true,
+ "test_id": "LV-1b",
+ "question": "Which natural language had the highest full compliance rate for malicious prompts in the multilingual and obfuscated attack evaluation?",
+ "started_at": "2026-10-18T08:09:54Z",
+ "http_status": 200,
+ "elapsed_seconds": 96.02,
+ "outcome": "grounded_answer",
+ "expected_outcome": "grounded_answer",
+ "outcome_as_expected": true,
+ "verdict": "PASS",
+ "checks": {
+  "http_200": {
+   "ok": true,
+   "detail": 200
+  },
+  "response_schema": {
+   "ok": true,
+   "detail": null
+  },
+  "answer_non_empty": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_structure": {
+   "ok": true,
+   "detail": null
+  },
+  "claims_cite_returned_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "citations_match_stored_sources": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_titles_match_corpus": {
+   "ok": true,
+   "detail": null
+  },
+  "grounded_answer_has_claims_and_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "loop_bounds": {
+   "ok": true,
+   "detail": {
+    "retrieval_rounds": 1,
+    "retry_count": 0,
+    "regeneration_count": 0
+   }
+  }
+ },
+ "workflow": {
+  "retrieval_rounds": 1,
+  "assessments": [
+   "sufficient=True;relevant=12;papers=4"
+  ],
+  "reformulations": 0,
+  "invalid_reformulations": 0,
+  "grounding_reasons": [
+   "ok"
+  ],
+  "veto_codes": [
+   [
+    []
+   ]
+  ],
+  "llm_calls": 2,
+  "reranked": true,
+  "generations": 1,
+  "regenerations": 0,
+  "grounding_checks": [
+   "structural=True;grounded=True;claims=1;cited=1;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;prose_uncovered=1;veto_codes=-"
+  ],
+  "terminal": "grounding:structural=True;grounded=True;claims=1;cited=1;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;prose_uncovered=1;veto_codes=-"
+ },
+ "llm_calls": 2,
+ "expected_paper_ids": [
+  3
+ ],
+ "expected_paper_overlap": [
+  3
+ ],
+ "response": {
+  "answer": "Turkish had the highest full compliance rate.",
+  "claims": [
+   {
+    "text": "Turkish had the highest full compliance rate.",
+    "evidence_ids": [
+     "b77a41e9-5293-53e5-8681-48fc220b28c9"
+    ]
+   }
+  ],
+  "citations": [
+   {
+    "id": "b77a41e9-5293-53e5-8681-48fc220b28c9",
+    "paper_id": 3,
+    "title": "An Empirical Evaluation of Prompt Injection Vulnerabilities in Large Language Models Across Multilingual and Obfuscated Attack Scenarios",
+    "year": 2026,
+    "source_type": "paragraph",
+    "text_chars": 534,
+    "text_start": "The language or encoding used for the malicious request has a marked effect on compliance.Table III reports full compliance, stalling, refusal, fulfillment, and"
+   }
+  ],
+  "grounded": true,
+  "retrieval_rounds": 1,
+  "retry_count": 0,
+  "regeneration_count": 0,
+  "trace": [
+   "retrieve:round=1;vector=12;graph=5;total=17",
+   "assess:sufficient=True;relevant=12;papers=4",
+   "rerank",
+   "generate:strict=False",
+   "grounding:structural=True;grounded=True;claims=1;cited=1;invalid_citations=0;unsupported=0;reason=ok;vetoed=0;prose_uncovered=1;veto_codes=-"
+  ],
+  "provider": "groq",
+  "model": "openai/gpt-oss-20b"
+ }
+}

@@ -10,8 +10,11 @@ from sqlalchemy.pool import StaticPool
 
 from app.api import routes_ingestion
 from app.ingestion import corpus
+from app.ingestion import unpaywall as unpaywall_module
 from app.ingestion.corpus import Base, Paper
+from app.ingestion.pdf_store import DownloadResult
 from app.ingestion.sources import acl_anthology, arxiv, semantic_scholar
+from app.ingestion.unpaywall import OaLookup
 from app.main import app
 from tests.ingestion.gate_fakes import PermissiveGate
 
@@ -121,7 +124,9 @@ def test_collect_orchestrates_sources_dedups_and_enriches(
         lambda topic, api_key=None, **kwargs: [s2_candidate],
     )
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(
         acl_anthology, "search_topic", lambda bib_path, topic, **kw: [acl_candidate]
@@ -155,14 +160,19 @@ def test_collect_includes_enriched_ids(
         semantic_scholar, "search_topic", lambda topic, api_key=None, **kwargs: []
     )
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
 
-    def fake_enrich(session, email, dest_dir, **kw):
-        return [42]
-
-    monkeypatch.setattr(routes_ingestion.unpaywall, "enrich", fake_enrich)
+    # The full-text step (D-FULLTEXT-01) replaced the bare Unpaywall step;
+    # a paper it completes is a paper the run touched.
+    monkeypatch.setattr(
+        routes_ingestion.fulltext,
+        "acquire_missing_full_text",
+        lambda session, log, **kw: {"stored_paper_ids": [42], "pdfs_stored": 1},
+    )
 
     response = client.post("/collect", json={"topic": "anything"})
 
@@ -183,7 +193,7 @@ def test_collect_calls_download_anthology_export_before_search(
     monkeypatch.setattr(
         acl_anthology,
         "download_anthology_export",
-        lambda dest_path, force=False: calls.append("download"),
+        lambda dest_path, force=False, **kw: calls.append("download"),
     )
     monkeypatch.setattr(
         acl_anthology,
@@ -319,7 +329,9 @@ def test_collect_survives_one_failing_discovery_source(
 
     monkeypatch.setattr(semantic_scholar, "search_topic", _rate_limited)
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
@@ -387,21 +399,25 @@ def test_collect_reports_a_failing_enrichment_step_without_losing_papers(
         semantic_scholar, "search_topic", lambda topic, api_key=None, **kwargs: []
     )
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
 
-    def _boom(session, email, dest_dir):
+    def _boom(session, log, **kw):
         raise RuntimeError("unpaywall down")
 
-    monkeypatch.setattr(routes_ingestion.unpaywall, "enrich", _boom)
+    monkeypatch.setattr(routes_ingestion.fulltext, "acquire_missing_full_text", _boom)
 
     response = client.post("/collect", json={"topic": "anything"})
 
     assert response.status_code == 200
     body = response.json()
     assert body["count"] == 1
-    assert body["sources"]["unpaywall"].startswith("failed")
+    assert body["sources"]["fulltext"].startswith("failed")
+    assert body["status"] == "partial"
+    assert [w["code"] for w in body["warnings"]] == ["fulltext_step_failed"]
     assert test_session.query(Paper).count() == 1
 
 
@@ -434,7 +450,9 @@ def test_collect_reports_every_source_ok_on_a_clean_run(
         semantic_scholar, "search_topic", lambda topic, api_key=None, **kwargs: []
     )
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
@@ -447,8 +465,10 @@ def test_collect_reports_every_source_ok_on_a_clean_run(
         "arxiv": "ok",
         "semantic_scholar": "ok",
         "acl_anthology": "ok",
-        "unpaywall": "ok",
+        "fulltext": "ok",
     }
+    assert body["status"] == "completed"
+    assert body["warnings"] == []
 
 
 def test_collect_passes_the_configured_request_limits_to_each_source(
@@ -480,7 +500,9 @@ def test_collect_passes_the_configured_request_limits_to_each_source(
     monkeypatch.setattr(arxiv, "search_topic", _arxiv)
     monkeypatch.setattr(semantic_scholar, "search_topic", _semantic_scholar)
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
@@ -493,16 +515,23 @@ def test_collect_passes_the_configured_request_limits_to_each_source(
     # D-S1-GATE-01: sources are asked for their candidate pool, not their
     # cap -- the cap now applies to what the relevance gate admits.
     assert seen["arxiv"] == {
-        "max_results": 30,
+        # D-S1-RETRIEVAL-01: the retrieval ceiling and page size.
+        "max_results": 200,
+        "page_size": 100,
         "num_retries": 0,
         "min_interval_seconds": 4.0,
         "backoff_base_seconds": 7.0,
         "backoff_max_seconds": 45.0,
         "contact": "ops@example.org",
+        # The gate's facet synonyms; "anything" has none, so arXiv builds
+        # its query from the topic's terms as before.
+        "query_groups": None,
     }
     assert seen["semantic_scholar"] == {
         "limit": 30,
         "request_limit": 30,
+        "page_size": 100,
+        "max_pages": 3,
         "max_retries": 2,
         "min_interval_seconds": 1.25,
         "backoff_base_seconds": 0.5,
@@ -527,14 +556,18 @@ def test_collect_passes_the_configured_politeness_to_arxiv_pdf_downloads(
     )
     monkeypatch.setattr(
         arxiv,
-        "download_pdf",
-        lambda url, dest_path, **kwargs: seen.append(kwargs) or False,
+        "download_pdf_result",
+        lambda url, dest_path, **kwargs: (
+            seen.append(kwargs) or DownloadResult("http_error", 404)
+        ),
     )
     monkeypatch.setattr(
         semantic_scholar, "search_topic", lambda topic, api_key=None, **kwargs: []
     )
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
@@ -544,15 +577,17 @@ def test_collect_passes_the_configured_politeness_to_arxiv_pdf_downloads(
     response = client.post("/collect", json={"topic": "anything"})
 
     assert response.status_code == 200
-    assert seen == [
-        {
-            "contact": "ops@example.org",
-            "num_retries": 1,
-            "min_interval_seconds": 4.0,
-            "backoff_base_seconds": 7.0,
-            "backoff_max_seconds": 45.0,
-        }
-    ]
+    # Once while admitting the candidate, once more from the full-text step's
+    # arXiv provider (the paper is still without a PDF): both are paced.
+    polite = {
+        "contact": "ops@example.org",
+        "num_retries": 1,
+        "min_interval_seconds": 4.0,
+        "backoff_base_seconds": 7.0,
+        "backoff_max_seconds": 45.0,
+        "max_bytes": 50 * 1024 * 1024,
+    }
+    assert seen == [polite, polite]
 
 
 def test_collect_gives_unpaywall_a_polite_downloader_for_arxiv_copies(
@@ -563,29 +598,40 @@ def test_collect_gives_unpaywall_a_polite_downloader_for_arxiv_copies(
     monkeypatch.setenv("ARXIV_MIN_INTERVAL_SECONDS", "4")
     seen: list[dict] = []
 
-    def _enrich(session, email, dest_dir, download_arxiv_pdf=None):
-        download_arxiv_pdf("https://arxiv.org/pdf/2401.00001v1", "/tmp/42.pdf")
-        return []
-
     monkeypatch.setattr(arxiv, "search_topic", lambda topic, **kwargs: [])
     monkeypatch.setattr(
         arxiv,
-        "download_pdf",
-        lambda url, dest_path, **kwargs: seen.append(kwargs) or False,
+        "download_pdf_result",
+        lambda url, dest_path, **kwargs: (
+            seen.append({"url": url, **kwargs}) or DownloadResult("http_error", 404)
+        ),
     )
     monkeypatch.setattr(
-        semantic_scholar, "search_topic", lambda topic, api_key=None, **kwargs: []
+        semantic_scholar,
+        "search_topic",
+        lambda topic, api_key=None, **kwargs: [
+            {"title": "From S2", "year": 2024, "doi": "10.1/s2"}
+        ],
     )
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
-    monkeypatch.setattr(routes_ingestion.unpaywall, "enrich", _enrich)
+    monkeypatch.setattr(
+        unpaywall_module,
+        "lookup_oa_pdf",
+        lambda doi, email: OaLookup(
+            "oa_location_found", "https://arxiv.org/pdf/2401.00001v1", 200
+        ),
+    )
 
     response = client.post("/collect", json={"topic": "anything"})
 
     assert response.status_code == 200
-    assert seen and seen[0]["contact"] == "ops@example.org"
+    assert [call["url"] for call in seen] == ["https://arxiv.org/pdf/2401.00001v1"]
+    assert seen[0]["contact"] == "ops@example.org"
     assert seen[0]["min_interval_seconds"] == 4.0
 
 
@@ -601,7 +647,9 @@ def test_collect_keeps_a_paper_whose_pdf_download_fails(
         semantic_scholar, "search_topic", lambda topic, api_key=None, **kwargs: []
     )
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
@@ -645,7 +693,9 @@ def test_collect_makes_one_arxiv_request_when_throttled_without_retry_after(
         lambda topic, api_key=None, **kwargs: _s2_candidates(2),
     )
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
@@ -683,7 +733,9 @@ def test_collect_reports_an_exhausted_arxiv_source_and_keeps_the_others(
         ],
     )
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(
@@ -699,7 +751,9 @@ def test_collect_reports_an_exhausted_arxiv_source_and_keeps_the_others(
     assert "429" in body["sources"]["arxiv"]
     assert body["sources"]["semantic_scholar"] == "ok"
     assert body["sources"]["acl_anthology"] == "ok"
-    assert body["sources"]["unpaywall"] == "ok"
+    assert body["sources"]["fulltext"] == "ok"
+    assert body["status"] == "partial"
+    assert "source_failed" in [w["code"] for w in body["warnings"]]
     assert test_session.query(Paper).count() == 1
 
 
@@ -760,7 +814,9 @@ def _stub_sources(
         lambda topic, api_key=None, **kwargs: s2_results,
     )
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(
         acl_anthology, "search_topic", lambda bib_path, topic, **kw: acl_results
@@ -866,9 +922,12 @@ def test_collect_cross_source_duplicates_still_merge_under_the_caps(
 
     body = client.post("/collect", json={"topic": "anything"}).json()
 
-    # 10 arXiv rows; S2 keeps 10 papers, one of which merges into an arXiv row.
-    assert body["count"] == 19
-    assert test_session.query(Paper).count() == 19
+    # 10 arXiv rows. S2's first hit merges into an arXiv row without using one
+    # of S2's slots (S1 audit, 2026-10-10, superseding D-CAP-01's counting),
+    # so S2 still contributes 10 papers of its own.
+    assert body["count"] == 20
+    assert test_session.query(Paper).count() == 20
+    assert body["source_stats"]["semantic_scholar"]["added"] == 10
     assert test_session.query(Paper).filter_by(doi="10.1/s2-0").count() == 1
 
 
@@ -982,35 +1041,63 @@ def test_collect_reports_what_each_source_contributed_before_processing(
 
     body = client.post("/collect", json={"topic": "anything"}).json()
 
-    assert body["source_stats"]["arxiv"] == {
+    assert _without_retrieval(body["source_stats"]["arxiv"]) == {
+        "cap": 10,
+        "slots_used": 0,
         "candidates": 0,
         "processed": 0,
         "added": 0,
         "duplicates": 0,
         "rejected": 0,
         "capped": 0,
+        "cross_source_duplicates": 0,
+        "already_in_corpus": 0,
+        "duplicate_promotions": 0,
+        "language_unverified": 0,
         "beyond_candidate_pool": 0,
     }
-    assert body["source_stats"]["semantic_scholar"] == {
+    assert _without_retrieval(body["source_stats"]["semantic_scholar"]) == {
+        "cap": 10,
+        "slots_used": 2,
         "candidates": 2,
         "processed": 2,
         "added": 2,
         "duplicates": 0,
         "rejected": 0,
         "capped": 0,
+        "cross_source_duplicates": 0,
+        "already_in_corpus": 0,
+        "duplicate_promotions": 0,
+        "language_unverified": 0,
         "beyond_candidate_pool": 0,
     }
-    assert body["source_stats"]["acl_anthology"] == {
+    assert _without_retrieval(body["source_stats"]["acl_anthology"]) == {
+        "cap": 10,
+        "slots_used": 0,
         "candidates": 1,
         "processed": 1,
         "added": 0,
         "duplicates": 1,
         "rejected": 0,
         "capped": 0,
+        # ACL's only candidate is Semantic Scholar's paper 1, collected
+        # earlier in this run.
+        "cross_source_duplicates": 1,
+        "already_in_corpus": 0,
+        "duplicate_promotions": 0,
+        "language_unverified": 0,
         "beyond_candidate_pool": 0,
     }
+    # A list-returning source reports no retrieval detail; the local ACL
+    # search always does.
+    assert body["source_stats"]["arxiv"]["retrieval"] is None
+    assert body["source_stats"]["acl_anthology"]["retrieval"]["complete"] is True
     # The status field keeps its existing contract untouched.
     assert body["sources"]["arxiv"] == "ok"
+
+
+def _without_retrieval(stats: dict) -> dict:
+    return {key: value for key, value in stats.items() if key != "retrieval"}
 
 
 def test_a_failed_source_reports_no_statistics_for_the_rows_it_rolled_back(
@@ -1127,7 +1214,9 @@ def test_collect_semantic_scholar_non_research_records_do_not_use_up_its_cap(
     monkeypatch.setattr(semantic_scholar, "LIMITER", semantic_scholar.RateLimiter(0.0))
     monkeypatch.setattr(arxiv, "search_topic", lambda topic, **kwargs: [])
     monkeypatch.setattr(
-        acl_anthology, "download_anthology_export", lambda dest_path, force=False: None
+        acl_anthology,
+        "download_anthology_export",
+        lambda dest_path, force=False, **kw: None,
     )
     monkeypatch.setattr(acl_anthology, "search_topic", lambda bib_path, topic, **kw: [])
     monkeypatch.setattr(

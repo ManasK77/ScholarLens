@@ -72,12 +72,21 @@ class Settings(BaseSettings):
     arxiv_contact: str | None = None
     # Sent as Semantic Scholar's search `limit`, which otherwise defaults to 100.
     semantic_scholar_max_results: int = Field(default=10, gt=0, le=10)
-    # Results requested in the one Semantic Scholar search call -- that
-    # source's candidate pool. Larger than the cap, so records dropped as
-    # non-research by `publicationTypes` (D-S2-TYPES-01) or rejected by the
-    # relevance gate (D-S1-GATE-01) do not use up a slot. Never below the cap;
-    # 100 is the API's own maximum.
-    semantic_scholar_request_limit: int = Field(default=40, gt=0, le=100)
+    # Semantic Scholar's candidate pool (D-S1-RETRIEVAL-01, 2026-10-12): the
+    # search is paged until this many research records are kept (records
+    # dropped as non-research by `publicationTypes` are backfilled from later
+    # pages), the result set is exhausted, or the page budget below runs out.
+    # Separate from the admission cap above: the pool is what the relevance
+    # gate judges, the cap what may become new papers. 1000 is the API's
+    # ceiling for relevance search (offset + limit <= 1000). The 2026-10-12
+    # audit found every gate-passing record within the first 24 of 16,451
+    # matches and none in ranks 41-100, so 100 is ample for this topic.
+    semantic_scholar_request_limit: int = Field(default=100, gt=0, le=1000)
+    # Records per Semantic Scholar search page; 100 is the API's maximum.
+    semantic_scholar_page_size: int = Field(default=100, gt=0, le=100)
+    # Hard stop on pages per run, whatever the pool: the pool's own pages plus
+    # one page of backfill by default.
+    semantic_scholar_max_pages: int = Field(default=3, gt=0, le=10)
     # ACL Anthology is searched in the local export, which can match hundreds
     # of records; at most this many distinct papers (and their PDFs) are
     # admitted, highest relevance-gate score first.
@@ -86,10 +95,28 @@ class Settings(BaseSettings):
     # --- S1 relevance gate (D-S1-GATE-01) ---
     # Candidates fetched per source before the gate judges them. The admitted
     # cap per source stays `*_max_results` (10); the pool is larger so that
-    # rejected candidates do not cost recall. arXiv's is one request whose
-    # page size is this; ACL's bounds how many local matches are judged.
-    arxiv_candidate_pool: int = Field(default=30, gt=0, le=100)
+    # rejected candidates do not cost recall.
+    #
+    # arXiv (D-S1-RETRIEVAL-01): the retrieval ceiling. The search is paged,
+    # `arxiv_page_size` results per request, until arXiv's reported total is
+    # exhausted or this many results were read; a run that stops at the
+    # ceiling is recorded as incomplete. The 2026-10-12 query matched 28
+    # papers, so one request covers it.
+    arxiv_candidate_pool: int = Field(default=200, gt=0, le=1000)
+    arxiv_page_size: int = Field(default=100, gt=0, le=500)
+    # ACL's bounds how many local matches are judged.
     acl_anthology_candidate_pool: int = Field(default=100, gt=0, le=1000)
+    # The ACL Anthology export cache (D-ACL-CACHE-01). Older than this many
+    # days, `/collect` tries to refresh it first and keeps the last known-good
+    # file when the refresh fails (the run is then marked stale). 0 refreshes
+    # on every run. A refresh is rejected unless it parses to at least
+    # `acl_anthology_min_records` records and to no fewer than 90% of the
+    # cached file's.
+    acl_anthology_max_age_days: int = Field(default=7, ge=0, le=365)
+    acl_anthology_min_records: int = Field(default=50_000, ge=1)
+    acl_anthology_export_url: str = (
+        "https://aclanthology.org/anthology+abstracts.bib.gz"
+    )
     # The cross-encoder scoring the topic against a candidate's title and
     # abstract. Its own setting, so a Mode B reranker change cannot move S1's
     # calibrated floor.
@@ -106,6 +133,30 @@ class Settings(BaseSettings):
     # "conceptual". A label for auditing only; it admits and rejects nothing.
     # Calibrated on the same single topic as the floor.
     relevance_strong_threshold: float = 3.5
+    # Paper-language check (D-S1-LANG-01): a candidate's abstract must be in
+    # the Latin alphabet and in English. Judged on the abstract only; text
+    # shorter than the minimums is recorded `unverified`, never rejected.
+    # Measured on the 26-paper corpus and the regression set (2026-10-12):
+    # every English abstract was 100% Latin, with an English-marker ratio of
+    # 0.18-0.29; the French/Turkish test abstracts are below 0.05.
+    paper_language_min_latin_fraction: float = Field(default=0.5, ge=0.0, le=1.0)
+    paper_language_min_english_ratio: float = Field(default=0.10, ge=0.0, le=1.0)
+    paper_language_min_words: int = Field(default=20, ge=1, le=1000)
+    paper_language_min_letters: int = Field(default=40, ge=1, le=10_000)
+    # Rejected and capped candidates keep at most this many characters of
+    # their abstract in `candidate_decisions.evidence["text_audit"]`, for
+    # false-negative review; 0 stores none (the hash and length are kept).
+    relevance_audit_excerpt_chars: int = Field(default=400, ge=0, le=4000)
+
+    # --- S1 full-text acquisition (D-FULLTEXT-01) ---
+    # Every PDF download: per-request timeout, size limit and retries of a
+    # timeout / 429 / 5xx answer. A body is stored only when it is a PDF.
+    fulltext_timeout_seconds: float = Field(default=30.0, gt=0.0, le=120.0)
+    fulltext_max_pdf_mb: int = Field(default=50, gt=0, le=500)
+    fulltext_max_retries: int = Field(default=1, ge=0, le=3)
+    # Wall-clock budget for the post-discovery full-text step of one
+    # /collect; papers it does not reach are recorded `not_attempted`.
+    fulltext_step_budget_seconds: float = Field(default=600.0, gt=0.0, le=3600.0)
     # Semantic Scholar's introductory keyed rate is one request per second;
     # the default leaves headroom.
     semantic_scholar_min_interval_seconds: float = Field(default=1.5, ge=1.0, le=60.0)
@@ -174,7 +225,15 @@ class Settings(BaseSettings):
     # distinct papers. This prevents one prolific paper from appearing broad.
     retrieval_min_chunks: int = Field(default=2, ge=1, le=100)
     retrieval_min_papers: int = Field(default=2, ge=1, le=100)
+    # A question about one paper (app/interactive/intent.py) can be answered by
+    # that paper alone; synthesis, comparison and unclassifiable questions keep
+    # `retrieval_min_papers`.
+    retrieval_min_papers_paper_specific: int = Field(default=1, ge=1, le=100)
     retrieval_min_score: float = Field(default=0.2, ge=0.0, le=1.0)
+    # The cross-encoder picks the `retrieval_top_n` passages shown to the model
+    # from this many times as many cosine hits; the sufficiency gate and the
+    # graph expansion still see only the first `retrieval_top_n`. 1 disables it.
+    retrieval_pool_factor: int = Field(default=3, ge=1, le=10)
     # Cross-encoder is instantiated lazily on the first Mode B request because
     # loading it during API startup would make even /health model-dependent.
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -396,6 +455,29 @@ class Settings(BaseSettings):
     # `/health` still answers); `app.api.security.require_api_key` then fails
     # closed and rejects every authenticated request.
     api_key: str | None = None
+    # FastAPI reads a request body before any dependency runs, so these bounds
+    # are enforced by `app.api.body_limit` ahead of `require_api_key`: an
+    # anonymous caller cannot make the server buffer an unbounded body before
+    # being told 401. JSON bodies (`/query`, `/collect`, `/pipeline/run`) are
+    # tiny; `/upload` is bounded by `max_upload_files * max_upload_size_mb`.
+    max_request_body_kb: int = Field(default=256, gt=0)
+    max_upload_files: int = Field(default=20, gt=0)
+    # Failed API-key attempts per client address before `429` (sliding
+    # window; `app.api.security.AuthFailureThrottle`). Process-local: each
+    # worker counts separately. A lockout ends one window after the failures
+    # that caused it, so a legitimate user is never locked out for longer.
+    auth_failure_limit: int = Field(default=20, gt=0, le=10_000)
+    auth_failure_window_seconds: float = Field(default=60.0, gt=0.0, le=3600.0)
+
+    # --- Mode B overall deadline ---
+    # Wall-clock bound on one `POST /query`, across retrieval, reranking and
+    # every Groq call (generation, grounding check, one regeneration). The
+    # live grounded run took 74 s with two Groq calls; the worst path makes
+    # four, each allowed `LLM_TIMEOUT_SECONDS` (120 s) plus retries, so
+    # without this a request could run for many minutes. 180 s leaves room
+    # for the normal path. On expiry the caller gets 504 and no further
+    # model call starts; one already in flight is not interrupted.
+    query_deadline_seconds: float = Field(default=180.0, gt=0.0, le=1800.0)
 
     @field_validator("trend_max_year")
     @classmethod

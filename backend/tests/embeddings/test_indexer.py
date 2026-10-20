@@ -229,7 +229,7 @@ def test_records_carry_every_metadata_field(index) -> None:
         "venue": "ACL",
         "section_type": "Limitations",
         "graph_node_id": "4:abc:17",
-        "text_sha256": record.payload()['text_sha256'],
+        "text_sha256": record.payload()["text_sha256"],
         "embed_version": None,
     }
     assert set(record.payload()) == set(PAYLOAD_FIELDS)
@@ -638,8 +638,8 @@ def test_an_unknown_filter_key_is_rejected(populated) -> None:
 def test_every_indexed_field_is_filterable(populated) -> None:
     """No payload field is accidentally excluded from the allow-list."""
     probes = {
-        'text_sha256': 'hash',
-        'embed_version': 'version',
+        "text_sha256": "hash",
+        "embed_version": "version",
         "paper_id": 1,
         "text": "unused",
         "source_type": "limitation",

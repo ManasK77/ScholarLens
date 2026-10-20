@@ -1,0 +1,21 @@
+paper_id,title,year,has_full_text
+1,Multilingual Hidden Prompt Injection Attacks on LLM-Based Academic Reviewing,2025,True
+2,MIPIAD: Multilingual Indirect Prompt Injection Attack Defense with Qwen -- TF-IDF Hybrid and Meta-Ensemble Learning,2026,True
+3,An Empirical Evaluation of Prompt Injection Vulnerabilities in Large Language Models Across Multilingual and Obfuscated Attack Scenarios,2026,True
+4,A test suite of prompt injection attacks for LLM-based machine translation,2024,True
+5,Scaling Behavior of Machine Translation with Large Language Models under Prompt Injection Attacks,2024,True
+6,"Visible Reasoning and Indirect Prompt-Injection Monitorability Across English, Tamil, and Tanglish",2026,True
+7,The Effect of Multi-Lingual and Keyword Adversarial Injection on LLM Relevance Judgment,2026,True
+8,Sentra-Guard: A Real-Time Multilingual Defense Against Adversarial LLM Prompts,2025,True
+9,"Design and Implementation of a Secure RAG-Enhanced AI Chatbot for Smart Tourism Customer Service: Defending Against Prompt Injection Attacks -- A Case Study of Hsinchu, Taiwan",2025,True
+10,Comprehensive Evaluation of ChatGPT Reliability Through Multilingual Inquiries,2023,True
+11,A Privacy Preserving Federated XLM-RoBERTa Framework for Multilingual Prompt Injection Defense in Educational AI Platforms,2026,False
+12,Detection and analysis of prompt injection in indian multilingual large language models,2026,False
+13,"Cross-Lingual Indirect Prompt Injection Across Retrieval, Reranking, And Generation In Multilingual RAG",2026,False
+14,Adversarial and Multilingual Threats in Retrieval-Augmented Generation: From Prompt Injection to Model Exploitation,2025,False
+15,Benchmarking Prompt Injection Attacks on LLMs: Turkish Vulnerability Assessment and English Comparative Analysis,2026,False
+16,SemGuard: A Triple-Anchor Semantic Security Gateway for Multilingual Prompt Attack Detection in Large Language Models,2026,False
+17,A Study on Cross-Lingual Security Vulnerabilities in Large Language Models,2025,False
+18,Hybrid XRXNet for multilingual legal text analysis: a resilient approach to classification and attack mitigation,2025,False
+19,Confidential and Attack-Resilient Edge LLM Serving for Multilingual Chatbots,2026,False
+20,Phishing Email Detection Using Large Language Models,2025,True

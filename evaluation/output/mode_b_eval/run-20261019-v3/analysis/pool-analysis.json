@@ -1,0 +1,452 @@
+{
+ "note": "Agent-authored labels; expected-passage lists are not exhaustive.",
+ "scope_counts_answerable": {
+  "single_paper": 15,
+  "synthesis": 16,
+  "unspecified": 36,
+  "comparison": 2
+ },
+ "by_pool_depth": {
+  "all_answerable": {
+   "calibration": {
+    "12": {
+     "required_papers": [
+      7,
+      10
+     ],
+     "expected_passages": [
+      16,
+      77
+     ],
+     "questions_reaching_an_expected_passage": [
+      12,
+      28
+     ]
+    },
+    "24": {
+     "required_papers": [
+      8,
+      10
+     ],
+     "expected_passages": [
+      19,
+      77
+     ],
+     "questions_reaching_an_expected_passage": [
+      15,
+      28
+     ]
+    },
+    "36": {
+     "required_papers": [
+      8,
+      10
+     ],
+     "expected_passages": [
+      21,
+      77
+     ],
+     "questions_reaching_an_expected_passage": [
+      16,
+      28
+     ]
+    },
+    "48": {
+     "required_papers": [
+      8,
+      10
+     ],
+     "expected_passages": [
+      25,
+      77
+     ],
+     "questions_reaching_an_expected_passage": [
+      18,
+      28
+     ]
+    },
+    "100": {
+     "required_papers": [
+      8,
+      10
+     ],
+     "expected_passages": [
+      29,
+      77
+     ],
+     "questions_reaching_an_expected_passage": [
+      21,
+      28
+     ]
+    }
+   },
+   "held_out": {
+    "12": {
+     "required_papers": [
+      24,
+      32
+     ],
+     "expected_passages": [
+      31,
+      113
+     ],
+     "questions_reaching_an_expected_passage": [
+      18,
+      41
+     ]
+    },
+    "24": {
+     "required_papers": [
+      23,
+      32
+     ],
+     "expected_passages": [
+      35,
+      113
+     ],
+     "questions_reaching_an_expected_passage": [
+      20,
+      41
+     ]
+    },
+    "36": {
+     "required_papers": [
+      24,
+      32
+     ],
+     "expected_passages": [
+      41,
+      113
+     ],
+     "questions_reaching_an_expected_passage": [
+      24,
+      41
+     ]
+    },
+    "48": {
+     "required_papers": [
+      22,
+      32
+     ],
+     "expected_passages": [
+      45,
+      113
+     ],
+     "questions_reaching_an_expected_passage": [
+      27,
+      41
+     ]
+    },
+    "100": {
+     "required_papers": [
+      20,
+      32
+     ],
+     "expected_passages": [
+      54,
+      113
+     ],
+     "questions_reaching_an_expected_passage": [
+      28,
+      41
+     ]
+    }
+   },
+   "all": {
+    "12": {
+     "required_papers": [
+      31,
+      42
+     ],
+     "expected_passages": [
+      47,
+      190
+     ],
+     "questions_reaching_an_expected_passage": [
+      30,
+      69
+     ]
+    },
+    "24": {
+     "required_papers": [
+      31,
+      42
+     ],
+     "expected_passages": [
+      54,
+      190
+     ],
+     "questions_reaching_an_expected_passage": [
+      35,
+      69
+     ]
+    },
+    "36": {
+     "required_papers": [
+      32,
+      42
+     ],
+     "expected_passages": [
+      62,
+      190
+     ],
+     "questions_reaching_an_expected_passage": [
+      40,
+      69
+     ]
+    },
+    "48": {
+     "required_papers": [
+      30,
+      42
+     ],
+     "expected_passages": [
+      70,
+      190
+     ],
+     "questions_reaching_an_expected_passage": [
+      45,
+      69
+     ]
+    },
+    "100": {
+     "required_papers": [
+      28,
+      42
+     ],
+     "expected_passages": [
+      83,
+      190
+     ],
+     "questions_reaching_an_expected_passage": [
+      49,
+      69
+     ]
+    }
+   }
+  },
+  "needs_two_or_more_papers": {
+   "calibration": {
+    "12": {
+     "required_papers": [
+      7,
+      10
+     ],
+     "expected_passages": [
+      0,
+      12
+     ],
+     "questions_reaching_an_expected_passage": [
+      0,
+      4
+     ]
+    },
+    "24": {
+     "required_papers": [
+      8,
+      10
+     ],
+     "expected_passages": [
+      0,
+      12
+     ],
+     "questions_reaching_an_expected_passage": [
+      0,
+      4
+     ]
+    },
+    "36": {
+     "required_papers": [
+      8,
+      10
+     ],
+     "expected_passages": [
+      0,
+      12
+     ],
+     "questions_reaching_an_expected_passage": [
+      0,
+      4
+     ]
+    },
+    "48": {
+     "required_papers": [
+      8,
+      10
+     ],
+     "expected_passages": [
+      0,
+      12
+     ],
+     "questions_reaching_an_expected_passage": [
+      0,
+      4
+     ]
+    },
+    "100": {
+     "required_papers": [
+      8,
+      10
+     ],
+     "expected_passages": [
+      0,
+      12
+     ],
+     "questions_reaching_an_expected_passage": [
+      0,
+      4
+     ]
+    }
+   },
+   "held_out": {
+    "12": {
+     "required_papers": [
+      24,
+      32
+     ],
+     "expected_passages": [
+      6,
+      41
+     ],
+     "questions_reaching_an_expected_passage": [
+      4,
+      11
+     ]
+    },
+    "24": {
+     "required_papers": [
+      23,
+      32
+     ],
+     "expected_passages": [
+      6,
+      41
+     ],
+     "questions_reaching_an_expected_passage": [
+      4,
+      11
+     ]
+    },
+    "36": {
+     "required_papers": [
+      24,
+      32
+     ],
+     "expected_passages": [
+      9,
+      41
+     ],
+     "questions_reaching_an_expected_passage": [
+      6,
+      11
+     ]
+    },
+    "48": {
+     "required_papers": [
+      22,
+      32
+     ],
+     "expected_passages": [
+      9,
+      41
+     ],
+     "questions_reaching_an_expected_passage": [
+      7,
+      11
+     ]
+    },
+    "100": {
+     "required_papers": [
+      20,
+      32
+     ],
+     "expected_passages": [
+      11,
+      41
+     ],
+     "questions_reaching_an_expected_passage": [
+      7,
+      11
+     ]
+    }
+   },
+   "all": {
+    "12": {
+     "required_papers": [
+      31,
+      42
+     ],
+     "expected_passages": [
+      6,
+      53
+     ],
+     "questions_reaching_an_expected_passage": [
+      4,
+      15
+     ]
+    },
+    "24": {
+     "required_papers": [
+      31,
+      42
+     ],
+     "expected_passages": [
+      6,
+      53
+     ],
+     "questions_reaching_an_expected_passage": [
+      4,
+      15
+     ]
+    },
+    "36": {
+     "required_papers": [
+      32,
+      42
+     ],
+     "expected_passages": [
+      9,
+      53
+     ],
+     "questions_reaching_an_expected_passage": [
+      6,
+      15
+     ]
+    },
+    "48": {
+     "required_papers": [
+      30,
+      42
+     ],
+     "expected_passages": [
+      9,
+      53
+     ],
+     "questions_reaching_an_expected_passage": [
+      7,
+      15
+     ]
+    },
+    "100": {
+     "required_papers": [
+      28,
+      42
+     ],
+     "expected_passages": [
+      11,
+      53
+     ],
+     "questions_reaching_an_expected_passage": [
+      7,
+      15
+     ]
+    }
+   }
+  }
+ },
+ "questions_changed_at_depth_36": {
+  "same": 52,
+  "more": 15,
+  "fewer": 2
+ }
+}

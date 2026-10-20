@@ -1,0 +1,141 @@
+{
+ "mode": "live",
+ "sent": true,
+ "question": "Which languages have multilingual prompt injection defenses been evaluated on, and what limitations do the papers report about language coverage?",
+ "elapsed_seconds": 73.98,
+ "outcome": "grounded_answer",
+ "verdict": "PASS",
+ "checks": {
+  "http_200": {
+   "ok": true,
+   "detail": 200
+  },
+  "response_schema": {
+   "ok": true,
+   "detail": null
+  },
+  "answer_non_empty": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_structure": {
+   "ok": true,
+   "detail": null
+  },
+  "claims_cite_returned_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "citations_match_stored_sources": {
+   "ok": true,
+   "detail": null
+  },
+  "citation_titles_match_corpus": {
+   "ok": true,
+   "detail": null
+  },
+  "grounded_answer_has_claims_and_citations": {
+   "ok": true,
+   "detail": null
+  },
+  "loop_bounds": {
+   "ok": true,
+   "detail": {
+    "retrieval_rounds": 1,
+    "retry_count": 0,
+    "regeneration_count": 0
+   }
+  }
+ },
+ "workflow": {
+  "retrieval_rounds": 1,
+  "assessments": [
+   "sufficient=True;relevant=12;papers=7"
+  ],
+  "reformulations": 0,
+  "invalid_reformulations": 0,
+  "grounding_reasons": [
+   "ok"
+  ],
+  "reranked": true,
+  "generations": 1,
+  "regenerations": 0,
+  "grounding_checks": [
+   "structural=True;grounded=True;claims=2;cited=4;invalid_citations=0;unsupported=0;reason=ok"
+  ],
+  "terminal": "grounding:structural=True;grounded=True;claims=2;cited=4;invalid_citations=0;unsupported=0;reason=ok"
+ },
+ "expected_paper_overlap": [
+  2
+ ],
+ "response": {
+  "answer": "The only multilingual prompt‑injection defense that has been empirically evaluated on more than one language is MIPIAD, which was tested on English and Bangla.  Other studies either evaluate only English or note that their evaluations are limited to a single language or a narrow set of models, and they point out that coverage for low‑resource or non‑English languages is missing.",
+  "claims": [
+   {
+    "text": "MIPIAD was empirically validated on English and Bangla.",
+    "evidence_ids": [
+     "dcac6746-ea9b-5eb9-b440-97742d854e33"
+    ]
+   },
+   {
+    "text": "Other papers report limitations such as evaluation restricted to a single language (often English), a single conference or LLM, fixed injection strategies, and a lack of coverage for low‑resource or non‑English languages.",
+    "evidence_ids": [
+     "dbf268c7-8edf-55bd-97a2-302d530b1db7",
+     "5e5af377-b434-54a4-bdf0-0fb8b56be74c",
+     "04c841dc-d96e-54d7-b040-e07c3c1aaadf"
+    ]
+   }
+  ],
+  "citations": [
+   {
+    "id": "dcac6746-ea9b-5eb9-b440-97742d854e33",
+    "paper_id": 2,
+    "title": "MIPIAD: Multilingual Indirect Prompt Injection Attack Defense with Qwen -- TF-IDF Hybrid and Meta-Ensemble Learning",
+    "year": 2026,
+    "source_type": "paragraph",
+    "text_chars": 623,
+    "text_start": "That setting is still underexplored once the input stream is multilingual.In practice, systems see a mix of languages, domains, and formatting styles, so a defe"
+   },
+   {
+    "id": "dbf268c7-8edf-55bd-97a2-302d530b1db7",
+    "paper_id": 1,
+    "title": "Multilingual Hidden Prompt Injection Attacks on LLM-Based Academic Reviewing",
+    "year": 2025,
+    "source_type": "paragraph",
+    "text_chars": 843,
+    "text_start": "This study has several limitations.Our evaluation is restricted to papers from a single conference and a single open-weight LLM, and results may differ for othe"
+   },
+   {
+    "id": "04c841dc-d96e-54d7-b040-e07c3c1aaadf",
+    "paper_id": 2,
+    "title": "MIPIAD: Multilingual Indirect Prompt Injection Attack Defense with Qwen -- TF-IDF Hybrid and Meta-Ensemble Learning",
+    "year": 2026,
+    "source_type": "paragraph",
+    "text_chars": 358,
+    "text_start": "Most existing literature still assumes an English-heavy setting.Crosslingual transfer is less understood for promptinjection defense, where translations and dom"
+   },
+   {
+    "id": "5e5af377-b434-54a4-bdf0-0fb8b56be74c",
+    "paper_id": 3,
+    "title": "An Empirical Evaluation of Prompt Injection Vulnerabilities in Large Language Models Across Multilingual and Obfuscated Attack Scenarios",
+    "year": 2026,
+    "source_type": "paragraph",
+    "text_chars": 972,
+    "text_start": "Existing safety mechanisms attempt to mitigate this risk through alignment training, safety policies, and prompt filtering.However, most publicly documented eva"
+   }
+  ],
+  "grounded": true,
+  "retrieval_rounds": 1,
+  "retry_count": 0,
+  "regeneration_count": 0,
+  "trace": [
+   "retrieve:round=1;vector=12;graph=4;total=16",
+   "assess:sufficient=True;relevant=12;papers=7",
+   "rerank",
+   "generate:strict=False",
+   "grounding:structural=True;grounded=True;claims=2;cited=4;invalid_citations=0;unsupported=0;reason=ok"
+  ],
+  "provider": "groq",
+  "model": "openai/gpt-oss-20b"
+ }
+}

@@ -76,22 +76,29 @@ class FakeJointSchema:
 def test_batch_extraction_falls_back_without_dropping_chunk_order():
     model = FakeJointIE()
     calls = []
+
     def batch(texts, schema, config=None):
         calls.append(list(texts))
-        raise RuntimeError('one bad batch')
+        raise RuntimeError("one bad batch")
+
     model.batch_extract = batch
     extractor = JointEntityRelationExtractor(model, batch_size=2)
-    extractor.extract_many(['first', 'second', 'third'])
-    assert calls == [['first', 'second'], ['third']]
-    assert [c[0] for c in model.extract_calls] == ['first', 'second', 'third']
+    extractor.extract_many(["first", "second", "third"])
+    assert calls == [["first", "second"], ["third"]]
+    assert [c[0] for c in model.extract_calls] == ["first", "second", "third"]
 
 
 def test_batch_extraction_matches_single_pass_results():
-    payload = {'entities': [{'id': 'e1', 'type': 'model', 'text': 'BERT', 'confidence': .9}], 'relations': []}
+    payload = {
+        "entities": [{"id": "e1", "type": "model", "text": "BERT", "confidence": 0.9}],
+        "relations": [],
+    }
     single = FakeJointIE([payload, payload])
     batch = FakeJointIE()
     batch.batch_extract = lambda texts, schema, config=None: [payload for _ in texts]
-    assert JointEntityRelationExtractor(single).extract_many(['a', 'b']) == JointEntityRelationExtractor(batch, batch_size=2).extract_many(['a', 'b'])
+    assert JointEntityRelationExtractor(single).extract_many(
+        ["a", "b"]
+    ) == JointEntityRelationExtractor(batch, batch_size=2).extract_many(["a", "b"])
     assert batch.extract_calls == []
 
 

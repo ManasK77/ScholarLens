@@ -1,0 +1,89 @@
+{
+ "_provenance": "Agent-assigned (provisional, not independent) on 2026-10-18 BEFORE the live calls, from the passage catalogue. An aspect is covered when a returned claim cites one of its passages (evaluation.mode_b.evaluate_completeness); a lower bound. LV-Q1b and LV-Q2b were added after the runs as aliases: they re-ask LV-Q1's and LV-Q2's exact questions, so they share those pre-registered aspect lists unchanged.",
+ "LV-Q1": [
+  {
+   "id": "language_count_121",
+   "expected_passage_ids": [
+    "41cb089b-e463-552d-b687-4d4b1563b10f",
+    "55a2dcc3-bfec-5d89-a05a-cc73fbb01432",
+    "6152189e-89e2-553b-bf56-3ce4acb34852",
+    "b9d03539-df6e-5eba-88a1-5356750da976",
+    "b9d4f2c2-b601-5a08-8b6b-8f73397b3a21"
+   ]
+  },
+  {
+   "id": "qa_data_points_7892",
+   "expected_passage_ids": [
+    "41cb089b-e463-552d-b687-4d4b1563b10f",
+    "7ad10f8c-88a1-5ce9-96d3-0bcb85bd5ca2",
+    "9a9da019-2c2c-579c-9005-445103f99d9b",
+    "b9d03539-df6e-5eba-88a1-5356750da976",
+    "b9d4f2c2-b601-5a08-8b6b-8f73397b3a21"
+   ]
+  }
+ ],
+ "LV-Q2": [
+  {
+   "id": "paper_3_reports_higher_non_english_compliance",
+   "expected_passage_ids": [
+    "a61a1ab2-0758-5efe-9694-069de4316a5b",
+    "a729a233-e6c2-5114-be5f-1d5837aca714",
+    "b6620f6d-b756-54e8-91ae-6771d2799a11",
+    "b77a41e9-5293-53e5-8681-48fc220b28c9"
+   ]
+  },
+  {
+   "id": "paper_10_reports_non_english_jailbreaks",
+   "expected_passage_ids": [
+    "6f2edf7b-7734-57ed-8498-e50c8b83d666",
+    "62047eb2-3922-5293-b826-b74a8b05bdeb",
+    "65c1ff5f-e2e7-58e7-b5cd-886394590c05",
+    "f1bdfb3d-2845-5754-9f48-cb3ae84d578e",
+    "7ad10f8c-88a1-5ce9-96d3-0bcb85bd5ca2"
+   ]
+  }
+ ],
+ "LV-Q1b": [
+  {
+   "id": "language_count_121",
+   "expected_passage_ids": [
+    "41cb089b-e463-552d-b687-4d4b1563b10f",
+    "55a2dcc3-bfec-5d89-a05a-cc73fbb01432",
+    "6152189e-89e2-553b-bf56-3ce4acb34852",
+    "b9d03539-df6e-5eba-88a1-5356750da976",
+    "b9d4f2c2-b601-5a08-8b6b-8f73397b3a21"
+   ]
+  },
+  {
+   "id": "qa_data_points_7892",
+   "expected_passage_ids": [
+    "41cb089b-e463-552d-b687-4d4b1563b10f",
+    "7ad10f8c-88a1-5ce9-96d3-0bcb85bd5ca2",
+    "9a9da019-2c2c-579c-9005-445103f99d9b",
+    "b9d03539-df6e-5eba-88a1-5356750da976",
+    "b9d4f2c2-b601-5a08-8b6b-8f73397b3a21"
+   ]
+  }
+ ],
+ "LV-Q2b": [
+  {
+   "id": "paper_3_reports_higher_non_english_compliance",
+   "expected_passage_ids": [
+    "a61a1ab2-0758-5efe-9694-069de4316a5b",
+    "a729a233-e6c2-5114-be5f-1d5837aca714",
+    "b6620f6d-b756-54e8-91ae-6771d2799a11",
+    "b77a41e9-5293-53e5-8681-48fc220b28c9"
+   ]
+  },
+  {
+   "id": "paper_10_reports_non_english_jailbreaks",
+   "expected_passage_ids": [
+    "6f2edf7b-7734-57ed-8498-e50c8b83d666",
+    "62047eb2-3922-5293-b826-b74a8b05bdeb",
+    "65c1ff5f-e2e7-58e7-b5cd-886394590c05",
+    "f1bdfb3d-2845-5754-9f48-cb3ae84d578e",
+    "7ad10f8c-88a1-5ce9-96d3-0bcb85bd5ca2"
+   ]
+  }
+ ]
+}

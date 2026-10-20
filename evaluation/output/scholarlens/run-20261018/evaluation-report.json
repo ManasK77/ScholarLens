@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-10-18T08:22:39.973262+00:00",
+  "configuration": {
+    "similarity_threshold": 0.2
+  },
+  "summary": {
+    "gaps_evaluated": 4,
+    "validity_index": null,
+    "components_used": [],
+    "interpretation": "Composite of later-paper confirmation, survey agreement, and normalized expert validity, over the methods that had independent evidence."
+  },
+  "availability": {
+    "time_shift": {
+      "status": "unavailable",
+      "reason": "no later papers supplied",
+      "requires": "papers published after the gaps' cutoff year (--future-papers), ideally with relevant_future_paper_ids labels"
+    },
+    "survey_crosscheck": {
+      "status": "unavailable",
+      "reason": "no survey open problems supplied",
+      "requires": "open problems transcribed from survey papers (--surveys)"
+    },
+    "expert_scoring": {
+      "status": "unavailable",
+      "reason": "no expert ratings supplied",
+      "requires": "1-5 ratings from independent experts (--expert-scores)"
+    }
+  },
+  "time_shift": null,
+  "survey_crosscheck": null,
+  "expert_scoring": null
+}

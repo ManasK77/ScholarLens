@@ -17,6 +17,13 @@ export interface Evidence {
   text: string
   year?: number | null
   source_type?: string
+  /** Every label one sentence is stored under (cluster members only). */
+  source_types?: string[]
+  point_ids?: string[]
+  /** Citation markers in the text, e.g. "[12]": the passage may report other work. */
+  citation_markers?: string[]
+  /** Report evidence only: the quote reached the stored length cap, so the passage may continue. */
+  truncated?: boolean
 }
 
 /**
@@ -41,21 +48,38 @@ export interface Cluster {
   id: number
   label: string | null
   member_count: number
+  paper_count?: number
+  evidence_scope?: 'single_paper' | 'corroborated'
   contradiction_flag: boolean
   contradiction_score: number
   members: Evidence[]
   contradictions?: ContradictionPair[]
 }
 
+export interface TrendQualifiers {
+  papers: number
+  years: number
+  max_papers_per_year: number
+  small_sample: boolean
+  partial_years: string[]
+  single_year: boolean
+}
+
 export interface Trend {
   cluster_id: number
+  /** Distinct papers per year (not mentions). */
   yearly_counts: Record<string, number>
   slope: number
+  qualifiers?: TrendQualifiers
 }
 
 export interface GapRanking {
   cluster_id: number
   score: number
+  /** Distinct papers stating the theme; one paper = exploratory. */
+  paper_count?: number
+  evidence_scope?: 'single_paper' | 'corroborated'
+  exploratory?: boolean
   signals: {
     mention_frequency: number
     trend_slope: number
@@ -75,6 +99,9 @@ export interface GroundedClaim {
   supported: boolean
   statement: string
   evidence_ids: string[]
+  /** llm_cited | not_supported | nli_verified | llm_unverified | not_claimed */
+  basis?: string
+  llm_supported?: boolean
 }
 
 export interface ReportJustification {
@@ -131,14 +158,21 @@ export interface GraphEdge {
 export interface GraphSnapshot {
   nodes: GraphNode[]
   edges: GraphEdge[]
+  /** Size of the whole graph; the snapshot may be a bounded part of it. */
+  total_nodes?: number
+  total_edges?: number
 }
 
 export interface QueryResult {
+  /** Which terminal Mode B reached. Absent from an older API. */
+  outcome?: 'grounded_answer' | 'no_indexed_evidence' | 'insufficient_evidence' | 'grounding_failed'
   answer: string
   claims: Array<{ text: string; evidence_ids: string[] }>
   citations: Evidence[]
   grounded: boolean
   retry_count: number
+  /** Draft claims that failed a check and are not shown (0 when complete). Absent from an older API. */
+  removed_claim_count?: number
   trace: string[]
   provider: string
   model: string
@@ -167,6 +201,28 @@ export interface CollectResult {
   /** What each source contributed before dedup, so a source that stored
    *  nothing can be told from a source that returned nothing. */
   source_stats?: Record<string, { candidates: number; added: number; duplicates: number }>
+  /** The run's outcome (S1 hardening, 2026-10-12). Anything short of
+   *  `completed` comes with `warnings` saying why. */
+  status?: 'completed' | 'completed_with_warnings' | 'partial' | 'failed'
+  warnings?: CollectWarning[]
+  /** Full text vs metadata only, over the distinct papers the run touched. */
+  full_text?: { touched: CollectCoverage; added: CollectCoverage }
+  collection_run_id?: number
+}
+
+/** Why a run was not a complete, clean, exhaustive read. */
+export interface CollectWarning {
+  source: string
+  code: string
+  message: string
+}
+
+export interface CollectCoverage {
+  papers: number
+  with_full_text: number
+  metadata_only: number
+  metadata_only_without_doi: number
+  coverage: number | null
 }
 
 export interface CorpusResetResult {

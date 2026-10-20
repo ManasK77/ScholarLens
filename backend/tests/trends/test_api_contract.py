@@ -33,8 +33,8 @@ PROJECTED_FIELDS = {"cluster_id", "yearly_counts", "slope"}
 
 
 def _handler(name: str) -> ast.FunctionDef:
-    if name == 'run_pipeline':
-        name = '_execute_pipeline'
+    if name == "run_pipeline":
+        name = "_execute_pipeline"
     tree = ast.parse(ROUTES.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name == name:
@@ -60,7 +60,9 @@ class TestFrozenHandlerShape:
             node for node in ast.walk(_handler("trends")) if isinstance(node, ast.Dict)
         ]
 
-        assert {key.value for key in payload.keys} == PROJECTED_FIELDS
+        # Plus the additive `qualifiers` (D-07-08), derived from
+        # `yearly_counts`; the read test above shows no other field is read.
+        assert {key.value for key in payload.keys} == PROJECTED_FIELDS | {"qualifiers"}
 
     def test_the_post_handler_calls_rebuild_with_the_session_only(self):
         [call] = [

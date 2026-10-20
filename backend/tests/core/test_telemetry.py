@@ -256,12 +256,12 @@ def test_clustering_stage_reports_hdbscan_and_nli_telemetry(session, info_logs):
             StatementCluster(label="theme", members=statements, contradictions=[])
         ]
     )
-    original = clustering.cluster_statements
-    clustering.cluster_statements = monkey_cluster
+    original = clustering.cluster_gap_statements
+    clustering.cluster_gap_statements = monkey_cluster
     try:
         clustering.rebuild_clusters(session, index=index, detector=detector)
     finally:
-        clustering.cluster_statements = original
+        clustering.cluster_gap_statements = original
 
     text = messages(info_logs)
     assert "s6 gap_points=3" in text

@@ -90,9 +90,11 @@ def environment(tmp_path, monkeypatch):
     monkeypatch.setattr(
         nerre,
         "write_paper_graph",
-        lambda graph, paper, result, input_hash=None: graph_hashes.update(
-            {paper.id: input_hash}
-        ),
+        lambda graph,
+        paper,
+        result,
+        input_hash=None,
+        **_provenance: graph_hashes.update({paper.id: input_hash}),
     )
     monkeypatch.setattr(
         nerre,

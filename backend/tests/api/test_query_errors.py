@@ -8,6 +8,11 @@ from fastapi.testclient import TestClient
 from app.api import routes_backend
 from app.api.security import require_api_key
 from app.explanation.llm import LLMUnavailableError
+from app.interactive.workflow import InteractiveServices
+
+# `/query` wraps its services with the overall deadline guard; tests that
+# replace `run_query` never call them, so any InteractiveServices will do.
+_UNUSED_SERVICES = InteractiveServices(retriever=None, graph_expand=None, llm=None)
 
 
 def test_query_returns_service_unavailable_when_llm_provider_is_offline(monkeypatch):
@@ -19,11 +24,16 @@ def test_query_returns_service_unavailable_when_llm_provider_is_offline(monkeypa
             retrieval_top_n=12,
             retrieval_min_chunks=2,
             retrieval_min_papers=2,
+            retrieval_min_papers_paper_specific=1,
+            retrieval_pool_factor=1,
             retrieval_min_score=0.2,
             grounding_regeneration_cap=1,
+            query_deadline_seconds=30.0,
         ),
     )
-    monkeypatch.setattr(routes_backend, "default_services", lambda settings: object())
+    monkeypatch.setattr(
+        routes_backend, "default_services", lambda settings: _UNUSED_SERVICES
+    )
     monkeypatch.setattr(
         routes_backend,
         "run_query",
@@ -44,6 +54,7 @@ def test_query_endpoint_accepts_a_natural_language_question(monkeypatch):
     application.include_router(routes_backend.router)
     application.dependency_overrides[require_api_key] = lambda: None
     expected = {
+        "outcome": "grounded_answer",
         "answer": "Multilingual evaluation remains limited [e1].",
         "claims": [
             {
@@ -65,6 +76,7 @@ def test_query_endpoint_accepts_a_natural_language_question(monkeypatch):
         "retrieval_rounds": 2,
         "retry_count": 1,
         "regeneration_count": 0,
+        "removed_claim_count": 0,
         "trace": ["retrieve:round=1", "reformulate", "retrieve:round=2"],
         "provider": "groq",
         "model": "groq-test",
@@ -74,11 +86,16 @@ def test_query_endpoint_accepts_a_natural_language_question(monkeypatch):
         retrieval_top_n=12,
         retrieval_min_chunks=2,
         retrieval_min_papers=2,
+        retrieval_min_papers_paper_specific=1,
+        retrieval_pool_factor=1,
         retrieval_min_score=0.2,
         grounding_regeneration_cap=1,
+        query_deadline_seconds=30.0,
     )
     monkeypatch.setattr(routes_backend, "get_settings", lambda: settings)
-    monkeypatch.setattr(routes_backend, "default_services", lambda _settings: object())
+    monkeypatch.setattr(
+        routes_backend, "default_services", lambda _settings: _UNUSED_SERVICES
+    )
     calls = []
 
     def fake_run_query(*args):
@@ -103,6 +120,8 @@ def test_query_endpoint_accepts_a_natural_language_question(monkeypatch):
             2,
             0.2,
             1,
+            1,
+            1,
         )
     ]
 
@@ -116,3 +135,75 @@ def test_query_endpoint_rejects_blank_or_oversized_input(question):
     response = TestClient(application).post("/query", json={"question": question})
 
     assert response.status_code == 422
+
+
+def _app():
+    application = FastAPI()
+    application.include_router(routes_backend.router)
+    application.dependency_overrides[require_api_key] = lambda: None
+    return application
+
+
+def test_openapi_documents_the_query_outcome_and_citation_shape():
+    schema = _app().openapi()
+    ref = schema["paths"]["/query"]["post"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]["$ref"]
+    model = schema["components"]["schemas"][ref.rsplit("/", 1)[1]]
+    assert set(model["properties"]["outcome"]["enum"]) == {
+        "grounded_answer",
+        "no_indexed_evidence",
+        "insufficient_evidence",
+        "grounding_failed",
+    }
+    assert "outcome" in model["required"] and "citations" in model["required"]
+
+
+def test_a_workflow_result_with_an_unknown_outcome_is_not_served(monkeypatch):
+    settings = SimpleNamespace(
+        retrieval_round_cap=3,
+        retrieval_top_n=12,
+        retrieval_min_chunks=2,
+        retrieval_min_papers=2,
+        retrieval_min_papers_paper_specific=1,
+        retrieval_pool_factor=1,
+        retrieval_min_score=0.2,
+        grounding_regeneration_cap=1,
+        query_deadline_seconds=30.0,
+    )
+    monkeypatch.setattr(routes_backend, "get_settings", lambda: settings)
+    monkeypatch.setattr(routes_backend, "default_services", lambda _s: _UNUSED_SERVICES)
+    bogus = {
+        "outcome": "probably_fine",
+        "answer": "x",
+        "claims": [],
+        "citations": [],
+        "grounded": True,
+        "retrieval_rounds": 1,
+        "retry_count": 0,
+        "regeneration_count": 0,
+        "trace": [],
+        "provider": "groq",
+        "model": "m",
+    }
+    monkeypatch.setattr(routes_backend, "run_query", lambda *_a: bogus)
+    response = TestClient(_app(), raise_server_exceptions=False).post(
+        "/query", json={"question": "What gaps remain?"}
+    )
+    assert response.status_code >= 500
+
+
+@pytest.mark.parametrize(
+    "body",
+    [b"{not json", b'{"question": 42}', b"[]", b'{"q": "Which languages?"}'],
+)
+def test_a_malformed_or_mistyped_body_is_a_422_that_runs_nothing(monkeypatch, body):
+    def never(*_a, **_k):
+        raise AssertionError("the workflow ran on an invalid request")
+
+    monkeypatch.setattr(routes_backend, "run_query", never)
+    response = TestClient(_app()).post(
+        "/query", content=body, headers={"Content-Type": "application/json"}
+    )
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], list)

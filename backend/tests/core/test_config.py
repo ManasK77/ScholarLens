@@ -895,16 +895,24 @@ def test_report_top_k_is_configurable_through_the_environment(
 def test_relevance_gate_settings_have_documented_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """D-S1-GATE-01. Pools are larger than the caps; the caps stay 10."""
+    """D-S1-GATE-01 / D-S1-RETRIEVAL-01. Retrieval ceilings and pools are
+    larger than the caps; the caps stay 10."""
     _set_all_required(monkeypatch)
 
     from app.core.config import Settings
 
     settings = Settings(_env_file=None)
 
-    assert settings.arxiv_candidate_pool == 30
-    assert settings.semantic_scholar_request_limit == 40
+    assert settings.arxiv_candidate_pool == 200
+    assert settings.arxiv_page_size == 100
+    assert settings.semantic_scholar_request_limit == 100
+    assert settings.semantic_scholar_page_size == 100
+    assert settings.semantic_scholar_max_pages == 3
     assert settings.acl_anthology_candidate_pool == 100
+    assert settings.acl_anthology_max_age_days == 7
+    assert settings.acl_anthology_min_records == 50_000
+    assert settings.fulltext_max_pdf_mb == 50
+    assert settings.fulltext_step_budget_seconds == 600.0
     assert settings.arxiv_max_results == 10
     assert settings.semantic_scholar_max_results == 10
     assert settings.acl_anthology_max_results == 10
@@ -934,9 +942,15 @@ def test_relevance_gate_settings_load_from_env(monkeypatch: pytest.MonkeyPatch) 
     ("variable", "value"),
     [
         ("ARXIV_CANDIDATE_POOL", "0"),
-        ("ARXIV_CANDIDATE_POOL", "101"),
+        ("ARXIV_CANDIDATE_POOL", "1001"),
+        ("ARXIV_PAGE_SIZE", "501"),
         ("ACL_ANTHOLOGY_CANDIDATE_POOL", "0"),
-        ("SEMANTIC_SCHOLAR_REQUEST_LIMIT", "101"),
+        # Semantic Scholar's relevance search serves at most 1,000 results,
+        # at most 100 per page.
+        ("SEMANTIC_SCHOLAR_REQUEST_LIMIT", "1001"),
+        ("SEMANTIC_SCHOLAR_PAGE_SIZE", "101"),
+        ("SEMANTIC_SCHOLAR_MAX_PAGES", "0"),
+        ("FULLTEXT_MAX_PDF_MB", "0"),
     ],
 )
 def test_candidate_pools_reject_empty_or_runaway_values(

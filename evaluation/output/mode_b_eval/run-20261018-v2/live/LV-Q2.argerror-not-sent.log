@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/app/app/interactive/live_check.py", line 469, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/app/app/interactive/live_check.py", line 369, in main
+    else [int(p) for p in args.expected_paper_ids.split(";") if p.strip()]
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/interactive/live_check.py", line 369, in <listcomp>
+    else [int(p) for p in args.expected_paper_ids.split(";") if p.strip()]
+          ^^^^^^
+ValueError: invalid literal for int() with base 10: '3,10'

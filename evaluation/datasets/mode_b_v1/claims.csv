@@ -1,0 +1,61 @@
+claim_id,label,phenomenon,cited_passage_ids,claim,note
+c01,supported,verbatim,38787298-e281-5154-8bd4-850f612eecfe,MIPIAD's empirical validation covers English and Bangla only.,
+c02,supported,paraphrase,e36c6671-0353-5e0c-a94e-e5a60e597b6e,The reviewing study used 484 accepted ICML papers.,
+c03,supported,numeric_percent,58ae75bf-525b-50a1-afbe-87eea5ba6419,"Across all experimental conditions, 68.76% of malicious requests resulted in full compliance.",
+c04,supported,numeric_percent,b77a41e9-5293-53e5-8681-48fc220b28c9,"Turkish prompts showed the highest full compliance rate, at 80.18%.",
+c05,supported,numeric_percent,40efb42c-0311-567b-b987-223f0d506260,Even Hex-encoded prompts still produced malicious outputs in 54.41% of cases.,
+c06,supported,numeric_percent,4ecd46b9-5836-5778-9101-b0b1d79f66f1,Sentra-Guard reports 99.98% accuracy on HarmBench-28K at 47 ms latency.,System name appears only in the paper title.
+c07,supported,paraphrase,69fe59af-a70b-52d2-be56-30f94f62c494,Commercial online MT systems were the most robust against prompt injection.,
+c08,supported,paraphrase_low_overlap,94b6ea45-7cb6-57f2-8a0f-2bb9db71cb48,"Bigger models did not reliably resist the injected instruction; under attack, scaling was often inverse or non-monotonic.",
+c09,supported,numeric,d3467607-f8c5-5f7c-a803-0297dac85a10,The tourism chatbot required a cosine similarity of at least 0.70 between the query and the retrieved chunks.,
+c10,supported,numeric,4d314b98-1c6f-5051-afd8-cbfb28111d7f,"Combined attack success was 5/16 for English prompts, 1/16 for Tamil prompts and 5/15 for Tanglish prompts.",
+c11,supported,numeric_percent,318409dc-7c65-5b9a-aec4-8106e182e4b4,Claude Sonnet 4's false positive rate rose from 2.4% to 24.1% on translated emails.,
+c12,supported,verbatim,21c9127d-bab9-50b4-b6eb-1c4e934acfb1,PromptArmor reduces attack effectiveness but does not fully eliminate false-positive inflation.,
+c13,supported,negated_statement,1b889f2b-ff49-5b60-ba3a-9e2fd51ebd89,The WMT test suite authors did not perform human evaluation because of time and financial considerations.,
+c14,supported,named_method,19aa116e-38c8-5d41-957e-70f139a9c997,XLPID uses Low-Rank Adaptation over LLM backbones.,
+c15,supported,numeric,c084406a-8546-5b97-a401-b6ef64c57acc,Hybridization reached an F1 of 0.9205 compared with 0.8939 for the best standalone model.,
+c16,supported,numeric,41cb089b-e463-552d-b687-4d4b1563b10f,The ChatGPT fuzzing study covered 121 languages.,
+c17,supported,numeric_percent,4fc80d03-b1c4-540e-96e0-34292845515c,Prompt injection raised the jailbreak probability from 5.07% to 25.67% for the RQ1 strategy.,
+c18,supported,paraphrase,bdbe7811-62f3-5f38-b043-7393ecb45ab9,GPT-5 Mini was the most conservative model in terms of full compliance (44.09%).,
+c19,supported,factual_list,3a52d238-330c-5be2-b54d-86b8d4e2ed62,"Sentra-Guard was evaluated across English, French, Spanish, Arabic and Hindi.",
+c20,supported,factual_list,83bb292f-35de-53bc-a550-edc9d606a336,"The injected instruction was translated into Japanese, Chinese and Arabic using machine translation.",
+c21,supported,paraphrase,ca9c3a6d-e092-5633-a530-6abb744db885,MIPIAD's Bangla attack samples were produced by machine-translating English templates with NLLB-200.,
+c22,supported,verbatim,973bd52c-d278-5c6e-b517-e7b312af78d4,Only the first 6000 characters of each paper were provided to the model.,
+c23,supported,verbatim,c4ede2e7-bf6c-58f3-9aee-e253bf391f73,Sentra-Guard lacks a dedicated homoglyph resolution stage.,
+c24,supported,numeric,2c3e654c-f6d6-5cd5-817d-025a4eb4b90d,All 17 benign-correct outputs were labelled with an intent to ignore the injection.,
+c25,supported,cross_paper_synthesis,88d0a389-4682-53de-a878-a2f76e5e0384;65ec5a4b-b9aa-50a2-a446-b7814c9b7652,Both MIPIAD and the Sarvam study note that translated attack text may differ from natively written text.,Reasonable synthesis with low lexical overlap.
+c26,supported,paraphrase_low_overlap,7ad10f8c-88a1-5ce9-96d3-0bcb85bd5ca2,Wrapping malicious questions in multiple languages can lead ChatGPT to jailbreak.,
+c27,supported,negated_statement,34d0a813-37cd-5ab8-bdbb-f1be920bea67,The sample did not allow the authors to assess intentional Cyrillic character substitution attacks.,
+c28,supported,numeric,bacebe98-f874-5ba1-93b8-a88c388a656d,The relevance judgment experiments used queries and passages from the 2022 TREC Deep Learning track.,
+c29,supported,numeric,90bf3679-7820-5358-9491-eb843f4c7f63,The MIPIAD test set uses an attack-to-benign ratio of about 10:1.,
+c30,supported,paraphrase,641fffba-904c-519a-8448-032856612d44,Arabic injection showed near-zero mean score drift.,
+u01,unsupported,number_changed,58ae75bf-525b-50a1-afbe-87eea5ba6419,"Across all experimental conditions, 78.76% of malicious requests resulted in full compliance.",
+u02,unsupported,language_swapped,38787298-e281-5154-8bd4-850f612eecfe,MIPIAD's empirical validation covers English and Hindi only.,
+u03,unsupported,absolute_added,38787298-e281-5154-8bd4-850f612eecfe,MIPIAD is the only defense evaluated on Bangla.,
+u04,unsupported,negation_flip,21c9127d-bab9-50b4-b6eb-1c4e934acfb1,PromptArmor fully eliminates false-positive inflation.,
+u05,unsupported,negation_flip,a729a233-e6c2-5114-be5f-1d5837aca714,Simple character encodings prevent malicious outputs.,
+u06,unsupported,comparison_reversed,b8628874-8658-59f4-b297-9e387ce3eca2,Direct categories achieved higher full compliance than elaborate categories.,
+u07,unsupported,overgeneralization,38787298-e281-5154-8bd4-850f612eecfe,Prompt injection detectors in the literature are validated mainly on English and Bangla.,One paper's coverage stated as the literature's.
+u08,unsupported,wrong_citation,38787298-e281-5154-8bd4-850f612eecfe,Sentra-Guard achieves 99.98% accuracy.,Cites a MIPIAD passage.
+u09,unsupported,wrong_citation,641fffba-904c-519a-8448-032856612d44,Online MT systems are the most robust against prompt injection.,Cites a reviewing-study passage.
+u10,unsupported,causal_unsupported,924957e8-21b9-50ac-9c76-b1f7565611c1,Arabic injection had weaker effects because Arabic text is written right to left.,The paper's explanation is English-centric alignment.
+u11,unsupported,partial_support,38787298-e281-5154-8bd4-850f612eecfe;88d0a389-4682-53de-a878-a2f76e5e0384,MIPIAD covers English and Bangla and was evaluated on human-written Bangla attacks.,The second half is contradicted (machine translated).
+u12,unsupported,number_changed,c084406a-8546-5b97-a401-b6ef64c57acc,Hybridization reached an F1 of 0.9305.,
+u13,unsupported,language_added,3a52d238-330c-5be2-b54d-86b8d4e2ed62,"Sentra-Guard was evaluated across English, French, Spanish, Arabic, Hindi and Bangla.",
+u14,unsupported,resource_level_added,38787298-e281-5154-8bd4-850f612eecfe,MIPIAD was validated on low-resource languages.,
+u15,unsupported,misattributed,5e5af377-b434-54a4-bdf0-0fb8b56be74c,The papers report that their own evaluations were limited to English prompts.,The passage is about publicly documented evaluations in general.
+u16,unsupported,model_swapped,bdbe7811-62f3-5f38-b043-7393ecb45ab9,GPT-4o was the most conservative model in terms of full compliance.,
+u17,unsupported,dataset_swapped,4ecd46b9-5836-5778-9101-b0b1d79f66f1,Sentra-Guard reports 99.98% accuracy on the BIPIA benchmark.,
+u18,unsupported,negation_flip,2a2e0294-55ea-5914-8743-d0cff8a7808c,The Sarvam study ranks Tamil as safer than English.,The passage says the paper does not rank languages.
+u19,unsupported,overgeneralization,58ae75bf-525b-50a1-afbe-87eea5ba6419,LLMs comply with malicious requests in most cases for all languages and models.,
+u20,unsupported,cross_task_overgeneralization,71731fe0-93d7-5899-9db2-c900b591a389,Instruction tuning makes phishing detectors robust to prompt injection.,
+u21,unsupported,number_changed,41cb089b-e463-552d-b687-4d4b1563b10f,The ChatGPT fuzzing study covered 112 languages.,
+u22,unsupported,number_changed,bacebe98-f874-5ba1-93b8-a88c388a656d,The relevance judgment experiments used the 2019 TREC Deep Learning track.,
+u23,unsupported,contradiction_antonym,218758fd-3453-5d6d-bb73-c47d98c7d3a6,MIPIAD lowers ASR in English but increases it in Bangla.,
+u24,unsupported,meaning_changing_paraphrase,641fffba-904c-519a-8448-032856612d44,"Hidden prompt injection made reviews more lenient for English, Japanese and Chinese.",The passage reports harsher reviews.
+u25,unsupported,partial_support,0e287678-4815-5ab5-a972-abb7237d7b65,The HITL Vector Injection mechanism reduced adaptation lag by over 90% relative to full retraining and was validated in production.,
+u26,unsupported,contradiction_antonym,37affec2-6b60-5cb0-8561-611374d37f56,Grok-3 had the lowest attack success rate under instruction override.,The passage says maximum susceptibility.
+u27,unsupported,overgeneralization,a9319f31-1687-52ba-8144-8886b2c9a3f8,Most prompt injection defenses fail to detect content-based injections.,One defense (PromptArmor) generalised to most defenses.
+u28,unsupported,unsupported_priority,e0b34ec4-4e1c-50ea-befa-7271ce348705,The scaling-behaviour paper is the first to study prompt injection in machine translation.,The passage claims first for scaling in a multilingual setting.
+u29,unsupported,unsupported_quantifier,218758fd-3453-5d6d-bb73-c47d98c7d3a6,All seven victim LLMs had larger ASR reductions in Bangla than in English.,
+u30,unsupported,model_swapped,37affec2-6b60-5cb0-8561-611374d37f56,Claude Sonnet 4 exhibited maximum susceptibility with an attack success rate of 12.3%.,The passage attributes it to Grok-3.

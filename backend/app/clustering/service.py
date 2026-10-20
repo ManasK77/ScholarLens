@@ -28,7 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.clustering.claims import MIN_RESEARCH_WORDS, research_statement_rejection
-from app.clustering.cluster import cluster_statements
+from app.clustering.cluster import cluster_gap_statements
 from app.clustering.nli import get_detector
 from app.clustering.schema import GapStatement, StatementCluster
 from app.clustering.storage import replace_clusters
@@ -123,7 +123,8 @@ def _with_contradictions(
     flagged = []
     for cluster in clusters:
         try:
-            contradictions = detector.detect(cluster.members)
+            # One row per sentence: a second label row is the same claim.
+            contradictions = detector.detect(cluster.statements)
         except Exception:
             if current_run():
                 raise
@@ -171,7 +172,8 @@ def rebuild_clusters(
         return replace_clusters(session, [])
 
     started = perf_counter()
-    clusters = cluster_statements(
+    # Each sentence is clustered once, however many labels it carries (D-06-14).
+    clusters = cluster_gap_statements(
         statements,
         min_cluster_size=settings.clustering_min_cluster_size,
         min_samples=settings.clustering_min_samples,

@@ -3,7 +3,7 @@
 import hashlib
 import logging
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -26,10 +26,34 @@ from app.parsing.storage import ParsedDocument
 logger = logging.getLogger(__name__)
 
 
+# `ParsedDocument.parser_used` values. The last two are not successful parses:
+# a document no parser recovered any text from is stored *empty* and labelled,
+# so it is told apart from a paper that genuinely states nothing (D-S2-STATUS-01).
+PARSER_GROBID = "grobid"
+PARSER_FALLBACK = "fallback"
+# A fallback parse made only because GROBID could not be reached. Provisional:
+# the S2 checkpoint does not accept it as current, so GROBID is tried again.
+PARSER_FALLBACK_GROBID_UNAVAILABLE = "fallback_grobid_unavailable"
+PARSER_NONE = "none"
+
+
 @dataclass(slots=True)
 class ParsingBatch:
     processed: list[int]
     missing_pdfs: list[int]
+    # Papers this batch parsed into no text at all (`parser_used == "none"`).
+    no_text: list[int] = field(default_factory=list)
+    # Papers this batch had to parse with the fallback because GROBID was
+    # unreachable; they are re-parsed with GROBID on a later run.
+    grobid_unavailable: list[int] = field(default_factory=list)
+
+
+def _has_text(sections: list[dict] | None) -> bool:
+    return any(
+        (paragraph.get("text") or "").strip()
+        for section in sections or []
+        for paragraph in section.get("paragraphs") or []
+    )
 
 
 def parse_and_store(session: Session, paper: Paper, grobid_url: str) -> ParsedDocument:
@@ -37,19 +61,39 @@ def parse_and_store(session: Session, paper: Paper, grobid_url: str) -> ParsedDo
     if not paper.pdf_path:
         raise ValueError(f"Paper {paper.id} has no stored PDF")
     pdf_bytes = Path(paper.pdf_path).read_bytes()
-    tei_xml = grobid_client.parse_fulltext(pdf_bytes, grobid_url)
+    outcome = grobid_client.fulltext(pdf_bytes, grobid_url)
     raw_sections = None
-    if tei_xml is not None:
+    reason = (
+        "service unavailable"
+        if outcome.status == "unavailable"
+        else "no GROBID response"
+    )
+    if outcome.tei is not None:
         try:
-            raw_sections = tei_parser.extract_sections(tei_xml)
+            raw_sections = tei_parser.extract_sections(outcome.tei)
+            # Headings with no paragraph text (a scanned PDF) are not a parse.
+            reason = "no body text" if raw_sections else "no body sections"
         except ET.ParseError:
             raw_sections = None
+            reason = "unparseable TEI"
 
-    if not raw_sections:
+    if not _has_text(raw_sections):
+        logger.warning(
+            "s2 paper=%s GROBID unusable (%s); using fallback", paper.id, reason
+        )
         raw_sections = fallback.extract_fallback_sections(pdf_bytes) or []
-        parser_used = "fallback"
+        parser_used = (
+            PARSER_FALLBACK_GROBID_UNAVAILABLE
+            if outcome.status == "unavailable"
+            else PARSER_FALLBACK
+        )
     else:
-        parser_used = "grobid"
+        parser_used = PARSER_GROBID
+    if not _has_text(raw_sections):
+        logger.warning("s2 paper=%s parsed document has no text", paper.id)
+        # Never keep a text-less structure: headings alone would read as a
+        # parsed paper that simply states nothing.
+        raw_sections, parser_used = [], PARSER_NONE
 
     normalized_sections = []
     labels = section_classifier.classify_sections(
@@ -116,6 +160,7 @@ def parse_all_pending(
     parsers: Counter[str] = Counter()
     backfill_attempted = backfill_succeeded = 0
     progress = ProgressLogger(logger, "s2", len(papers))
+    batch = ParsingBatch(processed, missing_pdfs)
     for position, paper in enumerate(papers, 1):
         progress.update(position)
         needs_backfill = _needs_metadata_backfill(paper)
@@ -138,20 +183,40 @@ def parse_all_pending(
                 document = storage.get_parsed_document(session, paper.id)
                 if document is not None:
                     parsers[document.parser_used] += 1
+                    if document.parser_used == PARSER_NONE:
+                        batch.no_text.append(paper.id)
+                    elif document.parser_used == PARSER_FALLBACK_GROBID_UNAVAILABLE:
+                        batch.grobid_unavailable.append(paper.id)
     logger.info(
-        "s2 complete processed=%d grobid=%d fallback=%d missing_pdfs=%d "
+        "s2 complete processed=%d grobid=%d fallback=%d "
+        "fallback_grobid_unavailable=%d no_text=%d missing_pdfs=%d "
         "backfill_attempted=%d backfill_succeeded=%d heading_keyword=%d "
         "heading_semantic=%d",
         len(processed),
-        parsers["grobid"],
-        parsers["fallback"],
+        parsers[PARSER_GROBID],
+        parsers[PARSER_FALLBACK],
+        parsers[PARSER_FALLBACK_GROBID_UNAVAILABLE],
+        parsers[PARSER_NONE],
         len(missing_pdfs),
         backfill_attempted,
         backfill_succeeded,
         headings.keyword_count - heading_baseline[0],
         headings.semantic_count - heading_baseline[1],
     )
-    return ParsingBatch(processed, missing_pdfs)
+    return batch
+
+
+def _parse_is_current(session: Session, paper_id: int) -> bool:
+    """A stored parse the S2 checkpoint may reuse.
+
+    A fallback parse made during a GROBID outage is not: the PDF is unchanged,
+    so without this check the outage-time result would be reused for good.
+    """
+    document = storage.get_parsed_document(session, paper_id)
+    return (
+        document is not None
+        and document.parser_used != PARSER_FALLBACK_GROBID_UNAVAILABLE
+    )
 
 
 def _parse_one(
@@ -182,7 +247,7 @@ def _parse_one(
             lambda: run_parsing_pipeline(
                 session, paper, grobid_url, unpaywall_email, pdf_storage_path
             ),
-            verify=lambda: storage.get_parsed_document(session, paper.id) is not None,
+            verify=lambda: _parse_is_current(session, paper.id),
             output=lambda: storage.get_parsed_document(session, paper.id).sections,
         ):
             processed.append(paper.id)

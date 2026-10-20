@@ -12,6 +12,16 @@ from app.ner_re.schema import RELATION_ENDPOINTS, JointExtractionResult
 
 RELATION_LABELS = {name: name.upper() for name in RELATION_ENDPOINTS}
 
+# Bumped when what a projection *records about its own origin* changes, not
+# what it extracts (that is the S4 input hash). A projection written before
+# D-S4-PROV-01 has no evidence on its edges and no model on its Paper node, so
+# `paper_graph_current` refuses it and the checkpoint rewrites it once -- with
+# the same input hash, which leaves every derived stage's fingerprint alone.
+NERRE_PROVENANCE_VERSION = "1"
+
+# A MENTIONS edge names at most this many units; `evidence_count` is exact.
+MAX_EVIDENCE_REFS = 25
+
 
 @contextmanager
 def graph_session(settings: Settings | None = None):
@@ -39,19 +49,28 @@ def ensure_graph_schema(session) -> None:
 
 
 def write_paper_graph(
-    session, paper: Paper, result: JointExtractionResult, input_hash: str | None = None
+    session,
+    paper: Paper,
+    result: JointExtractionResult,
+    input_hash: str | None = None,
+    provenance: dict | None = None,
 ) -> str:
-    """Replace one paper's projection atomically, preserving shared entities."""
+    """Replace one paper's projection atomically, preserving shared entities.
+
+    `provenance` is stored on the Paper node (model, its resolved revision, the
+    input basis, `nerre_provenance`); see `ner_re.service._provenance`.
+    """
     return session.execute_write(
-        lambda tx: _replace_paper(tx, paper, result, input_hash)
+        lambda tx: _replace_paper(tx, paper, result, input_hash, provenance or {})
     )
 
 
-def _replace_paper(session, paper, result, input_hash):
+def _replace_paper(session, paper, result, input_hash, provenance):
     paper_row = session.run(
         "MERGE (p:Paper {id: $id}) "
         "SET p.title=$title, p.year=$year, p.venue=$venue, p.doi=$doi, "
         "p.nerre_input_hash=$input_hash, p.nerre_version='1' "
+        "SET p += $provenance "
         "RETURN elementId(p) AS node_id",
         id=paper.id,
         title=paper.title,
@@ -59,6 +78,7 @@ def _replace_paper(session, paper, result, input_hash):
         venue=paper.venue,
         doi=paper.doi,
         input_hash=input_hash,
+        provenance=provenance,
     ).single()
     paper_node_id = paper_row["node_id"]
 
@@ -77,7 +97,8 @@ def _replace_paper(session, paper, result, input_hash):
             "MERGE (e:Entity {normalized_name: row.normalized, entity_type: row.type}) "
             "ON CREATE SET e.name=row.name "
             "MERGE (p)-[m:MENTIONS]->(e) "
-            "SET m.confidence=row.confidence",
+            "SET m.confidence=row.confidence, m.evidence=row.evidence, "
+            "m.evidence_count=row.evidence_count",
             paper_id=paper.id,
             rows=[
                 {
@@ -85,6 +106,8 @@ def _replace_paper(session, paper, result, input_hash):
                     "type": e.entity_type,
                     "name": e.text,
                     "confidence": e.confidence,
+                    "evidence": list(e.evidence[:MAX_EVIDENCE_REFS]),
+                    "evidence_count": len(e.evidence),
                 }
                 for e in result.entities
             ],
@@ -99,6 +122,8 @@ def _replace_paper(session, paper, result, input_hash):
                 "head": " ".join(relation.head.casefold().split()),
                 "tail": " ".join(relation.tail.casefold().split()),
                 "confidence": relation.confidence,
+                "evidence": list(relation.evidence[:MAX_EVIDENCE_REFS]),
+                "cross_sentence": relation.cross_sentence,
             }
         )
     for kind, rows in grouped.items():
@@ -110,7 +135,8 @@ def _replace_paper(session, paper, result, input_hash):
             "MATCH (h:Entity {normalized_name: row.head, entity_type: $head_type}) "
             "MATCH (t:Entity {normalized_name: row.tail, entity_type: $tail_type}) "
             f"MERGE (h)-[r:{relationship} {{paper_id: $paper_id}}]->(t) "
-            "SET r.confidence=row.confidence "
+            "SET r.confidence=row.confidence, r.evidence=row.evidence, "
+            "r.cross_sentence=row.cross_sentence "
             "MERGE (p)-[:SUPPORTS]->(h) MERGE (p)-[:SUPPORTS]->(t)"
         )
         session.run(
@@ -123,12 +149,42 @@ def _replace_paper(session, paper, result, input_hash):
     return paper_node_id
 
 
+def remove_orphan_entity(session, normalized_name: str, entity_type: str) -> bool:
+    """Delete one Entity node by exact key, only if nothing references it.
+
+    Shared entities are kept on purpose when a paper's projection is replaced,
+    so a node can outlive every mention. This removes a specific one that was
+    confirmed invalid, and never detaches: a node with any relationship -- for
+    example one another paper mentions -- is left untouched. Returns whether a
+    node was removed.
+    """
+
+    def remove(tx):
+        return tx.run(
+            "MATCH (e:Entity {normalized_name: $name, entity_type: $entity_type}) "
+            "WHERE NOT (e)--() "
+            "WITH collect(e) AS orphans "
+            "FOREACH (e IN orphans | DELETE e) "
+            "RETURN size(orphans) AS removed",
+            name=normalized_name,
+            entity_type=entity_type,
+        ).single()["removed"]
+
+    return bool(session.execute_write(remove))
+
+
 def paper_graph_current(session, paper_id, input_hash):
     row = session.run(
-        'MATCH (p:Paper {id: $id}) RETURN properties(p)["nerre_input_hash"] AS input_hash',
+        "MATCH (p:Paper {id: $id}) RETURN properties(p) AS props",
         id=paper_id,
     ).single()
-    return row is not None and row["input_hash"] == input_hash
+    if row is None:
+        return False
+    props = row["props"] or {}
+    return (
+        props.get("nerre_input_hash") == input_hash
+        and props.get("nerre_provenance") == NERRE_PROVENANCE_VERSION
+    )
 
 
 def get_paper_node_id(session, paper_id: int) -> str | None:
@@ -214,23 +270,57 @@ def expand_paper_neighborhood(
     return [dict(row) for row in rows]
 
 
-def graph_snapshot(session, limit: int = 500) -> dict[str, list[dict]]:
+def graph_snapshot(session, limit: int = 500) -> dict:
+    """A bounded, self-consistent view of the graph for the dashboard.
+
+    Every paper comes first, then entities by how connected they are, and only
+    edges between returned nodes are returned. Nodes and edges used to be two
+    independent unordered `LIMIT`s, so the view showed an arbitrary few papers,
+    entities whose edges were cut, and edges to nodes it never sent. The totals
+    let a caller say how much of the graph it is showing (additive keys).
+    """
     nodes = [
         dict(row)
         for row in session.run(
-            "MATCH (n) WITH n, properties(n) AS props "
+            "MATCH (n) WITH n, properties(n) AS props, COUNT { (n)--() } AS degree "
             "RETURN elementId(n) AS id, labels(n) AS labels, "
             "coalesce(props['name'], props['title'], labels(n)[0]) AS label "
+            "ORDER BY CASE WHEN 'Paper' IN labels(n) THEN 0 ELSE 1 END, "
+            "degree DESC, id "
             "LIMIT $limit",
             limit=limit,
         )
     ]
-    edges = [
-        dict(row)
-        for row in session.run(
-            "MATCH (a)-[r]->(b) RETURN elementId(a) AS source, "
-            "elementId(b) AS target, type(r) AS type LIMIT $limit",
-            limit=limit,
-        )
-    ]
-    return {"nodes": nodes, "edges": edges}
+    ids = [node["id"] for node in nodes]
+    edges = (
+        [
+            dict(row)
+            for row in session.run(
+                "MATCH (a)-[r]->(b) WHERE elementId(a) IN $ids AND elementId(b) IN $ids "
+                "RETURN elementId(a) AS source, elementId(b) AS target, type(r) AS type "
+                "LIMIT $edge_limit",
+                ids=ids,
+                edge_limit=limit * 4,
+            )
+        ]
+        if ids
+        else []
+    )
+    totals = next(
+        iter(
+            session.run(
+                "MATCH (n) WITH count(n) AS nodes "
+                "OPTIONAL MATCH ()-[r]->() RETURN nodes, count(r) AS edges"
+            )
+        ),
+        None,
+    )
+    total_nodes = totals["nodes"] if totals else len(nodes)
+    total_edges = totals["edges"] if totals else len(edges)
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "total_nodes": total_nodes,
+        "total_edges": total_edges,
+        "truncated": total_nodes > len(nodes) or total_edges > len(edges),
+    }

@@ -178,29 +178,46 @@ class TestConflictingEvidenceIsNotAsserted:
         assert claim["supported"] is False
         assert claim["evidence_ids"] == []
 
-    def test_a_conflict_claim_citing_real_passages_survives(self, session):
+    def test_a_conflict_claim_citing_real_passages_survives_when_nli_confirms_it(
+        self, session
+    ):
+        """Real citations are necessary, not sufficient (D-09-13)."""
         _seed(session)
         index = FakeIndex(points=_dominated_ranking())
-        llm = FakeLLM(
-            [
-                _draft(
-                    ["a0", "b0"],
-                    conflicting_evidence={
-                        "supported": True,
-                        "statement": "Paper 101 and paper 102 report opposite "
-                        "outcomes for the same defense.",
-                        "evidence_ids": ["a0", "b0"],
-                    },
-                )
-            ]
+        draft = _draft(
+            ["a0", "b0"],
+            conflicting_evidence={
+                "supported": True,
+                "statement": "Paper 101 and paper 102 report opposite "
+                "outcomes for the same defense.",
+                "evidence_ids": ["a0", "b0"],
+            },
         )
+        verdicts = []
 
-        generate_top_reports(session, SETTINGS_CAPPED, index, llm)
+        def verifier(verified):
+            def check(cited):
+                verdicts.append([item["id"] for item in cited])
+                return {"method": "test", "verified": verified}
 
+            return check
+
+        generate_top_reports(
+            session, SETTINGS_CAPPED, index, FakeLLM([draft]), verifier=verifier(True)
+        )
         [row] = list_reports(session)
         claim = row.justification["conflicting_evidence"]
-        assert claim["supported"] is True
+        assert (claim["supported"], claim["basis"]) == (True, "nli_verified")
         assert claim["evidence_ids"] == ["a0", "b0"]
+        assert verdicts == [["a0", "b0"]]
+
+        generate_top_reports(
+            session, SETTINGS_CAPPED, index, FakeLLM([draft]), verifier=verifier(False)
+        )
+        [row] = list_reports(session)
+        claim = row.justification["conflicting_evidence"]
+        assert (claim["supported"], claim["llm_supported"]) == (False, True)
+        assert claim["basis"] == "llm_unverified"
 
 
 class TestJustificationIsStored:

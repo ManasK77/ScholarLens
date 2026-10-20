@@ -3,7 +3,19 @@
 from dataclasses import dataclass
 
 
+SCORE_FIELDS = ("novelty", "validity", "evidence_quality", "actionability")
+
+
+def _rater(value: object) -> str:
+    rater = str(value or "").strip()
+    if not rater:
+        raise ValueError("a rated row needs a rater_id")
+    return rater
+
+
 def _score(value: object, field: str) -> int:
+    if value is None or not str(value).strip():
+        raise ValueError(f"{field} is missing; a rated row needs all four scores")
     score = int(value)
     if not 1 <= score <= 5:
         raise ValueError(f"{field} must be between 1 and 5")
@@ -15,17 +27,19 @@ class GapCandidate:
     gap_id: str
     description: str
     cutoff_year: int
-    relevant_future_paper_ids: tuple[str, ...] = ()
+    # `None`: unlabelled. `()`: labelled, and no later paper addresses the gap.
+    relevant_future_paper_ids: tuple[str, ...] | None = None
 
     @classmethod
     def from_dict(cls, row: dict) -> "GapCandidate":
+        labels = row.get("relevant_future_paper_ids")
         return cls(
             gap_id=str(row["gap_id"]),
             description=str(row["description"]),
             cutoff_year=int(row["cutoff_year"]),
-            relevant_future_paper_ids=tuple(
-                str(value) for value in row.get("relevant_future_paper_ids", [])
-            ),
+            relevant_future_paper_ids=None
+            if labels is None
+            else tuple(str(value) for value in labels),
         )
 
 
@@ -86,7 +100,7 @@ class ExpertScore:
     def from_dict(cls, row: dict) -> "ExpertScore":
         return cls(
             gap_id=str(row["gap_id"]),
-            rater_id=str(row["rater_id"]),
+            rater_id=_rater(row.get("rater_id")),
             novelty=_score(row["novelty"], "novelty"),
             validity=_score(row["validity"], "validity"),
             evidence_quality=_score(row["evidence_quality"], "evidence_quality"),

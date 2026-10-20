@@ -1,0 +1,35 @@
+claim_id,label,phenomenon,cited_passage_ids,claim,note
+s01,supported,verbatim,08139c9d-7f22-533f-b330-d40ef02dca42,Evaluation on HarmBench-28K yielded 99.98% accuracy.,
+s02,supported,paraphrase_low_overlap,7491e03e-bc8f-5212-bbec-4dd3d27e4f0f,"With Sentra-Guard switched on, every language-model pairing was detected more than 96% of the time.",
+s03,supported,paraphrase,4d314b98-1c6f-5051-afd8-cbfb28111d7f,The paper says its per-language attack-success counts are too small to support a language comparison.,
+s04,unsupported,same_words_changed_meaning,4d314b98-1c6f-5051-afd8-cbfb28111d7f,"Tamil prompts were the most robust to attack, which supports a language comparison.",passage says the counts do not support a language comparison
+s05,unsupported,unsupported_percentage,7491e03e-bc8f-5212-bbec-4dd3d27e4f0f,Mistral 7B on Arabic reached a detection rate of 97.3%.,passage: 94.3%
+s06,unsupported,unsupported_count,b9d4f2c2-b601-5a08-8b6b-8f73397b3a21,The fuzzing study translated 30 malicious questions into 150 languages.,passage: 121 languages
+s07,supported,count,b9d4f2c2-b601-5a08-8b6b-8f73397b3a21,The study translated 30 malicious questions into 121 languages.,
+s08,unsupported,numeric_comparison_reversed,6bd45f38-3968-5458-8e3a-75bc888c2d2d,Translation lowered Claude Sonnet 4's false positive rate from 24.1% to 2.4%.,"baseline 2.4% (English), 24.1% after translation"
+s09,supported,numeric,6bd45f38-3968-5458-8e3a-75bc888c2d2d,Claude Sonnet 4's false positive rate rose from 2.4% on English to 24.1% after translation.,
+s10,unsupported,named_language,7491e03e-bc8f-5212-bbec-4dd3d27e4f0f,Claude 3 Opus achieved the highest detection rate on Hindi inputs at 99.5%.,passage: English inputs
+s11,unsupported,named_model_swap,7491e03e-bc8f-5212-bbec-4dd3d27e4f0f,Mistral 7B achieved the highest detection rate on English inputs at 99.5%.,passage: Claude 3 Opus; Mistral 7B is named elsewhere in the passage
+s12,unsupported,broad_from_one_paper,6f2edf7b-7734-57ed-8498-e50c8b83d666,Non-English questions bypass the safety checks of all LLMs.,"one study of ChatGPT, hedged ('might')"
+s13,unsupported,absolute_only,08139c9d-7f22-533f-b330-d40ef02dca42,Sentra-Guard is the only defense evaluated across five languages.,
+s14,unsupported,unsupported_cause,924957e8-21b9-50ac-9c76-b1f7565611c1,Arabic prompt injection had weaker effects because Arabic text is written right to left.,passage offers uneven alignment as the explanation
+s15,supported,causal_stated,924957e8-21b9-50ac-9c76-b1f7565611c1,The authors suggest uneven multilingual alignment as a plausible explanation for the weaker Arabic effects.,
+s16,unsupported,contradicts_passage,4d314b98-1c6f-5051-afd8-cbfb28111d7f,The study found that Tamil prompts were significantly more vulnerable than English prompts.,"1/16 Tamil vs 5/16 English, and no comparison supported"
+s17,unsupported,partial_support,08139c9d-7f22-533f-b330-d40ef02dca42,Sentra-Guard reached 99.98% accuracy on HarmBench-28K and was evaluated on ten languages.,first half supported; passage: five languages
+s18,unsupported,related_but_wrong_passage,0dcb933c-9098-59b0-9239-ff576d2cdb6e,Sentra-Guard reduced adaptation lag by over 90% relative to full retraining.,"true of paper 8 (08139c9d), but the cited future-work passage does not state it"
+s19,supported,verbatim,08139c9d-7f22-533f-b330-d40ef02dca42,The HITL Vector Injection mechanism reduced adaptation lag by over 90% relative to full retraining.,
+s20,unsupported,wrong_paper_id,7491e03e-bc8f-5212-bbec-4dd3d27e4f0f,Paper 3 reports that baseline LLMs had attack success rates between 78.5% and 93.5%.,the passage is paper 8's
+s21,supported,paper_id_reference,7491e03e-bc8f-5212-bbec-4dd3d27e4f0f,Paper 8 reports that baseline LLMs had attack success rates between 78.5% and 93.5%.,
+s22,unsupported,gap_inferred_from_absence,7491e03e-bc8f-5212-bbec-4dd3d27e4f0f,No study has evaluated prompt injection defenses on Hindi.,the passage itself evaluates Hindi
+s23,supported,gap_stated,2af6cff6-dae8-5614-b351-8a33b18e3277,Cross-lingual robustness remains underexplored in LLM security.,
+s24,unsupported,prior_work_as_own,2af6cff6-dae8-5614-b351-8a33b18e3277,The Sentra-Guard authors report that their XLM-R classifier achieved 87.3% accuracy on a multilingual jailbreak corpus.,the passage credits Li et al. [19]
+s25,supported,future_work_stated,0dcb933c-9098-59b0-9239-ff576d2cdb6e,Future work will address low-resource and code-mixed language robustness.,
+s26,unsupported,future_work_as_done,0dcb933c-9098-59b0-9239-ff576d2cdb6e,Sentra-Guard resolves homoglyph attacks through Unicode normalization.,listed as future work
+s27,supported,hedged,62047eb2-3922-5293-b826-b74a8b05bdeb,Non-English questions might pose a risk of jailbreak.,
+s28,unsupported,hedge_dropped,62047eb2-3922-5293-b826-b74a8b05bdeb,Non-English questions always cause ChatGPT jailbreaks.,
+s29,supported,disagreement_own_result,924957e8-21b9-50ac-9c76-b1f7565611c1,"Arabic prompt injection exhibited markedly weaker effects, with limited score drift.",probed during development (before labelling the rest)
+s30,supported,elliptic_negation,6f2edf7b-7734-57ed-8498-e50c8b83d666,"184 questions (5.07%) led to ChatGPT jailbreaks, while their English versions did not.",probed during development (before labelling the rest)
+s31,supported,none_of_equivalent,6f2edf7b-7734-57ed-8498-e50c8b83d666,None of the English versions of the 184 jailbreaking questions led to a jailbreak.,
+s32,unsupported,direction_reversed,2f15b77e-f7bb-5fea-9278-333bd9d8b2ba,Performance deteriorated severely when the prompt was written in a non-English language.,probed during development (before labelling the rest)
+s33,supported,two_papers_one_claim,b6620f6d-b756-54e8-91ae-6771d2799a11;6f2edf7b-7734-57ed-8498-e50c8b83d666,"Two studies found weaker safety for non-English prompts: higher full-compliance rates, and ChatGPT jailbreaks that the English versions did not trigger.",
+s34,unsupported,citation_lacks_detail,b6620f6d-b756-54e8-91ae-6771d2799a11,"Turkish, Russian and Simplified Chinese prompts had higher full-compliance rates than English.",true of paper 3 (a61a1ab2) but not of the cited passage

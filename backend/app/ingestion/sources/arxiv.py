@@ -37,14 +37,19 @@ and be reported, not be waited on longer.
 """
 
 import logging
+import re
+from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
-from pathlib import Path
 from urllib.parse import urlparse
 
 import arxiv
 import requests
 
+from app.ingestion.pdf_store import DownloadResult
+from app.ingestion.pdf_store import store as store_pdf
 from app.ingestion.rate_limit import CooldownActive, RateLimiter, send_with_retries
+from app.ingestion.retrieval import Candidates, error_category
+from app.ingestion.retrieval import report as retrieval_report
 from app.ingestion.topic import meaningful_terms
 
 logger = logging.getLogger(__name__)
@@ -104,6 +109,28 @@ def _all_fields_query(topic: str) -> str:
     """
     terms = meaningful_terms(topic) or [topic.replace('"', "").strip()]
     return " AND ".join(f'all:"{term}"' for term in terms)
+
+
+def _grouped_query(query_groups: Sequence[Sequence[str]]) -> str:
+    """Facet groups as an AND of ORs (S1 audit, 2026-10-10).
+
+    Each group is one facet of the topic and its alternatives are synonyms the
+    relevance gate validated for retrieval ("multilingual", "cross-lingual",
+    ...), so they are OR'd; the groups are AND'd, so every facet still
+    constrains the search exactly as D-QUERY-02 requires. Double quotes are
+    dropped from each term for the reason `meaningful_terms` gives.
+    """
+
+    def clause(group: Sequence[str]) -> str:
+        terms = [
+            " ".join(term.replace('"', "").split())
+            for term in group
+            if term.replace('"', "").strip()
+        ]
+        phrases = [f'all:"{term}"' for term in dict.fromkeys(terms)]
+        return phrases[0] if len(phrases) == 1 else f"({' OR '.join(phrases)})"
+
+    return " AND ".join(clause(group) for group in query_groups if group)
 
 
 def is_arxiv_url(url: str | None) -> bool:
@@ -209,6 +236,28 @@ def _polite_session(
     return session
 
 
+def _candidate(r) -> dict:
+    return {
+        "title": r.title,
+        "authors": [a.name for a in r.authors],
+        "year": r.published.year,
+        "venue": None,
+        "doi": r.doi,
+        "abstract": r.summary,
+        "arxiv_id": r.get_short_id(),
+        "pdf_url": r.pdf_url,
+        "source_url": getattr(r, "entry_id", None),
+        "source": "arxiv",
+    }
+
+
+_VERSION = re.compile(r"v\d+$")
+
+
+def _versionless(arxiv_id: str | None) -> str | None:
+    return _VERSION.sub("", arxiv_id) if arxiv_id else arxiv_id
+
+
 def search_topic(
     topic: str,
     max_results: int = 10,
@@ -219,8 +268,25 @@ def search_topic(
     contact: str | None = None,
     limiter: RateLimiter | None = None,
     adapter: requests.adapters.BaseAdapter | None = None,
-) -> list[dict]:
-    """Search arXiv for `topic` and return a list of corpus-shaped dicts.
+    query_groups: Sequence[Sequence[str]] | None = None,
+    page_size: int | None = None,
+) -> Candidates:
+    """Search arXiv for `topic` and return corpus-shaped dicts, with a report.
+
+    With `query_groups` (the relevance gate's facets and their validated
+    synonyms) the query is built from those groups; without them, from the
+    topic's terms as before.
+
+    **Paging (D-S1-RETRIEVAL-01).** `max_results` is the retrieval ceiling,
+    `page_size` (default: the ceiling, so one request) the results per
+    request. Pages are read in arXiv's relevance order until arXiv's reported
+    total is exhausted or the ceiling is reached; every request waits its turn
+    on the shared limiter. Results are de-duplicated across pages by
+    version-less arXiv id, keeping the first (best-ranked) copy. The returned
+    `Candidates.retrieval` says how far the read got: stopping at the ceiling,
+    on an empty page before the reported total, or on a failed later page is
+    reported incomplete with the candidates read so far. A failure on the
+    *first* page still raises, as before: there is nothing to return.
 
     Raises `arxiv.HTTPError` when arXiv still refuses after `num_retries`
     retries, and `CooldownActive` while an earlier refusal's cooldown runs;
@@ -238,40 +304,92 @@ def search_topic(
         adapter=adapter,
         source="arXiv",
     )
+    page_size = min(page_size or max_results, max_results)
 
-    # `page_size`, not `max_results`, is what the library puts in the request
-    # URL (default 100), so the page is sized to what is kept. Its retries and
-    # delay are off: PoliteSession owns both.
-    client = arxiv.Client(page_size=max_results, delay_seconds=0.0, num_retries=0)
+    # The library's retries and delay are off: PoliteSession owns both. Its
+    # feed parser is used page by page so the reported total is visible.
+    client = arxiv.Client(page_size=page_size, delay_seconds=0.0, num_retries=0)
     client._session = session  # arxiv 4.x: the one Session every API request uses
-    query = _all_fields_query(topic)
+    query = _grouped_query(query_groups) if query_groups else _all_fields_query(topic)
     # The query as sent, so a run that returns nothing can be told apart from a
     # run that was never asked the right question (D-QUERY-02).
-    logger.info("arXiv search_query=%s max_results=%d", query, max_results)
+    logger.info(
+        "arXiv search_query=%s ceiling=%d page_size=%d", query, max_results, page_size
+    )
     search = arxiv.Search(query=query, max_results=max_results)
 
-    candidates = []
+    candidates: list[dict] = []
+    seen: set[str] = set()
+    duplicates = 0
+    total: int | None = None
+    offset = pages_requested = pages_succeeded = fetched = 0
+    stop_reason = "exhausted"
+    error: str | None = None
     try:
-        for r in client.results(search):
-            candidates.append(
-                {
-                    "title": r.title,
-                    "authors": [a.name for a in r.authors],
-                    "year": r.published.year,
-                    "venue": None,
-                    "doi": r.doi,
-                    "abstract": r.summary,
-                    "arxiv_id": r.get_short_id(),
-                    "pdf_url": r.pdf_url,
-                    "source": "arxiv",
-                }
-            )
+        while offset < max_results:
+            size = min(page_size, max_results - offset)
+            url = client._format_url(search, offset, size)
+            pages_requested += 1
+            try:
+                feed = client._parse_feed(url, first_page=offset == 0)
+            except arxiv.UnexpectedEmptyPageError:
+                # arXiv sometimes answers a later page with nothing before its
+                # own total is reached; what was read is kept, as incomplete.
+                stop_reason = "empty_page"
+                break
+            except Exception as exc:
+                if not pages_succeeded:
+                    raise
+                stop_reason, error = "page_error", error_category(exc)
+                logger.warning(
+                    "arXiv page at offset %d failed (%s); keeping %d candidates",
+                    offset,
+                    error,
+                    len(candidates),
+                )
+                break
+            if feed.malformed:
+                if not pages_succeeded:
+                    raise ValueError("arXiv returned a malformed feed")
+                stop_reason, error = "page_error", "malformed_feed"
+                break
+            pages_succeeded += 1
+            if total is None:
+                total = feed.header.total_results
+            fetched += len(feed.results)
+            for result in feed.results:
+                key = _versionless(result.get_short_id())
+                if key in seen:
+                    duplicates += 1
+                    continue
+                seen.add(key)
+                candidates.append(_candidate(result))
+            offset += len(feed.results)
+            if not feed.results or offset >= (total or 0):
+                break
+        else:
+            if total is not None and offset < total:
+                stop_reason = "ceiling"
     finally:
         session.close()
-    return candidates
+    return Candidates(
+        candidates,
+        retrieval_report(
+            query=query,
+            params={"ceiling": max_results, "page_size": page_size},
+            total_reported=total,
+            pages_requested=pages_requested,
+            pages_succeeded=pages_succeeded,
+            records_fetched=fetched,
+            records_dropped={"duplicate_across_pages": duplicates},
+            candidates=len(candidates),
+            stop_reason=stop_reason,
+            error=error,
+        ),
+    )
 
 
-def download_pdf(
+def download_pdf_result(
     url: str,
     dest_path: str,
     *,
@@ -282,7 +400,8 @@ def download_pdf(
     backoff_max_seconds: float = 60.0,
     limiter: RateLimiter | None = None,
     adapter: requests.adapters.BaseAdapter | None = None,
-) -> bool:
+    max_bytes: int = 50 * 1024 * 1024,
+) -> DownloadResult:
     """Fetch one arXiv-hosted PDF under the same politeness rules as the API.
 
     The request waits its turn on the same process-wide `LIMITER` the metadata
@@ -291,10 +410,12 @@ def download_pdf(
     burst, and a 429 answered here holds back the *next* arXiv request of
     either kind.
 
-    Returns True when the file was written and False on every failure: a 404,
-    a 429 that outlived the retry budget, a cooldown still running from an
-    earlier refusal, or a transport error. Nothing is raised — one paper's
-    missing full text must never abort a `/collect` run.
+    The body is stored only when it is a PDF within `max_bytes`
+    (`app.ingestion.pdf_store`, D-FULLTEXT-01); a file already at `dest_path`
+    survives a failed download. Nothing is raised — one paper's missing full
+    text must never abort a `/collect` run — and the result says what
+    happened: a 404, a 429 that outlived the retry budget, a cooldown still
+    running from an earlier refusal, a transport error, or a non-PDF body.
     """
     limiter = LIMITER if limiter is None else limiter
     limiter.set_min_interval(min_interval_seconds)
@@ -317,26 +438,40 @@ def download_pdf(
                 "arXiv PDF not fetched: cooldown active, %.0fs remaining",
                 exc.wait_seconds,
             )
-            return False
+            return DownloadResult("rate_limited", detail="cooldown")
+        except requests.exceptions.Timeout:
+            logger.warning("arXiv PDF not fetched: Timeout")
+            return DownloadResult("timeout")
         except requests.exceptions.RequestException as exc:
             logger.warning("arXiv PDF not fetched: %s", type(exc).__name__)
-            return False
+            return DownloadResult("network_error", detail=type(exc).__name__)
         with response:
             if response.status_code != requests.codes.OK:
                 logger.warning(
                     "arXiv PDF not fetched: answered HTTP %d", response.status_code
                 )
-                return False
+                status = "rate_limited" if response.status_code == 429 else "http_error"
+                return DownloadResult(status, response.status_code)
             try:
-                Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
-                with open(dest_path, "wb") as handle:
-                    handle.writelines(response.iter_content(_PDF_CHUNK_SIZE))
-            except (OSError, requests.exceptions.RequestException) as exc:
+                result = store_pdf(
+                    response.iter_content(_PDF_CHUNK_SIZE),
+                    dest_path,
+                    max_bytes=max_bytes,
+                    content_type=response.headers.get("Content-Type"),
+                )
+            except requests.exceptions.RequestException as exc:
                 logger.warning("arXiv PDF not stored: %s", type(exc).__name__)
-                return False
-        return True
+                return DownloadResult("network_error", 200, detail=type(exc).__name__)
+            if not result.ok:
+                logger.warning("arXiv PDF not stored: %s", result.status)
+            return result
     finally:
         session.close()
+
+
+def download_pdf(url: str, dest_path: str, **kwargs) -> bool:
+    """`download_pdf_result`, as True when a validated PDF was stored."""
+    return download_pdf_result(url, dest_path, **kwargs).ok
 
 
 def fetch_pdf(candidate: dict, dest_dir: str, download=None) -> str | None:

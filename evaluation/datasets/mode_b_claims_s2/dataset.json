@@ -1,0 +1,17 @@
+{
+ "name": "mode_b_claims_s2",
+ "version": 1,
+ "status": "provisional",
+ "source": "agent-authored",
+ "authored_by": "AI coding agent (Claude) working on this repository, 2026-10-18 (Mode B quality mission)",
+ "independent": false,
+ "labellers": 1,
+ "adjudicated": false,
+ "inter_annotator_agreement": null,
+ "labelled_before_scores": true,
+ "frozen_at": "2026-10-18T17:05Z",
+ "frozen_sha256": {
+  "claims.csv": "954a71edac775c68aee79955e38178dd1c5fba9570ddfebf4f205ec0780c86e7"
+ },
+ "notes": "Supplements mode_b_v1/claims.csv; scored separately, never pooled. Written by the same agent that changed the claim checker in the same session, so it is a development set. Labels were assigned from each cited passage's exact text before this file was scored; s29, s30 and s32 were probed against the checker while diagnosing LV-2 and are marked in their note column."
+}

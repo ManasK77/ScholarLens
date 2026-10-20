@@ -294,3 +294,14 @@ def gap_score(
     score = round(score, SCORE_DECIMALS)
     # `-0.0` would render as "-0.00" in the dashboard's score pill.
     return 0.0 if score == 0.0 else score
+
+
+# A theme fewer papers than this state is one paper's view, not a pattern in
+# the literature. Display/scope only: it changes no signal and no score, so a
+# single-paper theme is ranked exactly as before and labelled exploratory.
+CORROBORATION_MIN_PAPERS = 2
+
+
+def evidence_scope(paper_count: int) -> str:
+    """`corroborated`, or `single_paper` for a theme only one paper states."""
+    return "corroborated" if paper_count >= CORROBORATION_MIN_PAPERS else "single_paper"

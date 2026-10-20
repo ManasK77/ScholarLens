@@ -1,0 +1,107 @@
+{
+  "about": "Deterministic language-gate fixtures (D-S1-LANG-01). Every text here is SYNTHETIC, written for the test, except where `source` says otherwise; `expected_status` is the label. This is unit-test coverage of the rules, not real-world validation: no real non-English candidate was available on 2026-10-12 (the live run had none).",
+  "cases": [
+    {
+      "id": "english-plain",
+      "expected_status": "english",
+      "text": "We study prompt injection attacks against multilingual large language models. Our results show that attacks written in low-resource languages bypass safety filters trained on English data, and we propose a defense based on machine translation."
+    },
+    {
+      "id": "english-about-tamil-with-tamil-quote",
+      "expected_status": "english",
+      "text": "We show that the instruction 'முந்தைய வழிமுறைகளை புறக்கணி' (ignore previous instructions) is followed by the model when it is written in Tamil script. We evaluate this attack on three models and find that the success rate is higher than for the same instruction in English."
+    },
+    {
+      "id": "english-with-hindi-and-chinese-terms",
+      "expected_status": "english",
+      "text": "Attack prompts that mix English with Hindi words such as 'अनदेखा' or Chinese characters such as '忽略' evade keyword filters. We collect such prompts from public forums and show that the detectors we test miss most of them, while a translation step before detection recovers most of the lost accuracy."
+    },
+    {
+      "id": "english-with-math",
+      "expected_status": "english",
+      "text": "We bound the attack success rate by ε ≤ 0.05 and show that a perturbation δ with Σ α_i ≥ β leaves the detector's accuracy within 2% of the clean baseline [12, 14]. The analysis holds for every model we evaluate, and the bound is tight on the benchmark of Liu et al. (2024)."
+    },
+    {
+      "id": "tamil-script",
+      "expected_status": "non_latin_script",
+      "text": "இந்த ஆய்வில் பெரிய மொழி மாதிரிகளுக்கு எதிரான பன்மொழி தூண்டல் உட்செலுத்தல் தாக்குதல்களை நாங்கள் ஆராய்கிறோம். தமிழ் மற்றும் ஆங்கில மொழிகளில் உள்ள தாக்குதல்கள் பாதுகாப்பு வடிகட்டிகளைத் தவிர்க்கின்றன என்பதை எங்கள் முடிவுகள் காட்டுகின்றன."
+    },
+    {
+      "id": "hindi-devanagari",
+      "expected_status": "non_latin_script",
+      "text": "इस शोध में हम बड़े भाषा मॉडलों पर बहुभाषी प्रॉम्प्ट इंजेक्शन हमलों का अध्ययन करते हैं। हमारे परिणाम दिखाते हैं कि हिंदी में लिखे गए हमले सुरक्षा फ़िल्टर को दरकिनार कर देते हैं।"
+    },
+    {
+      "id": "chinese",
+      "expected_status": "non_latin_script",
+      "text": "本文研究针对大型语言模型的多语言提示注入攻击。实验结果表明，用低资源语言编写的攻击能够绕过基于英语数据训练的安全过滤器，我们提出了一种基于机器翻译的防御方法。"
+    },
+    {
+      "id": "japanese",
+      "expected_status": "non_latin_script",
+      "text": "本研究では、大規模言語モデルに対する多言語プロンプトインジェクション攻撃を調査する。低資源言語で書かれた攻撃が英語データで学習された安全フィルタを回避することを示し、機械翻訳に基づく防御手法を提案する。"
+    },
+    {
+      "id": "russian",
+      "expected_status": "non_latin_script",
+      "text": "В данной работе мы исследуем многоязычные атаки внедрения подсказок на большие языковые модели. Результаты показывают, что атаки на малоресурсных языках обходят фильтры безопасности, обученные на английских данных."
+    },
+    {
+      "id": "arabic",
+      "expected_status": "non_latin_script",
+      "text": "ندرس في هذا البحث هجمات حقن التعليمات متعددة اللغات ضد النماذج اللغوية الكبيرة، ونبين أن الهجمات المكتوبة بلغات منخفضة الموارد تتجاوز مرشحات الأمان المدربة على بيانات إنجليزية."
+    },
+    {
+      "id": "french",
+      "expected_status": "not_english",
+      "text": "Nous étudions les attaques par injection d'invites multilingues contre les grands modèles de langage. Nos résultats montrent que les attaques rédigées dans des langues peu dotées contournent les filtres de sécurité entraînés sur des données anglaises, et nous proposons une défense fondée sur la traduction automatique."
+    },
+    {
+      "id": "spanish",
+      "expected_status": "not_english",
+      "text": "Estudiamos los ataques de inyección de instrucciones multilingües contra los grandes modelos de lenguaje. Nuestros resultados muestran que los ataques escritos en lenguas de pocos recursos eluden los filtros de seguridad entrenados con datos en inglés, y proponemos una defensa basada en la traducción automática."
+    },
+    {
+      "id": "german",
+      "expected_status": "not_english",
+      "text": "Wir untersuchen mehrsprachige Prompt-Injection-Angriffe auf große Sprachmodelle. Unsere Ergebnisse zeigen, dass Angriffe in ressourcenarmen Sprachen Sicherheitsfilter umgehen, die mit englischen Daten trainiert wurden, und wir schlagen eine Abwehr auf Grundlage maschineller Übersetzung vor."
+    },
+    {
+      "id": "turkish",
+      "expected_status": "not_english",
+      "text": "Bu çalışmada büyük dil modellerine karşı çok dilli istem enjeksiyonu saldırılarını inceliyoruz. Sonuçlarımız, düşük kaynaklı dillerde yazılmış saldırıların İngilizce veriler üzerinde eğitilmiş güvenlik filtrelerini atlattığını göstermektedir ve makine çevirisine dayalı bir savunma öneriyoruz."
+    },
+    {
+      "id": "indonesian",
+      "expected_status": "not_english",
+      "text": "Kami meneliti serangan injeksi perintah multibahasa terhadap model bahasa besar. Hasil kami menunjukkan bahwa serangan yang ditulis dalam bahasa dengan sumber daya rendah dapat melewati filter keamanan yang dilatih dengan data berbahasa Inggris, dan kami mengusulkan pertahanan berbasis terjemahan mesin."
+    },
+    {
+      "id": "short-english",
+      "expected_status": "unverified",
+      "text": "Injected instructions in Hindi and Tamil."
+    },
+    {
+      "id": "short-non-latin",
+      "expected_status": "unverified",
+      "text": "தமிழ் LLM"
+    },
+    {
+      "id": "missing",
+      "expected_status": "unverified",
+      "text": null
+    },
+    {
+      "id": "bilingual-english-then-french",
+      "expected_status": "english",
+      "note": "Documented borderline: an English abstract followed by its French translation. The English half keeps the marker ratio above the floor, so it is judged English -- the paper likely has an English version, but this is not proof.",
+      "text": "We study prompt injection attacks against multilingual large language models and show that attacks in low-resource languages bypass safety filters that were trained on English data. Nous étudions les attaques par injection d'invites contre les grands modèles de langage et montrons qu'elles contournent les filtres."
+    },
+    {
+      "id": "mostly-tamil-with-english-terms",
+      "expected_status": "non_latin_script",
+      "note": "Documented borderline: Tamil prose with English model names and acronyms is still a Tamil-script paper.",
+      "text": "இந்த ஆய்வில் GPT-4, LLaMA மற்றும் Mistral மாதிரிகளுக்கு எதிரான prompt injection தாக்குதல்களை நாங்கள் ஆராய்கிறோம். தமிழ் மொழியில் எழுதப்பட்ட தாக்குதல்கள் பாதுகாப்பு வடிகட்டிகளைத் தவிர்க்கின்றன என்பதை முடிவுகள் காட்டுகின்றன."
+    }
+  ]
+}
